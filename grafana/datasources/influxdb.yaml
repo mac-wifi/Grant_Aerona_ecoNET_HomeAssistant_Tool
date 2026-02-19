@@ -1,0 +1,19 @@
+# Grafana provisioning: InfluxDB datasource
+# Place this file in Grafana's provisioning/datasources/ directory
+# or configure manually via Grafana UI > Configuration > Data Sources
+
+apiVersion: 1
+
+datasources:
+  - name: InfluxDB - EcoNet Grant
+    type: influxdb
+    access: proxy
+    url: http://a0d7b954-influxdb:8086
+    jsonData:
+      version: Flux
+      organization: home
+      defaultBucket: econet_grant
+    secureJsonData:
+      token: "${INFLUXDB_TOKEN}"
+    isDefault: true
+    editable: true

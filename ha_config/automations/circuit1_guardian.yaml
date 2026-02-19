@@ -1,0 +1,41 @@
+# ============================================================
+# Circuit 1 Guardian - Helper Automations
+# ============================================================
+# The guardian logic itself runs inside the integration (guardian.py).
+# These automations provide UI-driven control of the guardian.
+#
+# Prerequisites:
+#   1. Create an input_number helper in HA:
+#      Name: "Circuit 1 Desired Temperature"
+#      Entity ID: input_number.circuit1_desired_temp
+#      Min: 10, Max: 35, Step: 0.5, Unit: °C
+#
+#   2. Create an input_boolean helper:
+#      Name: "Circuit 1 Guardian Enabled"
+#      Entity ID: input_boolean.circuit1_guardian_enabled
+# ============================================================
+
+# When the desired temp or enabled toggle changes, update the guardian
+- id: econet_grant_guardian_update
+  alias: "EcoNet: Circuit 1 Guardian - Update"
+  description: >
+    When the user changes the desired temperature or toggles the guardian,
+    call the integration service to update the guardian state.
+  trigger:
+    - platform: state
+      entity_id: input_number.circuit1_desired_temp
+    - platform: state
+      entity_id: input_boolean.circuit1_guardian_enabled
+  action:
+    - choose:
+        - conditions:
+            - condition: state
+              entity_id: input_boolean.circuit1_guardian_enabled
+              state: "on"
+          sequence:
+            - service: econet_grant.set_guardian_temp
+              data:
+                temperature: "{{ states('input_number.circuit1_desired_temp') | float }}"
+      default:
+        - service: econet_grant.set_guardian_temp
+          data: {}

@@ -1,0 +1,29 @@
+# ============================================================
+# InfluxDB Integration Snippet for EcoNet Grant Aerona
+# ============================================================
+# Add this to your Home Assistant configuration.yaml.
+# Requires the InfluxDB add-on to be installed and running.
+#
+# Steps:
+#   1. Install InfluxDB add-on from HA Add-on Store
+#   2. In InfluxDB UI, create org "home" and bucket "econet_grant"
+#      with INFINITE retention
+#   3. Generate an API token and add it to secrets.yaml as:
+#      influxdb_token: "your-token-here"
+#   4. Paste this snippet into your configuration.yaml
+#   5. Restart Home Assistant
+# ============================================================
+
+influxdb:
+  api_version: 2
+  host: a0d7b954-influxdb
+  port: 8086
+  token: !secret influxdb_token
+  organization: home
+  bucket: econet_grant
+  max_retries: 3
+  include:
+    entity_globs:
+      - sensor.econet_grant_*
+      - number.econet_grant_*
+      - binary_sensor.econet_grant_*

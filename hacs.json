@@ -1,0 +1,7 @@
+{
+  "name": "EcoNet Grant Aerona",
+  "homeassistant": "2024.1.0",
+  "render_readme": true,
+  "iot_class": "local_polling",
+  "domains": ["sensor", "binary_sensor", "number", "button", "switch"]
+}

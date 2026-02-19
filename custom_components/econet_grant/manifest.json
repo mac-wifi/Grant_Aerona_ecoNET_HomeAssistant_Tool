@@ -1,0 +1,11 @@
+{
+  "domain": "econet_grant",
+  "name": "EcoNet Grant Aerona",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/yourusername/econet-grant-ha",
+  "iot_class": "local_polling",
+  "requirements": ["aiohttp>=3.8.0"],
+  "version": "0.1.0"
+}
