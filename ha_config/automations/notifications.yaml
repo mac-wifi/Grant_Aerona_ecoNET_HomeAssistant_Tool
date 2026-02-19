@@ -1,0 +1,84 @@
+# ============================================================
+# EcoNet Grant Aerona - Notification Automations
+# ============================================================
+# These automations listen to events fired by the integration's
+# change detector and send notifications.
+#
+# Prerequisites:
+#   - HA mobile app configured (notify.mobile_app_<your_phone>)
+#   - Email notification service configured (notify.email or smtp)
+#   - For urgent alerts: SMS or WhatsApp integration
+#     (e.g. Twilio, Pushover with high priority, or WhatsApp via notify)
+#
+# Customise the notify service targets below for your setup.
+# ============================================================
+
+# Standard notification: any external setting change
+- id: econet_grant_setting_changed_notify
+  alias: "EcoNet: Setting Changed - Notify"
+  description: >
+    Send a notification when a guest or external party changes a setting
+    on the heat pump (via the vendor app or panel).
+  trigger:
+    - platform: event
+      event_type: econet_grant_setting_changed
+  action:
+    - service: notify.notify
+      data:
+        title: "EcoNet: Setting Changed"
+        message: >
+          Parameter "{{ trigger.event.data.param_name }}" was changed
+          from {{ trigger.event.data.old_value }} to {{ trigger.event.data.new_value }}.
+
+    # Uncomment and configure for email notifications:
+    # - service: notify.email
+    #   data:
+    #     title: "EcoNet Grant: Setting Changed"
+    #     message: >
+    #       Parameter "{{ trigger.event.data.param_name }}" was changed
+    #       from {{ trigger.event.data.old_value }} to {{ trigger.event.data.new_value }}.
+
+# Urgent notification: critical setting changed (e.g. temperatures)
+- id: econet_grant_urgent_change_notify
+  alias: "EcoNet: URGENT Setting Changed - Alert"
+  description: >
+    Send an urgent notification (SMS / WhatsApp / high-priority push)
+    when a critical setting is changed externally. This is designed to
+    wake you in the middle of the night if guests change key temperatures.
+  trigger:
+    - platform: event
+      event_type: econet_grant_urgent_change
+  action:
+    - service: notify.notify
+      data:
+        title: "URGENT: EcoNet Setting Changed!"
+        message: >
+          CRITICAL: "{{ trigger.event.data.param_name }}" was changed
+          from {{ trigger.event.data.old_value }} to {{ trigger.event.data.new_value }}.
+          This is a monitored setting.
+
+    # Uncomment and configure for SMS (Twilio example):
+    # - service: notify.twilio_sms
+    #   data:
+    #     message: >
+    #       URGENT EcoNet: {{ trigger.event.data.param_name }} changed to
+    #       {{ trigger.event.data.new_value }} (was {{ trigger.event.data.old_value }})
+
+    # Uncomment for Pushover with emergency priority:
+    # - service: notify.pushover
+    #   data:
+    #     title: "URGENT: EcoNet Setting Changed"
+    #     message: >
+    #       {{ trigger.event.data.param_name }} changed from
+    #       {{ trigger.event.data.old_value }} to {{ trigger.event.data.new_value }}
+    #     data:
+    #       priority: 2
+    #       retry: 60
+    #       expire: 3600
+
+    # Uncomment for WhatsApp (if using a WhatsApp integration):
+    # - service: notify.whatsapp
+    #   data:
+    #     message: >
+    #       URGENT EcoNet: {{ trigger.event.data.param_name }} changed to
+    #       {{ trigger.event.data.new_value }}

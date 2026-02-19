@@ -1,0 +1,227 @@
+# ============================================================
+# EcoNet Grant Aerona - Lovelace Dashboard
+# ============================================================
+# To use this dashboard:
+#   1. In HA, go to Settings > Dashboards > Add Dashboard
+#   2. Choose "Start with an empty dashboard"
+#   3. Click the 3-dot menu > Edit Dashboard > Raw Configuration Editor
+#   4. Paste this YAML content
+#
+# Prerequisites:
+#   - econet_grant integration installed and configured
+#   - input_number.circuit1_desired_temp helper created
+#   - input_boolean.circuit1_guardian_enabled helper created
+#   - input_datetime.guest_checkout_date helper created
+#   - input_boolean.guest_checkout_active helper created
+#   - Grafana add-on running at port 3000
+# ============================================================
+
+title: Grant Aerona Heat Pump
+views:
+  # -------------------------------------------------------
+  # TAB 1: Temperature
+  # -------------------------------------------------------
+  - title: Temperature
+    path: temperature
+    icon: mdi:thermometer
+    cards:
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.econet_grant_circuit_1_thermostat
+            name: Circuit 1
+            min: 0
+            max: 50
+            severity:
+              green: 15
+              yellow: 30
+              red: 40
+
+          - type: gauge
+            entity: sensor.econet_grant_dhw_temperature
+            name: DHW
+            min: 0
+            max: 70
+            severity:
+              green: 40
+              yellow: 55
+              red: 60
+
+          - type: gauge
+            entity: sensor.econet_grant_outdoor_temperature
+            name: Outdoor
+            min: -20
+            max: 40
+            severity:
+              green: 5
+              yellow: 25
+              red: 35
+
+      - type: entities
+        title: Temperature Controls
+        entities:
+          - entity: number.econet_grant_circuit_1_comfort_temperature
+            name: Circuit 1 Comfort Temp
+          - entity: number.econet_grant_circuit_1_eco_temperature
+            name: Circuit 1 Eco Temp
+          - entity: number.econet_grant_circuit_1_base_temperature
+            name: Circuit 1 Base Temp
+          - entity: number.econet_grant_dhw_set_point
+            name: DHW Set Point
+
+      - type: entities
+        title: Circuit 1 Guardian
+        entities:
+          - entity: input_boolean.circuit1_guardian_enabled
+            name: Guardian Enabled
+          - entity: input_number.circuit1_desired_temp
+            name: Desired Temperature
+
+      - type: iframe
+        title: Temperature Graphs (Grafana)
+        url: "http://192.168.x.x:3000/d/econet-temperature?orgId=1&kiosk=tv"
+        aspect_ratio: 60%
+
+  # -------------------------------------------------------
+  # TAB 2: Performance
+  # -------------------------------------------------------
+  - title: Performance
+    path: performance
+    icon: mdi:chart-line
+    cards:
+      - type: horizontal-stack
+        cards:
+          - type: entity
+            entity: sensor.econet_grant_flow_temperature
+            name: Flow Temp
+            icon: mdi:thermometer-chevron-up
+
+          - type: entity
+            entity: sensor.econet_grant_return_temperature
+            name: Return Temp
+            icon: mdi:thermometer-chevron-down
+
+          - type: entity
+            entity: sensor.econet_grant_compressor_frequency
+            name: Compressor
+            icon: mdi:sine-wave
+
+          - type: entity
+            entity: sensor.econet_grant_pump_speed
+            name: Pump Speed
+            icon: mdi:pump
+
+      - type: horizontal-stack
+        cards:
+          - type: entity
+            entity: sensor.econet_grant_weather_temperature
+            name: Weather Temp
+
+          - type: entity
+            entity: sensor.econet_grant_buffer_temperature_lower
+            name: Buffer Temp
+
+          - type: entity
+            entity: sensor.econet_grant_heat_exchanger_temperature
+            name: Heat Exchanger
+
+          - type: entity
+            entity: sensor.econet_grant_work_state
+            name: Work State
+
+      - type: iframe
+        title: Performance Graphs (Grafana)
+        url: "http://192.168.x.x:3000/d/econet-performance?orgId=1&kiosk=tv"
+        aspect_ratio: 60%
+
+  # -------------------------------------------------------
+  # TAB 3: System
+  # -------------------------------------------------------
+  - title: System
+    path: system
+    icon: mdi:cog
+    cards:
+      - type: entities
+        title: System Info
+        entities:
+          - entity: sensor.econet_grant_work_state
+            name: Current State
+
+      - type: horizontal-stack
+        cards:
+          - type: button
+            name: Backup Settings
+            icon: mdi:content-save
+            tap_action:
+              action: call-service
+              service: econet_grant.backup_settings
+              service_data:
+                snapshot_name: "Default"
+
+          - type: button
+            name: Restore Defaults
+            icon: mdi:backup-restore
+            tap_action:
+              action: call-service
+              service: econet_grant.restore_settings
+              service_data:
+                snapshot_name: "Default"
+            confirmation:
+              text: "Restore all settings to the Default snapshot?"
+
+      - type: iframe
+        title: System Graphs (Grafana)
+        url: "http://192.168.x.x:3000/d/econet-system?orgId=1&kiosk=tv"
+        aspect_ratio: 60%
+
+  # -------------------------------------------------------
+  # TAB 4: Guest
+  # -------------------------------------------------------
+  - title: Guest
+    path: guest
+    icon: mdi:account-clock
+    cards:
+      - type: entities
+        title: Guest Checkout
+        entities:
+          - entity: input_datetime.guest_checkout_date
+            name: Checkout Date
+          - entity: input_boolean.guest_checkout_active
+            name: Checkout Active
+
+      - type: markdown
+        title: Guest Checkout Info
+        content: >
+          **How it works:**
+
+          1. Set the guest checkout date above (or via Alexa)
+
+          2. At 10:00 AM on that date, all heat pump settings will be
+             automatically restored to the "Default" snapshot
+
+          3. You'll receive a notification when the restore happens
+
+          **Alexa:** Create a routine that sets the checkout date.
+          Say "Alexa, guest checkout is [date]".
+
+      - type: horizontal-stack
+        cards:
+          - type: button
+            name: Save Guest Mode
+            icon: mdi:content-save-settings
+            tap_action:
+              action: call-service
+              service: econet_grant.backup_settings
+              service_data:
+                snapshot_name: "Guest Mode"
+
+          - type: button
+            name: Restore Guest Mode
+            icon: mdi:account-cog
+            tap_action:
+              action: call-service
+              service: econet_grant.restore_settings
+              service_data:
+                snapshot_name: "Guest Mode"
+            confirmation:
+              text: "Restore settings to the Guest Mode snapshot?"

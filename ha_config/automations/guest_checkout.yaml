@@ -1,0 +1,74 @@
+# ============================================================
+# Guest Checkout Automation
+# ============================================================
+# Prerequisites:
+#   1. Create an input_datetime helper in HA:
+#      Settings > Devices & Services > Helpers > Add Helper > Date
+#      Name: "Guest Checkout Date"
+#      Entity ID: input_datetime.guest_checkout_date
+#
+#   2. Create an input_boolean helper:
+#      Name: "Guest Checkout Active"
+#      Entity ID: input_boolean.guest_checkout_active
+#
+#   3. Expose input_datetime.guest_checkout_date to Alexa via
+#      Nabu Casa or emulated_hue so Alexa routines can set the date.
+#
+# Alexa Usage:
+#   Create an Alexa routine that sets input_datetime.guest_checkout_date
+#   Example voice command: "Alexa, guest checkout is January 30th"
+# ============================================================
+
+# Automation 1: Reset settings at 10:00 AM on the checkout date
+- id: econet_grant_guest_checkout_restore
+  alias: "EcoNet: Guest Checkout - Restore Defaults"
+  description: >
+    At 10:00 AM on the guest checkout date, restore all settings to the
+    "Default" snapshot and disable the checkout timer.
+  trigger:
+    - platform: time
+      at: "10:00:00"
+  condition:
+    - condition: state
+      entity_id: input_boolean.guest_checkout_active
+      state: "on"
+    - condition: template
+      value_template: >
+        {{ now().strftime('%Y-%m-%d') == states('input_datetime.guest_checkout_date') }}
+  action:
+    - service: econet_grant.restore_settings
+      data:
+        snapshot_name: "Default"
+    - service: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.guest_checkout_active
+    - service: notify.notify
+      data:
+        title: "EcoNet Grant - Guest Checkout"
+        message: >
+          Guest checkout triggered. Settings have been restored to defaults.
+          Checkout date was {{ states('input_datetime.guest_checkout_date') }}.
+
+# Automation 2: Activate checkout when the date is set
+- id: econet_grant_guest_checkout_activate
+  alias: "EcoNet: Guest Checkout - Activate on Date Set"
+  description: >
+    When the guest checkout date is changed (e.g. via Alexa),
+    automatically enable the checkout timer.
+  trigger:
+    - platform: state
+      entity_id: input_datetime.guest_checkout_date
+  condition:
+    - condition: template
+      value_template: >
+        {{ states('input_datetime.guest_checkout_date') >= now().strftime('%Y-%m-%d') }}
+  action:
+    - service: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.guest_checkout_active
+    - service: notify.notify
+      data:
+        title: "EcoNet Grant - Guest Checkout Scheduled"
+        message: >
+          Guest checkout scheduled for {{ states('input_datetime.guest_checkout_date') }}
+          at 10:00 AM. Settings will be restored to defaults at that time.

@@ -1,0 +1,40 @@
+backup_settings:
+  name: Backup Settings
+  description: Save a snapshot of all current editable parameters.
+  fields:
+    snapshot_name:
+      name: Snapshot Name
+      description: A label for this snapshot (e.g. "Default", "Guest Mode").
+      required: true
+      example: "Default"
+      selector:
+        text:
+
+restore_settings:
+  name: Restore Settings
+  description: Restore editable parameters from a saved snapshot.
+  fields:
+    snapshot_name:
+      name: Snapshot Name
+      description: The snapshot to restore. Omit to use "Default".
+      required: false
+      default: "Default"
+      example: "Default"
+      selector:
+        text:
+
+set_guardian_temp:
+  name: Set Guardian Temperature
+  description: Set the desired Circuit 1 temperature that the guardian will enforce. Omit temperature to disable.
+  fields:
+    temperature:
+      name: Temperature
+      description: The desired Circuit 1 Comfort temperature in °C. Leave empty to disable the guardian.
+      required: false
+      example: "21"
+      selector:
+        number:
+          min: 10
+          max: 35
+          step: 0.5
+          unit_of_measurement: "°C"

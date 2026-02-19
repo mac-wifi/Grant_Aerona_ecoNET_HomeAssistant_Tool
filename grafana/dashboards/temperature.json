@@ -1,0 +1,118 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "econet-temperature",
+    "title": "EcoNet Grant - Temperature",
+    "tags": ["econet", "temperature"],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "refresh": "5m",
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Circuit 1 Thermostat (Actual vs Desired)",
+        "type": "timeseries",
+        "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "celsius",
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 10,
+              "spanNulls": true
+            }
+          },
+          "overrides": []
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": { "type": "influxdb", "uid": "" },
+            "query": "from(bucket: \"econet_grant\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"°C\" or r._measurement == \"state\")\n  |> filter(fn: (r) => r.entity_id == \"sensor.econet_grant_circuit_1_thermostat\" or r.entity_id == \"number.econet_grant_circuit_1_comfort_temperature\")\n  |> filter(fn: (r) => r._field == \"value\")\n  |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "DHW Temperature",
+        "type": "timeseries",
+        "gridPos": { "h": 10, "w": 12, "x": 0, "y": 10 },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "celsius",
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 10,
+              "spanNulls": true
+            }
+          },
+          "overrides": []
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": { "type": "influxdb", "uid": "" },
+            "query": "from(bucket: \"econet_grant\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r.entity_id == \"sensor.econet_grant_dhw_temperature\" or r.entity_id == \"number.econet_grant_dhw_set_point\")\n  |> filter(fn: (r) => r._field == \"value\")\n  |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Outdoor Temperature",
+        "type": "timeseries",
+        "gridPos": { "h": 10, "w": 12, "x": 12, "y": 10 },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "celsius",
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 10,
+              "spanNulls": true
+            }
+          },
+          "overrides": []
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": { "type": "influxdb", "uid": "" },
+            "query": "from(bucket: \"econet_grant\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r.entity_id == \"sensor.econet_grant_outdoor_temperature\")\n  |> filter(fn: (r) => r._field == \"value\")\n  |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Current Setpoints",
+        "type": "stat",
+        "gridPos": { "h": 6, "w": 24, "x": 0, "y": 20 },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "celsius",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "blue", "value": null },
+                { "color": "green", "value": 15 },
+                { "color": "orange", "value": 30 },
+                { "color": "red", "value": 50 }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": { "type": "influxdb", "uid": "" },
+            "query": "from(bucket: \"econet_grant\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r.entity_id == \"sensor.econet_grant_circuit_1_thermostat\" or r.entity_id == \"sensor.econet_grant_dhw_temperature\" or r.entity_id == \"sensor.econet_grant_outdoor_temperature\")\n  |> filter(fn: (r) => r._field == \"value\")\n  |> last()"
+          }
+        ]
+      }
+    ]
+  },
+  "overwrite": true
+}

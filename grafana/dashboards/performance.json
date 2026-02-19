@@ -1,0 +1,114 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "econet-performance",
+    "title": "EcoNet Grant - Performance",
+    "tags": ["econet", "performance"],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "refresh": "5m",
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Flow vs Return Temperature",
+        "type": "timeseries",
+        "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "celsius",
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 10,
+              "spanNulls": true
+            }
+          },
+          "overrides": []
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": { "type": "influxdb", "uid": "" },
+            "query": "from(bucket: \"econet_grant\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r.entity_id == \"sensor.econet_grant_flow_temperature\" or r.entity_id == \"sensor.econet_grant_return_temperature\")\n  |> filter(fn: (r) => r._field == \"value\")\n  |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Compressor Frequency",
+        "type": "timeseries",
+        "gridPos": { "h": 10, "w": 12, "x": 0, "y": 10 },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "hertz",
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 10,
+              "spanNulls": true
+            }
+          },
+          "overrides": []
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": { "type": "influxdb", "uid": "" },
+            "query": "from(bucket: \"econet_grant\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r.entity_id == \"sensor.econet_grant_compressor_frequency\")\n  |> filter(fn: (r) => r._field == \"value\")\n  |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Pump Speed",
+        "type": "timeseries",
+        "gridPos": { "h": 10, "w": 12, "x": 12, "y": 10 },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 10,
+              "spanNulls": true
+            }
+          },
+          "overrides": []
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": { "type": "influxdb", "uid": "" },
+            "query": "from(bucket: \"econet_grant\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r.entity_id == \"sensor.econet_grant_pump_speed\")\n  |> filter(fn: (r) => r._field == \"value\")\n  |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Temperature Differential (Flow - Return)",
+        "description": "Higher differential at lower compressor frequency suggests better efficiency.",
+        "type": "timeseries",
+        "gridPos": { "h": 10, "w": 24, "x": 0, "y": 20 },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "celsius",
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 10,
+              "spanNulls": true
+            }
+          },
+          "overrides": []
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": { "type": "influxdb", "uid": "" },
+            "query": "flow = from(bucket: \"econet_grant\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r.entity_id == \"sensor.econet_grant_flow_temperature\")\n  |> filter(fn: (r) => r._field == \"value\")\n  |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)\n\nreturn_ = from(bucket: \"econet_grant\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r.entity_id == \"sensor.econet_grant_return_temperature\")\n  |> filter(fn: (r) => r._field == \"value\")\n  |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)\n\njoin(tables: {flow: flow, return_: return_}, on: [\"_time\"])\n  |> map(fn: (r) => ({_time: r._time, _value: r._value_flow - r._value_return_}))"
+          }
+        ]
+      }
+    ]
+  },
+  "overwrite": true
+}
