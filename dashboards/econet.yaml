@@ -1,0 +1,103 @@
+title: EcoNet Heat Pump
+views:
+  - title: Overview
+    path: overview
+    icon: mdi:heat-pump-outline
+    cards:
+      - type: heading
+        heading: Status
+        heading_style: title
+
+      - type: entities
+        title: System Status
+        show_header_toggle: false
+        entities:
+          - entity: sensor.grant_aerona_heat_pump_work_state
+            name: Work State
+          - entity: select.grant_aerona_heat_pump_work_mode
+            name: Work Mode
+          - entity: sensor.grant_aerona_heat_pump_system_demand
+            name: System Demand
+          - entity: sensor.grant_aerona_heat_pump_compressor_frequency
+            name: Compressor Frequency
+          - entity: sensor.grant_aerona_heat_pump_fan_speed
+            name: Fan Speed
+          - entity: sensor.grant_aerona_heat_pump_pump_speed
+            name: Pump Speed
+
+      - type: heading
+        heading: Temperatures
+        heading_style: title
+
+      - type: glance
+        title: Live Readings
+        columns: 3
+        show_state: true
+        entities:
+          - entity: sensor.grant_aerona_heat_pump_outdoor_temperature
+            name: Outdoor
+          - entity: sensor.grant_aerona_heat_pump_flow_temperature
+            name: Flow
+          - entity: sensor.grant_aerona_heat_pump_return_temperature
+            name: Return
+          - entity: sensor.grant_aerona_heat_pump_dhw_temperature
+            name: DHW
+          - entity: sensor.grant_aerona_heat_pump_circuit_1_thermostat
+            name: Heating
+          - entity: sensor.grant_aerona_heat_pump_weather_temperature
+            name: Weather
+          - entity: sensor.grant_aerona_heat_pump_buffer_temperature_lower
+            name: Buffer (Lower)
+          - entity: sensor.grant_aerona_heat_pump_heat_exchanger_temperature
+            name: Heat Exchanger
+          - entity: sensor.grant_aerona_heat_pump_heat_source_preset_temperature
+            name: Heat Source Preset
+
+      - type: heading
+        heading: Controls
+        heading_style: title
+
+      - type: entities
+        title: Heating
+        show_header_toggle: false
+        entities:
+          - entity: select.grant_aerona_heat_pump_circuit_1_operation_mode
+            name: Operation Mode
+          - entity: number.grant_aerona_heat_pump_circuit_1_comfort_temperature
+            name: Day Temperature
+          - entity: number.grant_aerona_heat_pump_circuit_1_eco_temperature
+            name: Night Temperature
+          - entity: number.grant_aerona_heat_pump_circuit_1_base_temperature
+            name: Base Temperature
+          - entity: number.grant_aerona_heat_pump_circuit_1_hysteresis
+            name: Hysteresis
+          - entity: number.grant_aerona_heat_pump_heating_curve
+            name: Heating Curve
+          - entity: number.grant_aerona_heat_pump_heating_curve_shift
+            name: Heating Curve Shift
+
+      - type: entities
+        title: Domestic Hot Water
+        show_header_toggle: false
+        entities:
+          - entity: select.grant_aerona_heat_pump_dhw_work_mode
+            name: Work Mode
+          - entity: number.grant_aerona_heat_pump_dhw_set_point
+            name: Set Point
+          - entity: number.grant_aerona_heat_pump_dhw_hysteresis
+            name: Hysteresis
+          - entity: number.grant_aerona_heat_pump_dhw_extension_of_work
+            name: Extension of Work
+          - entity: select.grant_aerona_heat_pump_dhw_boost
+            name: Boost
+
+      - type: heading
+        heading: Actions
+        heading_style: title
+
+      - type: entities
+        title: Backup & Restore
+        show_header_toggle: false
+        entities:
+          - entity: button.grant_aerona_heat_pump_restore_default_settings
+            name: Restore Default Settings

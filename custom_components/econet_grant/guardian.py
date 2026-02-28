@@ -1,6 +1,6 @@
-"""Circuit 1 Temperature Guardian.
+"""Heating Temperature Guardian.
 
-Monitors the Circuit 1 Day temperature setting and automatically reverts it
+Monitors the Heating Day temperature setting and automatically reverts it
 to the desired value when an external change is detected.
 """
 
@@ -22,8 +22,8 @@ GUARDIAN_PARAM = "Circuit1ComfortTemp"
 GUARDIAN_INDEX = NUMBER_DEFINITIONS[GUARDIAN_PARAM]["param_index"]
 
 
-class Circuit1Guardian:
-    """Watches Circuit 1 Comfort Temperature and reverts unauthorized changes."""
+class HeatingGuardian:
+    """Watches Heating Day Temperature and reverts unauthorized changes."""
 
     def __init__(
         self,
@@ -49,15 +49,15 @@ class Circuit1Guardian:
         """Set the temperature that should be maintained."""
         self._desired_temp = temp
         self._enabled = True
-        _LOGGER.info("Circuit 1 Guardian: desired temp set to %s", temp)
+        _LOGGER.info("Heating Guardian: desired temp set to %s", temp)
 
     def disable(self) -> None:
         self._enabled = False
         self._desired_temp = None
-        _LOGGER.info("Circuit 1 Guardian: disabled")
+        _LOGGER.info("Heating Guardian: disabled")
 
     async def check_and_revert(self, edit_params: dict[str, Any]) -> bool:
-        """Check if Circuit 1 temp has drifted and revert if so.
+        """Check if Heating temp has drifted and revert if so.
 
         Returns True if a revert was performed.
         """
@@ -69,14 +69,14 @@ class Circuit1Guardian:
         current_value = param.get("value") if isinstance(param, dict) else None
 
         if current_value is None:
-            _LOGGER.debug("Guardian: cannot read current Circuit 1 temp")
+            _LOGGER.debug("Guardian: cannot read current Heating temp")
             return False
 
         if abs(float(current_value) - self._desired_temp) < 0.05:
             return False
 
         _LOGGER.warning(
-            "Guardian: Circuit 1 temp is %s, desired is %s. Reverting.",
+            "Guardian: Heating temp is %s, desired is %s. Reverting.",
             current_value, self._desired_temp,
         )
 
@@ -86,17 +86,17 @@ class Circuit1Guardian:
         )
 
         if success:
-            _LOGGER.info("Guardian: successfully reverted Circuit 1 to %s", self._desired_temp)
+            _LOGGER.info("Guardian: successfully reverted Heating to %s", self._desired_temp)
             self._hass.components.persistent_notification.async_create(
                 message=(
-                    f"Circuit 1 temperature was changed to {current_value}°C. "
+                    f"Heating temperature was changed to {current_value}°C. "
                     f"Guardian reverted it to {self._desired_temp}°C."
                 ),
                 title="EcoNet Grant - Guardian Revert",
                 notification_id=f"{DOMAIN}_guardian_revert",
             )
         else:
-            _LOGGER.error("Guardian: FAILED to revert Circuit 1")
+            _LOGGER.error("Guardian: FAILED to revert Heating")
             self._change_detector.clear_self_write(GUARDIAN_PARAM)
 
         return success

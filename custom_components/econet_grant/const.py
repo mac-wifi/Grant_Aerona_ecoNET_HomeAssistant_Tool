@@ -35,8 +35,8 @@ SLOW_POLL_INTERVAL = 86400  # 24 hours for system settings
 
 # API retry configuration
 API_MAX_RETRIES = 5
-API_RETRY_DELAY = 1  # seconds
 API_TIMEOUT = 15  # seconds
+MIN_REQUEST_GAP = 1.0  # minimum seconds between consecutive requests to the controller
 
 # --- Sensor definitions from regParams.curr ---
 # Each entry: (key_in_api, friendly_name, device_class, unit, state_class)
@@ -67,7 +67,7 @@ SENSOR_DEFINITIONS: dict[str, dict] = {
         "state_class": SensorStateClass.MEASUREMENT,
     },
     "Circuit1thermostat": {
-        "name": "Circuit 1 Thermostat",
+        "name": "Heating Thermostat",
         "device_class": SensorDeviceClass.TEMPERATURE,
         "unit": UnitOfTemperature.CELSIUS,
         "state_class": SensorStateClass.MEASUREMENT,
@@ -105,7 +105,7 @@ SENSOR_DEFINITIONS: dict[str, dict] = {
     "GrantPumpSpeed": {
         "name": "Pump Speed",
         "device_class": None,
-        "unit": None,
+        "unit": "rpm",
         "state_class": SensorStateClass.MEASUREMENT,
     },
     "GrantWorkState": {
@@ -113,6 +113,31 @@ SENSOR_DEFINITIONS: dict[str, dict] = {
         "device_class": None,
         "unit": None,
         "state_class": None,
+        "value_map": {0: "Off", 1: "On"},
+    },
+}
+
+# --- Sensors from regParams.tilesParams / schemaParams ---
+# These read from non-curr sections of the regParams response.
+# Each entry specifies a source path within the regParams JSON.
+
+TILES_SENSOR_DEFINITIONS: dict[str, dict] = {
+    "FanSpeed": {
+        "name": "Fan Speed",
+        "device_class": None,
+        "unit": "rpm",
+        "state_class": SensorStateClass.MEASUREMENT,
+        "source": "tilesParams",
+        "tile_index": 3,
+    },
+    "SystemDemand": {
+        "name": "System Demand",
+        "device_class": None,
+        "unit": None,
+        "state_class": None,
+        "source": "schemaParams",
+        "schema_key": "reakcja_termostat1",
+        "value_map": {"Grzej": "Heat", "Nie grzej": "No Demand"},
     },
 }
 
@@ -123,7 +148,7 @@ SENSOR_DEFINITIONS: dict[str, dict] = {
 NUMBER_DEFINITIONS: dict[str, dict] = {
     "Circuit1ComfortTemp": {
         "param_index": "238",
-        "name": "Circuit 1 Comfort Temperature",
+        "name": "Heating Day Temperature",
         "min_value": 10,
         "max_value": 35,
         "step": 0.1,
@@ -131,7 +156,7 @@ NUMBER_DEFINITIONS: dict[str, dict] = {
     },
     "Circuit1EcoTemp": {
         "param_index": "239",
-        "name": "Circuit 1 Eco Temperature",
+        "name": "Heating Night Temperature",
         "min_value": 10,
         "max_value": 35,
         "step": 0.1,
@@ -139,7 +164,7 @@ NUMBER_DEFINITIONS: dict[str, dict] = {
     },
     "Circuit1BaseTemp": {
         "param_index": "261",
-        "name": "Circuit 1 Base Temperature",
+        "name": "Heating Base Temperature",
         "min_value": 25,
         "max_value": 60,
         "step": 1,
@@ -152,6 +177,89 @@ NUMBER_DEFINITIONS: dict[str, dict] = {
         "max_value": 55,
         "step": 1,
         "unit": UnitOfTemperature.CELSIUS,
+    },
+    "Circuit1DownHist": {
+        "param_index": "240",
+        "name": "Heating Hysteresis",
+        "min_value": 0,
+        "max_value": 5,
+        "step": 0.1,
+        "unit": UnitOfTemperature.CELSIUS,
+    },
+    "DHWHysteresis": {
+        "param_index": "104",
+        "name": "DHW Hysteresis",
+        "min_value": 0,
+        "max_value": 10,
+        "step": 1,
+        "unit": UnitOfTemperature.CELSIUS,
+    },
+    "DHWExtensionOfWork": {
+        "param_index": "113",
+        "name": "DHW Extension of Work",
+        "min_value": 0,
+        "max_value": 30,
+        "step": 1,
+        "unit": "min",
+    },
+    "Circuit1CurveRadiator": {
+        "param_index": "273",
+        "name": "Heating Curve",
+        "min_value": 0,
+        "max_value": 4,
+        "step": 0.1,
+        "unit": None,
+    },
+    "Circuit1Curveshift": {
+        "param_index": "275",
+        "name": "Heating Curve Shift",
+        "min_value": -20,
+        "max_value": 20,
+        "step": 1,
+        "unit": UnitOfTemperature.CELSIUS,
+    },
+}
+
+# --- Writable select entities (mode selectors from editParams.data) ---
+# key: param name, param_index, friendly name, options mapping {api_value: label}
+# Values confirmed via before/after iOS app comparison on 2026-02-25 and 2026-02-28.
+
+SELECT_DEFINITIONS: dict[str, dict] = {
+    "workState2": {
+        "param_index": "162",
+        "name": "Work Mode",
+        "options": {
+            1: "Summer",
+            2: "Winter",
+            6: "Auto",
+        },
+    },
+    "Circuit1WorkState": {
+        "param_index": "236",
+        "name": "Heating Operation Mode",
+        "options": {
+            0: "Off",
+            1: "Day",
+            2: "Night",
+            3: "Schedule",
+        },
+    },
+    "HDWusermode": {
+        "param_index": "119",
+        "name": "DHW Work Mode",
+        "options": {
+            0: "Off",
+            1: "On",
+            2: "Schedule",
+        },
+    },
+    "DHWBoost": {
+        "param_index": "115",
+        "name": "DHW Boost",
+        "options": {
+            0: "Off",
+            1: "On",
+        },
     },
 }
 

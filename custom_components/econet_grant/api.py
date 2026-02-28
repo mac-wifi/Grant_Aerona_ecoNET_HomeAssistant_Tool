@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 from aiohttp import BasicAuth, ClientSession, ClientTimeout
@@ -14,11 +15,11 @@ from .const import (
     API_MAX_RETRIES,
     API_NEW_PARAM,
     API_REG_PARAMS,
-    API_RETRY_DELAY,
     API_RM_CURR_NEW_PARAM,
     API_RM_NEW_PARAM,
     API_SYS_PARAMS,
     API_TIMEOUT,
+    MIN_REQUEST_GAP,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -48,6 +49,8 @@ class EconetClient:
         self._session = session
         self._auth = BasicAuth(username, password)
         self._timeout = ClientTimeout(total=API_TIMEOUT)
+        self._request_lock = asyncio.Lock()
+        self._last_request_at: float = 0.0
 
     @property
     def host(self) -> str:
@@ -56,57 +59,77 @@ class EconetClient:
     def _url(self, endpoint: str) -> str:
         return f"{self._host}{API_BASE_PATH}/{endpoint}"
 
+    async def _throttled_get(
+        self, url: str, params: dict[str, str] | None = None,
+    ) -> tuple[int, dict[str, Any] | None]:
+        """Execute a single GET, serialized and throttled.
+
+        Only one request is in-flight at a time (lock), and at least
+        MIN_REQUEST_GAP seconds elapse between consecutive requests.
+        Raises AuthError on 401, asyncio.TimeoutError on timeout.
+        Returns (status_code, parsed_json_or_None).
+        """
+        async with self._request_lock:
+            gap = MIN_REQUEST_GAP - (time.monotonic() - self._last_request_at)
+            if gap > 0:
+                await asyncio.sleep(gap)
+            try:
+                kwargs: dict[str, Any] = {
+                    "auth": self._auth,
+                    "timeout": self._timeout,
+                }
+                if params:
+                    kwargs["params"] = params
+                async with self._session.get(url, **kwargs) as resp:
+                    if resp.status == 401:
+                        raise AuthError(f"Unauthorized: {url}")
+                    if resp.status != 200:
+                        return resp.status, None
+                    return resp.status, await resp.json()
+            finally:
+                self._last_request_at = time.monotonic()
+
     async def get(self, endpoint: str) -> dict[str, Any] | None:
         """GET an endpoint with retries. Returns parsed JSON or None."""
         url = self._url(endpoint)
         for attempt in range(1, API_MAX_RETRIES + 1):
             try:
-                async with self._session.get(
-                    url, auth=self._auth, timeout=self._timeout
-                ) as resp:
-                    if resp.status == 401:
-                        raise AuthError(f"Unauthorized: {url}")
-                    if resp.status != 200:
-                        _LOGGER.warning(
-                            "HTTP %s from %s (attempt %d/%d)",
-                            resp.status, url, attempt, API_MAX_RETRIES,
-                        )
-                        return None
-                    return await resp.json()
+                status, data = await self._throttled_get(url)
+                if data is None:
+                    _LOGGER.warning(
+                        "HTTP %s from %s (attempt %d/%d)",
+                        status, url, attempt, API_MAX_RETRIES,
+                    )
+                    return None
+                return data
             except asyncio.TimeoutError:
                 _LOGGER.warning(
                     "Timeout fetching %s (attempt %d/%d)",
                     url, attempt, API_MAX_RETRIES,
                 )
-                if attempt < API_MAX_RETRIES:
-                    await asyncio.sleep(API_RETRY_DELAY)
         _LOGGER.error("Failed to fetch %s after %d attempts", url, API_MAX_RETRIES)
         return None
 
-    async def get_with_params(self, endpoint: str, params: dict[str, str]) -> dict[str, Any] | None:
-        """GET an endpoint with query parameters."""
+    async def get_with_params(
+        self, endpoint: str, params: dict[str, str],
+    ) -> dict[str, Any] | None:
+        """GET an endpoint with query parameters and retries."""
         url = self._url(endpoint)
         for attempt in range(1, API_MAX_RETRIES + 1):
             try:
-                async with self._session.get(
-                    url, auth=self._auth, timeout=self._timeout, params=params,
-                ) as resp:
-                    if resp.status == 401:
-                        raise AuthError(f"Unauthorized: {url}")
-                    if resp.status != 200:
-                        _LOGGER.warning(
-                            "HTTP %s from %s (attempt %d/%d)",
-                            resp.status, url, attempt, API_MAX_RETRIES,
-                        )
-                        return None
-                    return await resp.json()
+                status, data = await self._throttled_get(url, params)
+                if data is None:
+                    _LOGGER.warning(
+                        "HTTP %s from %s (attempt %d/%d)",
+                        status, url, attempt, API_MAX_RETRIES,
+                    )
+                    return None
+                return data
             except asyncio.TimeoutError:
                 _LOGGER.warning(
                     "Timeout fetching %s (attempt %d/%d)",
                     url, attempt, API_MAX_RETRIES,
                 )
-                if attempt < API_MAX_RETRIES:
-                    await asyncio.sleep(API_RETRY_DELAY)
         _LOGGER.error("Failed to fetch %s after %d attempts", url, API_MAX_RETRIES)
         return None
 

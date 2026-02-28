@@ -25,11 +25,11 @@ restore_settings:
 
 set_guardian_temp:
   name: Set Guardian Temperature
-  description: Set the desired Circuit 1 temperature that the guardian will enforce. Omit temperature to disable.
+  description: Set the desired Heating temperature that the guardian will enforce. Omit temperature to disable.
   fields:
     temperature:
       name: Temperature
-      description: The desired Circuit 1 Comfort temperature in °C. Leave empty to disable the guardian.
+      description: The desired Heating Day temperature in °C. Leave empty to disable the guardian.
       required: false
       example: "21"
       selector:
