@@ -34,5 +34,8 @@ home-assistant_v2.db*
 secrets.yaml
 .env
 
+# Exports (contain device UID, SSID, password hashes)
+exports/
+
 # Cursor
 .cursor/

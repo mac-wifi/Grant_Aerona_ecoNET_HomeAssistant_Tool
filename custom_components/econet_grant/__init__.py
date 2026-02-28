@@ -30,13 +30,14 @@ from .const import (
     SERVICE_SLOW_COORDINATOR,
 )
 from .coordinator import EconetFastCoordinator, EconetSlowCoordinator
-from .guardian import Circuit1Guardian
+from .guardian import HeatingGuardian
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
     Platform.NUMBER,
+    Platform.SELECT,
     Platform.BUTTON,
 ]
 
@@ -67,7 +68,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await slow_coordinator.async_config_entry_first_refresh()
 
     change_detector = ChangeDetector(hass)
-    guardian = Circuit1Guardian(hass, api, change_detector)
+    guardian = HeatingGuardian(hass, api, change_detector)
 
     # Process the initial slow data for change detection baseline
     if slow_coordinator.data:
