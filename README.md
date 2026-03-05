@@ -1,74 +1,143 @@
 # EcoNet Grant Aerona - Home Assistant Integration
 
-A custom Home Assistant integration for monitoring and controlling a **Grant Aerona** heat pump system via the **ecoNET** REST API (ecoMAX360i controller).
+> **Warning: This is a work-in-progress project built with AI-assisted coding (Cursor IDE). It is provided as-is with no warranty. Use entirely at your own risk. This integration writes to a live heat pump controller -- incorrect use could affect your heating system.**
 
-## Features
+A custom Home Assistant integration for monitoring and controlling a **Grant Aerona** heat pump via the **ecoNET** local REST API (ecoMAX360i controller).
 
-- **Temperature Monitoring**: Circuit 1, DHW, outdoor, flow, and return temperatures polled every 5 minutes
-- **Performance Monitoring**: Compressor frequency, pump speed
-- **System Settings**: Daily polling of all 208+ configurable parameters
-- **Temperature Control**: Set Circuit 1 and DHW temperatures directly from Home Assistant
-- **Change Detection**: Notifications when settings are changed externally (e.g. by guests)
-- **Urgent Alerts**: SMS/WhatsApp for critical setting changes
-- **Settings Backup & Restore**: One-button restore to saved defaults
-- **Circuit 1 Guardian**: Automatically reverts Circuit 1 temperature if changed by guests
-- **Guest Checkout**: Alexa integration to schedule automatic settings reset at checkout
-- **Safe Mode**: Write approval queue for safe testing against live systems
-- **Long-term Storage**: InfluxDB integration for indefinite data retention
-- **Grafana Dashboards**: Temperature, performance, and system dashboards
+This project was created to remotely manage a holiday home heat pump, allowing the owner to monitor what guests are doing with the heating and revert unwanted changes.
+
+## Current Status
+
+**Version:** 0.1.0 (active development)
+
+The integration is functional but has not been deployed to a production Home Assistant instance yet. All parameter mappings have been confirmed through manual before/after testing against the live ecoNET controller using the vendor's iOS app.
+
+## What Works
+
+### Read-Only Sensors (polled every 5 minutes from `regParams`)
+
+| Entity | Source | Description |
+|---|---|---|
+| Outdoor Temperature | `curr.GrantOutdoorTemp` | Outdoor air temp from heat pump |
+| Flow Temperature | `curr.GrantOutgoingTemp` | Water flow temperature |
+| Return Temperature | `curr.GrantReturnTemp` | Water return temperature |
+| DHW Temperature | `curr.TempCWU` | Domestic hot water tank temp |
+| Heating Thermostat | `curr.Circuit1thermostat` | Circuit 1 room thermostat reading |
+| Weather Temperature | `curr.TempWthr` | Weather compensation sensor |
+| Buffer Temperature (Lower) | `curr.TempBuforDown` | Buffer tank lower temp |
+| Heat Exchanger Temperature | `curr.TempClutch` | Heat exchanger / clutch temp |
+| Heat Source Preset Temp | `curr.HeatSourceCalcPresetTemp` | Calculated target flow temp |
+| Compressor Frequency | `curr.GrantCompressorFreq` | Compressor operating frequency (Hz) |
+| Pump Speed | `curr.GrantPumpSpeed` | Main circulation pump speed (rpm) |
+| Work State | `curr.GrantWorkState` | System on/off state |
+| Fan Speed | `tilesParams[3]` | Outdoor unit fan speed (rpm) |
+| System Demand | `schemaParams.reakcja_termostat1` | Heat demand status (Heat / No Demand) |
+
+### Writable Number Entities (from `editParams`)
+
+| Entity | Param Index | Range | Description |
+|---|---|---|---|
+| Heating Day Temperature | 238 | 10-35 °C | Circuit 1 comfort (day) setpoint |
+| Heating Night Temperature | 239 | 10-35 °C | Circuit 1 eco (night) setpoint |
+| Heating Base Temperature | 261 | 25-60 °C | Circuit 1 base temperature |
+| Heating Hysteresis | 240 | 0-5 °C | Circuit 1 switching hysteresis |
+| Heating Curve | 273 | 0-4 | Weather compensation curve gradient |
+| Heating Curve Shift | 275 | -20 to 20 °C | Curve parallel shift offset |
+| DHW Set Point | 103 | 20-55 °C | Hot water target temperature |
+| DHW Hysteresis | 104 | 0-10 °C | Hot water switching hysteresis |
+| DHW Extension of Work | 113 | 0-30 min | Extra DHW heating time |
+
+### Writable Select Entities (from `editParams`)
+
+| Entity | Param Index | Options | Description |
+|---|---|---|---|
+| Work Mode | 162 | Summer, Winter, Auto | System operating mode |
+| Heating Operation Mode | 236 | Off, Day, Night, Schedule | Circuit 1 operating mode |
+| DHW Work Mode | 119 | Off, On, Schedule | Hot water operating mode |
+| DHW Boost | 115 | Off, On | Temporary DHW boost |
+
+### Other Features
+
+- **Safe Mode**: All write operations are blocked by default and shown as persistent notifications, allowing manual review before anything is sent to the controller. Disable in integration options when ready to write.
+- **Change Detection**: Monitors `editParams` for external changes (e.g. someone adjusting settings via the ecoNET app or panel). Fires `econet_grant_setting_changed` events and `econet_grant_urgent_change` for critical parameters.
+- **Circuit 1 Guardian**: Can lock the heating day temperature to a desired value and automatically revert if changed externally.
+- **Backup & Restore**: Services to snapshot all editable parameters and restore them later (e.g. after guest checkout).
+- **Dashboard YAML**: A ready-made Lovelace dashboard in `dashboards/econet.yaml`.
 
 ## Installation
 
-### HACS (Recommended)
+This integration is not available via HACS. Manual installation only:
 
-1. Install [HACS](https://hacs.xyz/) if not already installed
-2. Add this repository as a custom repository in HACS
-3. Search for "EcoNet Grant Aerona" and install
-4. Restart Home Assistant
-5. Go to Settings > Devices & Services > Add Integration > "EcoNet Grant Aerona"
-
-### Manual
-
-1. Copy `custom_components/econet_grant/` to your HA `custom_components/` directory
+1. Copy the `custom_components/econet_grant/` folder into your Home Assistant `custom_components/` directory
 2. Restart Home Assistant
-3. Go to Settings > Devices & Services > Add Integration > "EcoNet Grant Aerona"
-
-## Configuration
-
-During setup you will be prompted for:
-
-- **Host**: IP address of your ecoNET device (e.g. `192.168.x.x`)
-- **Username**: Local device username (not econet24.com credentials)
-- **Password**: Local device password
-
-## InfluxDB & Grafana
-
-For long-term data storage and graphing, install the InfluxDB and Grafana add-ons in Home Assistant. See `ha_config/configuration.yaml` for the InfluxDB integration snippet and `grafana/` for importable dashboard JSON files.
+3. Go to **Settings > Devices & Services > Add Integration** and search for "EcoNet Grant Aerona"
+4. Enter your ecoNET device's local IP address, username, and password (these are the local device credentials, not your econet24.com cloud account)
 
 ## Architecture
 
 ```
-HA Server (192.168.x.x)
-  ├── econet_grant integration  ←→  ecoNET device (192.168.x.x)
-  ├── InfluxDB 2.x (indefinite storage)
-  ├── Grafana (graphs & dashboards)
-  ├── Automations (notifications, guest checkout, Circuit 1 guardian)
-  └── Lovelace Dashboard (controls + embedded Grafana)
+Home Assistant Server
+  └── custom_components/econet_grant/
+        ├── Fast coordinator (5 min)  ──GET──>  http://<econet_ip>/econet/regParams
+        │     └── Sensors, Fan Speed, System Demand
+        ├── Slow coordinator (24 hr)  ──GET──>  http://<econet_ip>/econet/editParams
+        │     └── Number entities, Select entities, Change detection
+        └── Write operations          ──GET──>  http://<econet_ip>/econet/rmNewParam?...
+              └── Sets parameters by index with value
 ```
 
-## Development
+The ecoNET device exposes a local REST API with basic auth. All communication is HTTP on the local network. The integration serialises requests with a minimum 1-second gap to avoid overwhelming the controller.
 
-### Parameter Mapping
+## Export & Comparison Tools
 
-Use `tools/param_mapper.py` to identify unknown API parameters by comparing before/after JSON snapshots:
+The `tools/` directory contains scripts for reverse-engineering the ecoNET API by comparing parameter snapshots before and after making changes in the vendor iOS app.
+
+### Pulling exports
 
 ```bash
-python tools/param_mapper.py Reference/before.json Reference/after.json
+# Set your ecoNET password (or you'll be prompted)
+export ECONET_PASS="your_password"
+
+# Pull a "before" snapshot
+./tools/pull_exports.sh before
+
+# Make a change in the iOS app...
+
+# Pull an "after" snapshot
+./tools/pull_exports.sh after
 ```
 
-### Safe Mode
+This saves `regParams.json`, `editParams.json`, and `sysParams.json` to timestamped directories under `exports/`.
 
-During development, enable `safe_mode` in the integration options. All write operations will be queued and require manual approval via HA persistent notifications before being sent to the live system.
+### Comparing exports
+
+```bash
+python3 tools/compare_exports.py exports/before_20260228_142520 exports/after_20260228_143143
+```
+
+This reports every changed key across all three endpoint files, which is how all the parameter index mappings in this integration were discovered.
+
+Note: `exports/` is gitignored because the files contain device identifiers and password hashes.
+
+## Hardware
+
+- **Heat Pump**: Grant Aerona (air source)
+- **Controller**: ecoMAX360i
+- **Network Module**: ecoNET300 (mr3020-v3 router, firmware 3.2.3881)
+- **Panel**: S003.20_1.10
+- **Module A**: S003.14
+
+## Known Limitations
+
+- Parameter mappings were reverse-engineered from a single Grant Aerona installation. Other ecoNET-based systems (different manufacturers or controller models) will likely have different parameter indices and tile layouts.
+- Fan Speed and System Demand are read from `tilesParams` and `schemaParams` respectively, which are positional/key-based. These positions could theoretically differ on other firmware versions.
+- The ecoNET local API is undocumented. Endpoint behaviour was determined through experimentation.
+- Not all ecoNET parameters have been mapped -- only those tested via before/after comparison.
+- InfluxDB, Grafana, and Alexa/guest-checkout integration are planned but not yet implemented.
+
+## Related Projects
+
+- [ecoNET-300 Home Assistant Integration](https://github.com/jontofront/ecoNET-300-Home-Assistant-Integration) -- A similar project for different ecoNET hardware (pellet boilers). Some API knowledge was referenced from this project.
 
 ## License
 
