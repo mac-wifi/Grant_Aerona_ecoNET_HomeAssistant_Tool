@@ -133,6 +133,7 @@ Note: `exports/` is gitignored because the files contain device identifiers and 
 - Fan Speed and System Demand are read from `tilesParams` and `schemaParams` respectively, which are positional/key-based. These positions could theoretically differ on other firmware versions.
 - The ecoNET local API is undocumented. Endpoint behaviour was determined through experimentation.
 - Not all ecoNET parameters have been mapped -- only those tested via before/after comparison.
+- The ecoNET Remote Menu (RM) API, which provides full parameter metadata and dynamic entity creation, is not supported by the ecoMAX360i controller (`remoteMenu: false` in `sysParams`). See [Reference/RM_ENDPOINTS.md](Reference/RM_ENDPOINTS.md) for details and how to detect if a future firmware update enables it.
 - InfluxDB, Grafana, and Alexa/guest-checkout integration are planned but not yet implemented.
 
 ## Related Projects

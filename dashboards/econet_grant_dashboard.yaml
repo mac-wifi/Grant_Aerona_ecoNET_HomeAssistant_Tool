@@ -1,11 +1,19 @@
 # ============================================================
 # EcoNet Grant Aerona - Lovelace Dashboard
 # ============================================================
-# To use this dashboard:
-#   1. In HA, go to Settings > Dashboards > Add Dashboard
-#   2. Choose "Start with an empty dashboard"
-#   3. Click the 3-dot menu > Edit Dashboard > Raw Configuration Editor
-#   4. Paste this YAML content
+# Add this to configuration.yaml to register as a YAML dashboard:
+#
+#   lovelace:
+#     mode: storage
+#     dashboards:
+#       econet-grant:
+#         mode: yaml
+#         title: Grant Aerona Heat Pump
+#         icon: mdi:heat-pump-outline
+#         filename: dashboards/econet_grant_dashboard.yaml
+#
+# Then place this file at <ha_config>/dashboards/econet_grant_dashboard.yaml
+# and restart Home Assistant.
 #
 # Prerequisites:
 #   - econet_grant integration installed and configured
@@ -28,7 +36,7 @@ views:
       - type: horizontal-stack
         cards:
           - type: gauge
-            entity: sensor.econet_grant_circuit_1_thermostat
+            entity: sensor.grant_aerona_heat_pump_circuit_1_thermostat
             name: Circuit 1
             min: 0
             max: 50
@@ -38,7 +46,7 @@ views:
               red: 40
 
           - type: gauge
-            entity: sensor.econet_grant_dhw_temperature
+            entity: sensor.grant_aerona_heat_pump_dhw_temperature
             name: DHW
             min: 0
             max: 70
@@ -48,7 +56,7 @@ views:
               red: 60
 
           - type: gauge
-            entity: sensor.econet_grant_outdoor_temperature
+            entity: sensor.grant_aerona_heat_pump_outdoor_temperature
             name: Outdoor
             min: -20
             max: 40
@@ -60,14 +68,24 @@ views:
       - type: entities
         title: Temperature Controls
         entities:
-          - entity: number.econet_grant_circuit_1_comfort_temperature
+          - entity: number.grant_aerona_heat_pump_circuit_1_comfort_temperature
             name: Circuit 1 Comfort Temp
-          - entity: number.econet_grant_circuit_1_eco_temperature
+          - entity: number.grant_aerona_heat_pump_circuit_1_eco_temperature
             name: Circuit 1 Eco Temp
-          - entity: number.econet_grant_circuit_1_base_temperature
+          - entity: number.grant_aerona_heat_pump_circuit_1_base_temperature
             name: Circuit 1 Base Temp
-          - entity: number.econet_grant_dhw_set_point
+          - entity: number.grant_aerona_heat_pump_dhw_set_point
             name: DHW Set Point
+          - entity: number.grant_aerona_heat_pump_summer_mode_activation_temperature
+            name: Summer Mode Activation Temp
+          - entity: number.grant_aerona_heat_pump_winter_mode_activation_temperature
+            name: Winter Mode Activation Temp
+          - entity: number.grant_aerona_heat_pump_heating_temperature_correction
+            name: Heating Temperature Correction
+          - entity: number.grant_aerona_heat_pump_dhw_correction_temperature
+            name: DHW Correction Temperature
+          - entity: select.grant_aerona_heat_pump_dhw_specify_priority
+            name: DHW Specify Priority
 
       - type: entities
         title: Circuit 1 Guardian
@@ -92,42 +110,42 @@ views:
       - type: horizontal-stack
         cards:
           - type: entity
-            entity: sensor.econet_grant_flow_temperature
+            entity: sensor.grant_aerona_heat_pump_flow_temperature
             name: Flow Temp
             icon: mdi:thermometer-chevron-up
 
           - type: entity
-            entity: sensor.econet_grant_return_temperature
+            entity: sensor.grant_aerona_heat_pump_return_temperature
             name: Return Temp
             icon: mdi:thermometer-chevron-down
 
           - type: entity
-            entity: sensor.econet_grant_compressor_frequency
+            entity: sensor.grant_aerona_heat_pump_compressor_frequency
             name: Compressor
             icon: mdi:sine-wave
 
           - type: entity
-            entity: sensor.econet_grant_pump_speed
+            entity: sensor.grant_aerona_heat_pump_pump_speed
             name: Pump Speed
             icon: mdi:pump
 
       - type: horizontal-stack
         cards:
           - type: entity
-            entity: sensor.econet_grant_weather_temperature
+            entity: sensor.grant_aerona_heat_pump_weather_temperature
             name: Weather Temp
 
           - type: entity
-            entity: sensor.econet_grant_buffer_temperature_lower
+            entity: sensor.grant_aerona_heat_pump_buffer_temperature_lower
             name: Buffer Temp
 
           - type: entity
-            entity: sensor.econet_grant_heat_exchanger_temperature
+            entity: sensor.grant_aerona_heat_pump_heat_exchanger_temperature
             name: Heat Exchanger
 
           - type: entity
-            entity: sensor.econet_grant_work_state
-            name: Work State
+            entity: select.grant_aerona_heat_pump_heat_pump_mode
+            name: Heat Pump Mode
 
       - type: iframe
         title: Performance Graphs (Grafana)
@@ -144,7 +162,7 @@ views:
       - type: entities
         title: System Info
         entities:
-          - entity: sensor.econet_grant_work_state
+          - entity: select.grant_aerona_heat_pump_heat_pump_mode
             name: Current State
 
       - type: horizontal-stack
