@@ -43,26 +43,30 @@ async def async_setup_entry(
     entities: list[SensorEntity] = []
 
     for key, defn in SENSOR_DEFINITIONS.items():
-        description = SensorEntityDescription(
-            key=key,
-            name=defn["name"],
-            device_class=defn["device_class"],
-            native_unit_of_measurement=defn["unit"],
-            state_class=defn["state_class"],
-            suggested_display_precision=1,
-        )
+        desc_kwargs: dict[str, Any] = {
+            "key": key,
+            "name": defn["name"],
+            "device_class": defn["device_class"],
+            "native_unit_of_measurement": defn["unit"],
+            "state_class": defn["state_class"],
+        }
+        if defn["state_class"] is not None:
+            desc_kwargs["suggested_display_precision"] = 1
+        description = SensorEntityDescription(**desc_kwargs)
         value_map = defn.get("value_map")
         entities.append(EconetSensor(coordinator, api, description, value_map))
 
     for key, defn in TILES_SENSOR_DEFINITIONS.items():
-        description = SensorEntityDescription(
-            key=key,
-            name=defn["name"],
-            device_class=defn["device_class"],
-            native_unit_of_measurement=defn["unit"],
-            state_class=defn["state_class"],
-            suggested_display_precision=1,
-        )
+        desc_kwargs = {
+            "key": key,
+            "name": defn["name"],
+            "device_class": defn["device_class"],
+            "native_unit_of_measurement": defn["unit"],
+            "state_class": defn["state_class"],
+        }
+        if defn["state_class"] is not None:
+            desc_kwargs["suggested_display_precision"] = 1
+        description = SensorEntityDescription(**desc_kwargs)
         entities.append(
             EconetTilesSensor(coordinator, api, description, defn)
         )

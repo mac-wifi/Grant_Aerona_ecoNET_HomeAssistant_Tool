@@ -108,13 +108,6 @@ SENSOR_DEFINITIONS: dict[str, dict] = {
         "unit": "rpm",
         "state_class": SensorStateClass.MEASUREMENT,
     },
-    "GrantWorkState": {
-        "name": "Work State",
-        "device_class": None,
-        "unit": None,
-        "state_class": None,
-        "value_map": {0: "Off", 1: "On"},
-    },
 }
 
 # --- Sensors from regParams.tilesParams / schemaParams ---
@@ -137,7 +130,12 @@ TILES_SENSOR_DEFINITIONS: dict[str, dict] = {
         "state_class": None,
         "source": "schemaParams",
         "schema_key": "reakcja_termostat1",
-        "value_map": {"Grzej": "Heat", "Nie grzej": "No Demand"},
+        "value_map": {
+            "Grzej": "Heating",
+            "Nie grzej": "No Demand",
+            "Heating": "Heating",
+            "No Demand": "No Demand",
+        },
     },
 }
 
@@ -218,6 +216,54 @@ NUMBER_DEFINITIONS: dict[str, dict] = {
         "step": 1,
         "unit": UnitOfTemperature.CELSIUS,
     },
+    "Circuit1boosttimeleft": {
+        "param_index": "1521",
+        "name": "Circuit 1 Boost Time",
+        "min_value": 0,
+        "max_value": 180,
+        "step": 1,
+        "unit": "min",
+    },
+    "Korekta_temperatury": {
+        "param_index": "10413",
+        "name": "Panel Temperature Correction",
+        "min_value": -5,
+        "max_value": 5,
+        "step": 0.1,
+        "unit": UnitOfTemperature.CELSIUS,
+    },
+    "SummerOn": {
+        "param_index": "702",
+        "name": "Summer Mode Activation Temperature",
+        "min_value": 17,
+        "max_value": 30,
+        "step": 1,
+        "unit": UnitOfTemperature.CELSIUS,
+    },
+    "SummerOff": {
+        "param_index": "703",
+        "name": "Winter Mode Activation Temperature",
+        "min_value": 0,
+        "max_value": 19,
+        "step": 1,
+        "unit": UnitOfTemperature.CELSIUS,
+    },
+    "HeatSourceTempInc": {
+        "param_index": "481",
+        "name": "DHW Correction Temperature",
+        "min_value": 0,
+        "max_value": 20,
+        "step": 1,
+        "unit": UnitOfTemperature.CELSIUS,
+    },
+    "hSMPTSIncreaseCirc": {
+        "param_index": "1402",
+        "name": "Heating Temperature Correction",
+        "min_value": 0,
+        "max_value": 20,
+        "step": 1,
+        "unit": UnitOfTemperature.CELSIUS,
+    },
 }
 
 # --- Writable select entities (mode selectors from editParams.data) ---
@@ -260,6 +306,33 @@ SELECT_DEFINITIONS: dict[str, dict] = {
             0: "Off",
             1: "On",
         },
+    },
+    "GrantWorkState": {
+        "param_index": "1133",
+        "name": "Heat Pump Mode",
+        "options": {
+            0: "Off",
+            1: "On",
+            2: "Schedule",
+        },
+    },
+}
+
+# --- Bitmask toggle selects (Yes/No toggles within a settings bitmask) ---
+# These operate on a single bit within a larger settings parameter.
+# The select reads the bit state and writes the full param with the bit toggled.
+# key: friendly key, settings_param: data key holding the bitmask,
+# bit_mask: the bit to toggle, on_label/off_label: display labels,
+# on_clears_bit: True if "On/Yes" means the bit should be CLEAR (inverted logic).
+
+BITMASK_SELECT_DEFINITIONS: dict[str, dict] = {
+    "HDWSpecifyPriority": {
+        "settings_param": "101",
+        "bit_mask": 16,
+        "name": "DHW Specify Priority",
+        "on_label": "Yes",
+        "off_label": "No",
+        "on_clears_bit": False,
     },
 }
 

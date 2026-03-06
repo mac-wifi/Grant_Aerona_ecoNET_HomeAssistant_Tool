@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# Pull JSON exports from all 3 ecoNET API endpoints.
+# Pull JSON exports from all known ecoNET API endpoints (legacy + RM).
 # Usage: ./pull_exports.sh <label>
 #   e.g. ./pull_exports.sh before
 #        ./pull_exports.sh after
 #
-# Outputs go to exports/<label>/ as timestamped JSON files.
+# Outputs go to exports/<label>_<timestamp>/ as pretty-printed JSON files.
 
 set -euo pipefail
 
@@ -28,23 +28,40 @@ mkdir -p "$OUT_DIR"
 BASE_URL="http://${ECONET_HOST}/econet"
 AUTH="${ECONET_USER}:${ECONET_PASS}"
 
-for endpoint in regParams editParams sysParams; do
-    echo -n "Fetching ${endpoint}... "
+LEGACY_ENDPOINTS="regParams editParams sysParams"
+RM_ENDPOINTS="regParamsData rmCurrentDataParams rmCurrentDataParamsEdits rmParamsData rmParamsNames rmParamsDescs rmParamsEnums rmParamsUnitsNames rmStructure rmLangs rmExistingLangs rmLocksNames rmAlarmsNames"
+
+ok_count=0
+skip_count=0
+
+echo "Pulling from ${ECONET_HOST} → ${OUT_DIR}"
+echo ""
+
+for endpoint in $LEGACY_ENDPOINTS $RM_ENDPOINTS; do
+    echo -n "  ${endpoint}... "
     HTTP_CODE=$(curl -s -w "%{http_code}" -o "${OUT_DIR}/${endpoint}.json" \
         --user "$AUTH" \
         --max-time 15 \
-        "${BASE_URL}/${endpoint}")
+        "${BASE_URL}/${endpoint}" 2>/dev/null || echo "000")
 
     if [[ "$HTTP_CODE" == "200" ]]; then
         python3 -m json.tool "${OUT_DIR}/${endpoint}.json" > "${OUT_DIR}/${endpoint}_pretty.json" 2>/dev/null \
             && mv "${OUT_DIR}/${endpoint}_pretty.json" "${OUT_DIR}/${endpoint}.json"
-        echo "OK ($(wc -c < "${OUT_DIR}/${endpoint}.json" | tr -d ' ') bytes)"
+        size=$(wc -c < "${OUT_DIR}/${endpoint}.json" | tr -d ' ')
+        echo "OK (${size} bytes)"
+        ok_count=$((ok_count + 1))
     else
-        echo "FAILED (HTTP ${HTTP_CODE})"
+        rm -f "${OUT_DIR}/${endpoint}.json"
+        echo "SKIP (HTTP ${HTTP_CODE})"
+        skip_count=$((skip_count + 1))
     fi
+
+    # Small delay between requests to avoid overwhelming the controller
+    sleep 1
 done
 
 echo ""
-echo "Exports saved to: ${OUT_DIR}"
-echo "Files:"
+echo "Done: ${ok_count} OK, ${skip_count} skipped"
+echo "Saved to: ${OUT_DIR}"
+echo ""
 ls -la "${OUT_DIR}"

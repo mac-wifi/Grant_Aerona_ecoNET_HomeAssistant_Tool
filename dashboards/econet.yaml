@@ -12,8 +12,8 @@ views:
         title: System Status
         show_header_toggle: false
         entities:
-          - entity: sensor.grant_aerona_heat_pump_work_state
-            name: Work State
+          - entity: select.grant_aerona_heat_pump_heat_pump_mode
+            name: Heat Pump Mode
           - entity: select.grant_aerona_heat_pump_work_mode
             name: Work Mode
           - entity: sensor.grant_aerona_heat_pump_system_demand
@@ -75,6 +75,14 @@ views:
             name: Heating Curve
           - entity: number.grant_aerona_heat_pump_heating_curve_shift
             name: Heating Curve Shift
+          - entity: number.grant_aerona_heat_pump_circuit_1_boost_time
+            name: Boost Time
+          - entity: number.grant_aerona_heat_pump_heating_temperature_correction
+            name: Temperature Correction
+          - entity: number.grant_aerona_heat_pump_summer_mode_activation_temperature
+            name: Summer Mode Activation Temp
+          - entity: number.grant_aerona_heat_pump_winter_mode_activation_temperature
+            name: Winter Mode Activation Temp
 
       - type: entities
         title: Domestic Hot Water
@@ -90,6 +98,17 @@ views:
             name: Extension of Work
           - entity: select.grant_aerona_heat_pump_dhw_boost
             name: Boost
+          - entity: select.grant_aerona_heat_pump_dhw_specify_priority
+            name: Specify Priority
+          - entity: number.grant_aerona_heat_pump_dhw_correction_temperature
+            name: Correction Temperature
+
+      - type: entities
+        title: System
+        show_header_toggle: false
+        entities:
+          - entity: number.grant_aerona_heat_pump_panel_temperature_correction
+            name: Panel Temperature Correction
 
       - type: heading
         heading: Actions

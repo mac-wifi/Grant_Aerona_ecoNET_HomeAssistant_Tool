@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import EconetApi
 from .const import (
+    BITMASK_SELECT_DEFINITIONS,
     CONF_SAFE_MODE,
     DEFAULT_SAFE_MODE,
     DEVICE_MANUFACTURER,
@@ -42,10 +43,14 @@ async def async_setup_entry(
     slow_coordinator: EconetSlowCoordinator = data[SERVICE_SLOW_COORDINATOR]
     api: EconetApi = data[SERVICE_API]
 
-    entities: list[EconetSelect] = []
+    entities: list[SelectEntity] = []
     for key, defn in SELECT_DEFINITIONS.items():
         entities.append(
             EconetSelect(fast_coordinator, slow_coordinator, api, entry, key, defn)
+        )
+    for key, defn in BITMASK_SELECT_DEFINITIONS.items():
+        entities.append(
+            EconetBitmaskSelect(fast_coordinator, slow_coordinator, api, entry, key, defn)
         )
 
     async_add_entities(entities)
@@ -154,6 +159,117 @@ class EconetSelect(CoordinatorEntity[EconetFastCoordinator], SelectEntity):
             _LOGGER.info("Set %s to %s (value=%d)", self._key, option, api_value)
         else:
             _LOGGER.error("Failed to set %s to %s (value=%d)", self._key, option, api_value)
+            if change_detector:
+                change_detector.clear_self_write(self._key)
+
+
+class EconetBitmaskSelect(CoordinatorEntity[EconetFastCoordinator], SelectEntity):
+    """A select entity that toggles a single bit within a settings bitmask."""
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        fast_coordinator: EconetFastCoordinator,
+        slow_coordinator: EconetSlowCoordinator,
+        api: EconetApi,
+        entry: ConfigEntry,
+        key: str,
+        defn: dict[str, Any],
+    ) -> None:
+        super().__init__(fast_coordinator)
+        self._slow_coordinator = slow_coordinator
+        self._api = api
+        self._entry = entry
+        self._key = key
+        self._settings_param = defn["settings_param"]
+        self._bit_mask = defn["bit_mask"]
+        self._on_label = defn["on_label"]
+        self._off_label = defn["off_label"]
+        self._on_clears_bit = defn.get("on_clears_bit", False)
+
+        self._attr_unique_id = f"{DOMAIN}_{api.uid}_{key}"
+        self._attr_name = defn["name"]
+        self._attr_options = [self._on_label, self._off_label]
+
+        self._attr_current_option = self._read_current()
+
+    def _read_current(self) -> str | None:
+        edit_params = (
+            self._slow_coordinator.data.get("editParams", {})
+            if self._slow_coordinator.data
+            else {}
+        )
+        param_data = edit_params.get("data", {}).get(self._settings_param, {})
+        raw_value = param_data.get("value") if param_data else None
+        if raw_value is None:
+            return None
+        bit_is_set = bool(int(raw_value) & self._bit_mask)
+        if self._on_clears_bit:
+            return self._off_label if bit_is_set else self._on_label
+        return self._on_label if bit_is_set else self._off_label
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._api.uid or self._api.host)},
+            name="Grant Aerona Heat Pump",
+            manufacturer=DEVICE_MANUFACTURER,
+            model=DEVICE_MODEL,
+            sw_version=self._api.sw_version,
+        )
+
+    @property
+    def _safe_mode(self) -> bool:
+        return self._entry.options.get(CONF_SAFE_MODE, DEFAULT_SAFE_MODE)
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self._attr_current_option = self._read_current()
+        self.async_write_ha_state()
+
+    def _get_change_detector(self):
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        return entry_data.get(SERVICE_CHANGE_DETECTOR)
+
+    async def async_select_option(self, option: str) -> None:
+        """Toggle the bitmask bit to match the selected option."""
+        edit_params = (
+            self._slow_coordinator.data.get("editParams", {})
+            if self._slow_coordinator.data
+            else {}
+        )
+        param_data = edit_params.get("data", {}).get(self._settings_param, {})
+        current_raw = param_data.get("value") if param_data else None
+        if current_raw is None:
+            _LOGGER.error("Cannot read current %s for bitmask toggle", self._settings_param)
+            return
+
+        current_int = int(current_raw)
+        want_on = option == self._on_label
+
+        if self._on_clears_bit:
+            new_value = current_int & ~self._bit_mask if want_on else current_int | self._bit_mask
+        else:
+            new_value = current_int | self._bit_mask if want_on else current_int & ~self._bit_mask
+
+        if self._safe_mode:
+            await _safe_mode_notify(
+                self.hass, self._key, self._settings_param, option, new_value,
+            )
+            return
+
+        change_detector = self._get_change_detector()
+        if change_detector:
+            change_detector.mark_self_write(self._key)
+
+        success = await self._api.set_param_by_index(self._settings_param, new_value)
+        if success:
+            self._attr_current_option = option
+            self.async_write_ha_state()
+            _LOGGER.info("Set %s to %s (bitmask %s → %d)", self._key, option, self._settings_param, new_value)
+        else:
+            _LOGGER.error("Failed to set %s to %s", self._key, option)
             if change_detector:
                 change_detector.clear_self_write(self._key)
 

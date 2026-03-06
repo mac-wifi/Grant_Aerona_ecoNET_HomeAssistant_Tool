@@ -20,3 +20,16 @@ Testing Round 3
 **Main circulation pump: 0rpm to 4000
 Circuit 1 Heating Curve: 1.4 to 2.1
 Circuiti 1 Heating Curve Shift: 0 to 3
+
+Testing Round 4
+Heat Pump Word Mode: On > Schedule (only other possible value is Off)
+Circuit 1 Boost Time: 0 > 19 min (could be 18 min, it was counting down) (max 180) 
+DHW Specify Priority: Yes > No (only values)
+Panel Correction Temp: 0.0 > 0.3c (min -5c, max +5c)
+
+Testing Round 5
+DHW Specify Priority: No > Yes
+Summer Mode Activation Temp: 19c > 21c
+Winter Mode Activation Temp: 17c > 18c
+DHW Correction Temp: 5c > 8c
+Circuit Temp Correction: 2c > 4c

@@ -52,6 +52,8 @@ class EconetFastCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "currUnits": reg_params.get("currUnits", {}),
             "settingsVer": reg_params.get("settingsVer"),
             "editableParamsVer": reg_params.get("editableParamsVer"),
+            "tilesParams": reg_params.get("tilesParams", []),
+            "schemaParams": reg_params.get("schemaParams", {}),
         }
 
 

@@ -1,38 +1,45 @@
 {
-    "settingsVer": 65162,
-    "editableParamsVer": 9612,
+    "settingsVer": 20842,
+    "editableParamsVer": 3460,
     "schedulesVer": 0,
     "remoteMenuVer": {},
     "curr": {
-        "TempWthr": 25.5,
-        "GrantCompressorFreq": 0,
-        "TempCWU": 53.700000000000003,
-        "GrantReturnTemp": 22.0,
-        "PS": "S002.11",
+        "GrantOutgoingTemp": 32.0,
+        "TempWthr": 5.0,
+        "GrantCompressorFreq": 80,
+        "TempCWU": 55.1,
+        "GrantReturnTemp": 27.0,
+        "PS": "S004.24",
+        "hdwBelowSetpointCounter": 0,
+        "TotalOutTemp": 999.0,
         "flapValveStates": 0,
-        "GrantOutgoingTemp": 22.0,
-        "Circuit5thermostatTemp": 0,
+        "TempCircuit6": 999.0,
+        "Circuit5thermostatTemp": 999.0,
         "TempBuforUp": null,
-        "GrantOutdoorTemp": -20.0,
-        "TempBuforDown": 22.0,
-        "Circuit4thermostatTemp": 0,
-        "Circuit7thermostatTemp": 0,
+        "GrantOutdoorTemp": 5.0,
+        "TempBuforDown": 27.0,
+        "Circuit4thermostatTemp": 999.0,
+        "Circuit7thermostatTemp": 999.0,
         "GrantWorkState": 1,
-        "Circuit6thermostatTemp": 0,
-        "Circuit3Curveshift": 0,
-        "Circuit1thermostat": 23.690000000000001,
-        "Circuit2thermostatTemp": 0,
-        "TempClutch": 22.0,
+        "belowSetpointCounter": 0,
+        "ahsPumpPower": 0,
+        "currentFlow": 19.5,
+        "Circuit6thermostatTemp": 999.0,
+        "Circuit1thermostat": 20.25,
+        "Circuit2thermostatTemp": 999.0,
+        "TempClutch": 32.0,
         "TempCircuit5": 999.0,
         "TempCircuit4": 999.0,
         "TempCircuit7": 999.0,
-        "TempCircuit6": 999.0,
+        "Circuit3thermostatTemp": 999.0,
         "TempCircuit3": 999.0,
         "TempCircuit2": 999.0,
-        "HeatSourceCalcPresetTemp": 30,
-        "GrantPumpSpeed": 0
+        "HeatSourceCalcPresetTemp": 46,
+        "GrantPumpSpeed": 4000
     },
     "currUnits": {
+        "belowSetpointCounter": 2,
+        "hdwBelowSetpointCounter": 2,
         "TempClutch": 1,
         "GrantOutgoingTemp": 1,
         "GrantCompressorFreq": 70,
@@ -43,13 +50,16 @@
         "TempBuforDown": 1
     },
     "currNumbers": {
+        "GrantOutgoingTemp": 1134,
         "TempWthr": 68,
         "GrantCompressorFreq": 1136,
         "TempCWU": 61,
         "GrantReturnTemp": 1135,
         "PS": 10010,
+        "hdwBelowSetpointCounter": 1471,
+        "TotalOutTemp": 78,
         "flapValveStates": 83,
-        "GrantOutgoingTemp": 1134,
+        "TempCircuit6": 72,
         "Circuit5thermostatTemp": 1036,
         "TempBuforUp": 62,
         "GrantOutdoorTemp": 1143,
@@ -57,15 +67,17 @@
         "Circuit4thermostatTemp": 985,
         "Circuit7thermostatTemp": 829,
         "GrantWorkState": 1133,
+        "belowSetpointCounter": 1470,
+        "ahsPumpPower": 1065,
+        "currentFlow": 612,
         "Circuit6thermostatTemp": 779,
-        "Circuit3Curveshift": 897,
         "Circuit1thermostat": 277,
         "Circuit2thermostatTemp": 327,
         "TempClutch": 64,
         "TempCircuit5": 71,
         "TempCircuit4": 70,
         "TempCircuit7": 73,
-        "TempCircuit6": 72,
+        "Circuit3thermostatTemp": 899,
         "TempCircuit3": 67,
         "TempCircuit2": 66,
         "HeatSourceCalcPresetTemp": 479,
@@ -75,7 +87,7 @@
         "mieszacz_bufor_pellet": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -86,7 +98,7 @@
         "kociol_elektryczny": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -97,7 +109,7 @@
         "podloga4": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -108,7 +120,7 @@
         "miesz3_otw": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -119,7 +131,7 @@
         "podloga2": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -130,7 +142,7 @@
         "podloga3": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -141,7 +153,7 @@
         "pompa_cyrkulacja_ON_CWU": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -152,7 +164,7 @@
         "pompa_ON_klimakonwektor4": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -163,7 +175,7 @@
         "pompa_ON_klimakonwektor5": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -174,7 +186,7 @@
         "pompa_CWU": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -185,18 +197,18 @@
         "pompa_ON_klimakonwektor1": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
             ],
-            false,
+            true,
             true
         ],
         "pompa_ON_klimakonwektor2": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -207,7 +219,7 @@
         "pompa_ON_klimakonwektor3": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -218,7 +230,7 @@
         "pompa_ciepla": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -229,7 +241,7 @@
         "pompa_kociol_gazowy_ON": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -240,7 +252,7 @@
         "mieszacz_bufor_gazowy": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -284,7 +296,7 @@
         "temp_sprzeglo": [
             [
                 [
-                    "22.0",
+                    "32.0",
                     1,
                     0
                 ]
@@ -306,7 +318,7 @@
         "reakcja_termostat1": [
             [
                 [
-                    "Nie grzej",
+                    "Grzej",
                     0,
                     1
                 ]
@@ -317,7 +329,7 @@
         "termostat5": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -328,7 +340,7 @@
         "termostat4": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -339,7 +351,7 @@
         "termostat3": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -350,7 +362,7 @@
         "termostat2": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -361,7 +373,7 @@
         "termostat1": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -372,7 +384,7 @@
         "termostat3-en": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -383,7 +395,7 @@
         "temp_grzejnik1": [
             [
                 [
-                    "22.0",
+                    "32.0",
                     1,
                     0
                 ]
@@ -394,51 +406,51 @@
         "temp_termostat5": [
             [
                 [
-                    "0.0",
+                    "999.0",
                     1,
                     0
                 ]
             ],
             false,
-            true
+            false
         ],
         "temp_termostat4": [
             [
                 [
-                    "0.0",
+                    "999.0",
                     1,
                     0
                 ]
             ],
             false,
-            true
+            false
         ],
         "temp_termostat3": [
             [
                 [
-                    "0.0",
+                    "999.0",
                     1,
                     0
                 ]
             ],
             false,
-            true
+            false
         ],
         "temp_termostat2": [
             [
                 [
-                    "0.0",
+                    "999.0",
                     1,
                     0
                 ]
             ],
             false,
-            true
+            false
         ],
         "temp_termostat1": [
             [
                 [
-                    "23.7",
+                    "20.2",
                     1,
                     0
                 ]
@@ -449,7 +461,7 @@
         "podloga1": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -471,7 +483,7 @@
         "CWU": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -482,7 +494,7 @@
         "kociol_olejowy": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -493,7 +505,7 @@
         "grzanie_CWU": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -548,7 +560,7 @@
         "pompa_GZ1": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -559,7 +571,7 @@
         "termostat1-en": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -570,7 +582,7 @@
         "bufor_gora": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -625,7 +637,7 @@
         "pompa_kociol_pellet_ON": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -636,7 +648,7 @@
         "grzejnik1": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -647,7 +659,7 @@
         "grzejnik3": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -658,7 +670,7 @@
         "grzejnik2": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -669,7 +681,7 @@
         "grzejnik5": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -680,7 +692,7 @@
         "grzejnik4": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -713,7 +725,7 @@
         "kociol_pellet": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -724,7 +736,7 @@
         "miesz2_otw": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -735,7 +747,7 @@
         "klimakonwektor1": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -746,7 +758,7 @@
         "klimakonwektor3": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -757,7 +769,7 @@
         "klimakonwektor2": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -768,7 +780,7 @@
         "klimakonwektor5": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -779,7 +791,7 @@
         "cyrkulacja_CWU": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -790,7 +802,7 @@
         "temp_CWU": [
             [
                 [
-                    "53.7",
+                    "55.1",
                     1,
                     0
                 ]
@@ -801,7 +813,7 @@
         "grzanie_bufor": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -812,7 +824,7 @@
         "kociol_gazowy": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -823,18 +835,18 @@
         "pompa_ON_podloga4": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
             ],
-            false,
+            true,
             true
         ],
         "pompa_ON_podloga1": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -845,18 +857,18 @@
         "pompa_ON_podloga3": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
             ],
-            false,
+            true,
             true
         ],
         "pompa_ON_podloga2": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -867,7 +879,7 @@
         "mieszacz_bufor": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -878,7 +890,7 @@
         "temp_pogoda": [
             [
                 [
-                    "25.5",
+                    "5.0",
                     1,
                     0
                 ]
@@ -889,7 +901,7 @@
         "miesz5_otw": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -900,7 +912,7 @@
         "pompa_kociol_ON": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -911,7 +923,7 @@
         "temp_bufor_dol": [
             [
                 [
-                    "22.0",
+                    "27.0",
                     1,
                     0
                 ]
@@ -922,7 +934,7 @@
         "Bufor": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -988,7 +1000,7 @@
         "pompa_ON_grzejnik4": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -999,29 +1011,29 @@
         "pompa_ON_grzejnik5": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
             ],
-            false,
+            true,
             true
         ],
         "pompa_ON_grzejnik1": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
             ],
-            false,
+            true,
             true
         ],
         "pompa_ON_grzejnik2": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -1032,7 +1044,7 @@
         "pompa_ON_grzejnik3": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -1043,7 +1055,7 @@
         "miesz4_otw": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -1054,7 +1066,7 @@
         "wyprowadzenia_kociol": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -1065,7 +1077,7 @@
         "termostat2-en": [
             [
                 [
-                    "S002.04",
+                    "S004.29",
                     0,
                     0
                 ]
@@ -1093,7 +1105,7 @@
         [
             [
                 [
-                    0,
+                    80,
                     29,
                     0
                 ]
@@ -1108,7 +1120,7 @@
         [
             [
                 [
-                    "2",
+                    "0",
                     0,
                     1
                 ]
@@ -1123,7 +1135,7 @@
         [
             [
                 [
-                    0,
+                    650,
                     12,
                     0
                 ]
@@ -1138,7 +1150,7 @@
         [
             [
                 [
-                    "0.3",
+                    "19.5",
                     30,
                     0
                 ]
@@ -1168,7 +1180,7 @@
         [
             [
                 [
-                    30,
+                    46,
                     1,
                     0
                 ]
@@ -1183,7 +1195,7 @@
         [
             [
                 [
-                    "22.0",
+                    "32.0",
                     1,
                     0
                 ]
@@ -1198,7 +1210,7 @@
         [
             [
                 [
-                    "25.5",
+                    "5.0",
                     1,
                     0
                 ]
@@ -1213,7 +1225,7 @@
         [
             [
                 [
-                    "53.7",
+                    "55.1",
                     1,
                     0
                 ]
@@ -1279,7 +1291,7 @@
         [
             [
                 [
-                    "22.0",
+                    "27.0",
                     1,
                     0
                 ]
@@ -1309,7 +1321,7 @@
         [
             [
                 [
-                    "---",
+                    "0.0",
                     1,
                     0
                 ]
@@ -1324,7 +1336,7 @@
         [
             [
                 [
-                    "22.0",
+                    "27.0",
                     1,
                     0
                 ]
@@ -1348,7 +1360,7 @@
             false,
             [
                 [
-                    40,
+                    45,
                     1,
                     0
                 ]
@@ -1360,7 +1372,7 @@
         [
             [
                 [
-                    "22.0",
+                    "27.0",
                     1,
                     0
                 ]
@@ -1369,7 +1381,7 @@
             false,
             [
                 [
-                    40,
+                    45,
                     1,
                     0
                 ]
@@ -1381,16 +1393,16 @@
         [
             [
                 [
-                    "---",
+                    "0.0",
                     1,
                     0
                 ]
             ],
-            false,
+            true,
             false,
             [
                 [
-                    40,
+                    45,
                     1,
                     0
                 ]
@@ -1402,7 +1414,7 @@
         [
             [
                 [
-                    "22.0",
+                    "27.0",
                     1,
                     0
                 ]
@@ -1411,7 +1423,7 @@
             false,
             [
                 [
-                    40,
+                    45,
                     1,
                     0
                 ]
@@ -1423,7 +1435,7 @@
         [
             [
                 [
-                    22.0,
+                    32.0,
                     1,
                     0
                 ]
@@ -1432,7 +1444,7 @@
             false,
             [
                 [
-                    40,
+                    45,
                     1,
                     0
                 ]
@@ -1444,7 +1456,7 @@
         [
             [
                 [
-                    "23.7",
+                    "20.2",
                     1,
                     0
                 ]
@@ -1453,7 +1465,7 @@
             true,
             [
                 [
-                    "20.0",
+                    "21.0",
                     1,
                     0
                 ]
@@ -1465,7 +1477,7 @@
         [
             [
                 [
-                    "23.7",
+                    "20.2",
                     1,
                     0
                 ]
@@ -1501,7 +1513,7 @@
         [
             [
                 [
-                    "22.0",
+                    "27.0",
                     1,
                     0
                 ]
@@ -1531,7 +1543,7 @@
         [
             [
                 [
-                    "22.0",
+                    "27.0",
                     1,
                     0
                 ]
@@ -1546,7 +1558,7 @@
         [
             [
                 [
-                    22.0,
+                    32.0,
                     1,
                     0
                 ]
@@ -1561,7 +1573,7 @@
         [
             [
                 [
-                    "20.0",
+                    "44.8",
                     1,
                     0
                 ]
@@ -1585,7 +1597,7 @@
             false,
             [
                 [
-                    40,
+                    45,
                     1,
                     0
                 ]
@@ -1597,12 +1609,12 @@
         [
             [
                 [
-                    "0.0",
+                    "999.0",
                     1,
                     0
                 ]
             ],
-            true,
+            false,
             false,
             [
                 [
@@ -1618,12 +1630,12 @@
         [
             [
                 [
-                    "0.0",
+                    "999.0",
                     1,
                     0
                 ]
             ],
-            true,
+            false,
             false,
             [
                 [
@@ -1714,7 +1726,7 @@
             false,
             [
                 [
-                    40,
+                    45,
                     1,
                     0
                 ]
@@ -1726,12 +1738,12 @@
         [
             [
                 [
-                    "0.0",
+                    "999.0",
                     1,
                     0
                 ]
             ],
-            true,
+            false,
             false,
             [
                 [
@@ -1747,12 +1759,12 @@
         [
             [
                 [
-                    "0.0",
+                    "999.0",
                     1,
                     0
                 ]
             ],
-            true,
+            false,
             false,
             [
                 [
@@ -1843,7 +1855,7 @@
             false,
             [
                 [
-                    40,
+                    45,
                     1,
                     0
                 ]
@@ -1855,12 +1867,12 @@
         [
             [
                 [
-                    "0.0",
+                    "999.0",
                     1,
                     0
                 ]
             ],
-            true,
+            false,
             false,
             [
                 [
@@ -1876,12 +1888,12 @@
         [
             [
                 [
-                    "0.0",
+                    "999.0",
                     1,
                     0
                 ]
             ],
-            true,
+            false,
             false,
             [
                 [
@@ -1972,7 +1984,7 @@
             false,
             [
                 [
-                    40,
+                    45,
                     1,
                     0
                 ]
@@ -1984,12 +1996,12 @@
         [
             [
                 [
-                    "0.0",
+                    "999.0",
                     1,
                     0
                 ]
             ],
-            true,
+            false,
             false,
             [
                 [
@@ -2005,12 +2017,12 @@
         [
             [
                 [
-                    "0.0",
+                    "999.0",
                     1,
                     0
                 ]
             ],
-            true,
+            false,
             false,
             [
                 [
@@ -2101,7 +2113,7 @@
             false,
             [
                 [
-                    40,
+                    45,
                     1,
                     0
                 ]
@@ -2134,12 +2146,12 @@
         [
             [
                 [
-                    "0.0",
+                    "999.0",
                     1,
                     0
                 ]
             ],
-            true,
+            false,
             false,
             [
                 [
@@ -2155,12 +2167,12 @@
         [
             [
                 [
-                    "0.0",
+                    "999.0",
                     1,
                     0
                 ]
             ],
-            true,
+            false,
             false,
             [
                 [
@@ -2230,7 +2242,7 @@
             false,
             [
                 [
-                    40,
+                    45,
                     1,
                     0
                 ]
@@ -2263,12 +2275,12 @@
         [
             [
                 [
-                    "0.0",
+                    "999.0",
                     1,
                     0
                 ]
             ],
-            true,
+            false,
             false,
             [
                 [
@@ -2284,12 +2296,12 @@
         [
             [
                 [
-                    "0.0",
+                    "999.0",
                     1,
                     0
                 ]
             ],
-            true,
+            false,
             false,
             [
                 [
@@ -2351,7 +2363,7 @@
             [
                 [
                     "0.0",
-                    11,
+                    32,
                     0
                 ]
             ],
@@ -2380,7 +2392,7 @@
         [
             [
                 [
-                    "3.0",
+                    "6.8",
                     7,
                     0
                 ]
@@ -2410,13 +2422,28 @@
         [
             [
                 [
-                    0,
+                    4000,
                     12,
                     0
                 ]
             ],
             true,
             true,
+            null,
+            null,
+            null,
+            null
+        ],
+        [
+            [
+                [
+                    "---",
+                    1,
+                    0
+                ]
+            ],
+            false,
+            false,
             null,
             null,
             null,
