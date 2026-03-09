@@ -1,26 +1,35 @@
 #!/usr/bin/env bash
 #
-# Pull JSON exports from all known ecoNET API endpoints (legacy + RM).
+# Pull JSON exports from ecoNET API legacy endpoints.
 # Usage: ./pull_exports.sh <label>
 #   e.g. ./pull_exports.sh before
 #        ./pull_exports.sh after
 #
 # Outputs go to exports/<label>_<timestamp>/ as pretty-printed JSON files.
+#
+# Credentials: set ECONET_PASS env var, or create .econet_credentials in
+# this directory with the password on the first line.
 
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CREDS_FILE="${SCRIPT_DIR}/.econet_credentials"
 
 ECONET_HOST="${ECONET_HOST:-192.168.1.6}"
 ECONET_USER="${ECONET_USER:-admin}"
 
 if [[ -z "${ECONET_PASS:-}" ]]; then
-    echo -n "EcoNet password: "
-    read -rs ECONET_PASS
-    echo
+    if [[ -f "$CREDS_FILE" ]]; then
+        ECONET_PASS="$(head -n 1 "$CREDS_FILE")"
+    else
+        echo -n "EcoNet password: "
+        read -rs ECONET_PASS
+        echo
+    fi
 fi
 
 LABEL="${1:?Usage: $0 <label>  (e.g. 'before' or 'after')}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 OUT_DIR="${SCRIPT_DIR}/../exports/${LABEL}_${TIMESTAMP}"
 
 mkdir -p "$OUT_DIR"
@@ -28,8 +37,7 @@ mkdir -p "$OUT_DIR"
 BASE_URL="http://${ECONET_HOST}/econet"
 AUTH="${ECONET_USER}:${ECONET_PASS}"
 
-LEGACY_ENDPOINTS="regParams editParams sysParams"
-RM_ENDPOINTS="regParamsData rmCurrentDataParams rmCurrentDataParamsEdits rmParamsData rmParamsNames rmParamsDescs rmParamsEnums rmParamsUnitsNames rmStructure rmLangs rmExistingLangs rmLocksNames rmAlarmsNames"
+ENDPOINTS="regParams editParams sysParams"
 
 ok_count=0
 skip_count=0
@@ -37,7 +45,7 @@ skip_count=0
 echo "Pulling from ${ECONET_HOST} → ${OUT_DIR}"
 echo ""
 
-for endpoint in $LEGACY_ENDPOINTS $RM_ENDPOINTS; do
+for endpoint in $ENDPOINTS; do
     echo -n "  ${endpoint}... "
     HTTP_CODE=$(curl -s -w "%{http_code}" -o "${OUT_DIR}/${endpoint}.json" \
         --user "$AUTH" \

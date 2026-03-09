@@ -33,6 +33,7 @@ home-assistant_v2.db*
 # Secrets
 secrets.yaml
 .env
+.econet_credentials
 
 # Exports (contain device UID, SSID, password hashes)
 exports/

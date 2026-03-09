@@ -1,0 +1,98 @@
+{
+  "data.1533.value": {
+    "first_seen_change": {
+      "old": 3,
+      "new": 1
+    },
+    "description": "Round 8: Circuit crit temp ignore after DHW 3>1 min, DHW Recirculation operation time 20>29 sec, DHW Recirculation pause time 10>17 min, DHW Pump Start Temp 30>39c, Circuit 1 Thermostat pump blockade Yes>No",
+    "observations": 1
+  },
+  "data.231.value": {
+    "first_seen_change": {
+      "old": 8482173,
+      "new": 8481149
+    },
+    "description": "Round 8: Circuit crit temp ignore after DHW 3>1 min, DHW Recirculation operation time 20>29 sec, DHW Recirculation pause time 10>17 min, DHW Pump Start Temp 30>39c, Circuit 1 Thermostat pump blockade Yes>No",
+    "observations": 1
+  },
+  "data.433.value": {
+    "first_seen_change": {
+      "old": 30,
+      "new": 39
+    },
+    "description": "Round 8: Circuit crit temp ignore after DHW 3>1 min, DHW Recirculation operation time 20>29 sec, DHW Recirculation pause time 10>17 min, DHW Pump Start Temp 30>39c, Circuit 1 Thermostat pump blockade Yes>No",
+    "observations": 1
+  },
+  "data.434.value": {
+    "first_seen_change": {
+      "old": 20,
+      "new": 29
+    },
+    "description": "Round 8: Circuit crit temp ignore after DHW 3>1 min, DHW Recirculation operation time 20>29 sec, DHW Recirculation pause time 10>17 min, DHW Pump Start Temp 30>39c, Circuit 1 Thermostat pump blockade Yes>No",
+    "observations": 1
+  },
+  "data.435.value": {
+    "first_seen_change": {
+      "old": 10,
+      "new": 17
+    },
+    "description": "Round 8: Circuit crit temp ignore after DHW 3>1 min, DHW Recirculation operation time 20>29 sec, DHW Recirculation pause time 10>17 min, DHW Pump Start Temp 30>39c, Circuit 1 Thermostat pump blockade Yes>No",
+    "observations": 1
+  },
+  "editableParamsVer": {
+    "first_seen_change": {
+      "old": 6409,
+      "new": 6415
+    },
+    "description": "Round 8: Circuit crit temp ignore after DHW 3>1 min, DHW Recirculation operation time 20>29 sec, DHW Recirculation pause time 10>17 min, DHW Pump Start Temp 30>39c, Circuit 1 Thermostat pump blockade Yes>No",
+    "observations": 2
+  },
+  "curr.currentFlow": {
+    "first_seen_change": {
+      "old": 19.4,
+      "new": 19.2
+    },
+    "description": "Round 8 regParams",
+    "observations": 1
+  },
+  "settingsVer": {
+    "first_seen_change": {
+      "old": 38698,
+      "new": 38727
+    },
+    "description": "Round 8 regParams",
+    "observations": 2
+  },
+  "tilesParams[29][0][0][0]": {
+    "first_seen_change": {
+      "old": "46.1",
+      "new": "46.0"
+    },
+    "description": "Round 8 regParams",
+    "observations": 1
+  },
+  "tilesParams[4][0][0][0]": {
+    "first_seen_change": {
+      "old": "19.4",
+      "new": "19.2"
+    },
+    "description": "Round 8 regParams",
+    "observations": 1
+  },
+  "quality": {
+    "first_seen_change": {
+      "old": 73,
+      "new": 72
+    },
+    "description": "Round 8 sysParams",
+    "observations": 1
+  },
+  "signal": {
+    "first_seen_change": {
+      "old": "-55",
+      "new": "-56"
+    },
+    "description": "Round 8 sysParams",
+    "observations": 1
+  }
+}

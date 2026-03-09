@@ -25,6 +25,9 @@ FUNCTIONALITY
 * Graph temperature and performance settings in an HTML page.
 * Set a desired temperature for Circuit 1 Day, monitor the actual Circuit 1 Day setting, and revert the setting to the desired temperature when a change in temperature is detected.
 * Create urgent message via SMS provider or Whatapp integration if the guest change certain types of setting, so that I am woken in the night by my iPhone.
+* Provide a time stamped log of all setting changes that are being monitored by the tool. Goal is if something changes that I don't spot I can look through the log to see all the settings changed with the latest change.
+* Monitor all parameters from all supported API endpoints on a 5 minute interval and, for parameters not deemed to be a variable value like external temperature or pump speed, create an alarm stating the parameter that was changed and its before/after value.
+* Check the '"remoteMenu": false` value and create a large red banner over the dashboard if this value ever changes to true with a message that RM API Endpoints might not be supported and to investigate further.
 
 
 DETAIL

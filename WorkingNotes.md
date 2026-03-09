@@ -33,3 +33,32 @@ Summer Mode Activation Temp: 19c > 21c
 Winter Mode Activation Temp: 17c > 18c
 DHW Correction Temp: 5c > 8c
 Circuit Temp Correction: 2c > 4c
+
+Testing Round 6
+External Temperature Sensor Support: Yes > No → editParams data["69"] TempSettings bit 0 (mask 1): 1=Yes, 0=No
+Temp Sensor Source: ecoMulti > Heat Pump → editParams data["69"] TempSettings bit 1 (mask 2): 0=ecoMulti, 1=Heat Pump
+Cooling Support: Yes > No → editParams data["485"] HeatingCooling: 1=Yes, 0=No
+Heat Pump Lock: No > Yes → editParams data["462"] HeatSourceAllowWorkSett: 0=No, 1=Yes
+DHW Support: Yes > No → editParams data["101"] HDWSETTINGS bit 0 (mask 1): 1=Yes, 0=No
+
+Testing Round 7
+Hydraulic scheme: Direct > Buffer (3rd option = Low Loss Header) → editParams data["19"] currentSchemat: 0=Direct, 1=Buffer, 2=Low Loss Header
+Setpoint temp. correction - cooling: 2c > 5c → editParams data["1054"] decreaseSetTemp: value (min 1, max 10, unit °C)
+Off Circuits during charging: Yes > No → editParams data["101"] HDWSETTINGS bit 12 (mask 4096): 1=Yes, 0=No
+DHW Recirculation support: Yes > No → editParams data["431"] CirculationSettings bit 0 (mask 1): 1=Yes, 0=No
+DHW Start from temp: Yes > No → editParams data["431"] CirculationSettings bit 1 (mask 2): 1=Yes, 0=No
+  (Also: data["433"] CirculationTempStart appears/disappears based on this setting; min 20, max 60, unit °C)
+
+Testing Round 8
+Circuit crit. temp ignore after DHW: 3 min > 1 min (do not revert) → editParams data["1533"] circuitCritHeatTempIgnoreTime: value (min 0, max 10, unit min)
+DHW Recirculation operation time: 20 sec > 29 sec → editParams data["434"] CirculationTimework: value (min 1, max 120, unit sec)
+DHW Recirculation pause time: 10 min > 17 min → editParams data["435"] CirculationTimestop: value (min 1, max 100, unit min)
+DHW Pump Start Temp: 30c > 39c → editParams data["433"] CirculationTempStart: value (min 20, max 60, unit °C)
+Circuit 1 Thermostat pump blockade: Yes > No → editParams data["231"] Circuit1Settings bit 10 (mask 1024): 1=Yes, 0=No
+
+Testing Round 9
+Backup Heater operation in defrost: yes > no → editParams data["143"] heatersSett bit 4 (mask 16): 1=Yes, 0=No
+Backup heater delay: 30min > 37min → editParams data["147"] heaterBuffDel: value (min 0, max 240, unit min)
+DHW heater delay: 15min > 19 min → editParams data["146"] heaterDhwDel: value (min 0, max 240, unit min)
+Outside temp start heater: 10c > 12c → editParams data["144"] heatersPermTemp: value (min -20, max 20, unit °C)
+Outside temp force heater: -10 > -8c → editParams data["145"] heatersForceTemp: value (min -20, max 20, unit °C)
