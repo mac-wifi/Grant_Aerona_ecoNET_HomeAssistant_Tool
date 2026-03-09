@@ -84,6 +84,18 @@ views:
             name: Heating Temperature Correction
           - entity: number.grant_aerona_heat_pump_dhw_correction_temperature
             name: DHW Correction Temperature
+          - entity: number.grant_aerona_heat_pump_setpoint_temperature_correction_cooling
+            name: Setpoint Temp Correction - Cooling
+          - entity: number.grant_aerona_heat_pump_heating_crit_temp_ignore_after_dhw
+            name: Heating Crit Temp Ignore After DHW
+          - entity: select.grant_aerona_heat_pump_heating_thermostat_pump_blockade
+            name: Heating Thermostat Pump Blockade
+          - entity: number.grant_aerona_heat_pump_dhw_pump_start_temp
+            name: DHW Pump Start Temp
+          - entity: number.grant_aerona_heat_pump_dhw_recirculation_operation_time
+            name: DHW Recirculation Operation Time
+          - entity: number.grant_aerona_heat_pump_dhw_recirculation_pause_time
+            name: DHW Recirculation Pause Time
           - entity: select.grant_aerona_heat_pump_dhw_specify_priority
             name: DHW Specify Priority
 
@@ -163,7 +175,43 @@ views:
         title: System Info
         entities:
           - entity: select.grant_aerona_heat_pump_heat_pump_mode
-            name: Current State
+            name: Heat Pump Mode
+
+      - type: entities
+        title: System Settings
+        entities:
+          - entity: select.grant_aerona_heat_pump_external_temperature_sensor_support
+            name: External Temp Sensor Support
+          - entity: select.grant_aerona_heat_pump_temperature_sensor_source
+            name: Temperature Sensor Source
+          - entity: select.grant_aerona_heat_pump_cooling_support
+            name: Cooling Support
+          - entity: select.grant_aerona_heat_pump_heat_pump_lock
+            name: Heat Pump Lock
+          - entity: select.grant_aerona_heat_pump_dhw_support
+            name: DHW Support
+          - entity: select.grant_aerona_heat_pump_hydraulic_scheme
+            name: Hydraulic Scheme
+          - entity: select.grant_aerona_heat_pump_off_circuits_during_charging
+            name: Off Circuits During Charging
+          - entity: select.grant_aerona_heat_pump_dhw_recirculation_support
+            name: DHW Recirculation Support
+          - entity: select.grant_aerona_heat_pump_dhw_start_from_temp
+            name: DHW Start From Temp
+
+      - type: entities
+        title: Backup Heater
+        entities:
+          - entity: select.grant_aerona_heat_pump_backup_heater_operation_in_defrost
+            name: Operation in Defrost
+          - entity: number.grant_aerona_heat_pump_outside_temp_start_heater
+            name: Outside Temp Start Heater
+          - entity: number.grant_aerona_heat_pump_outside_temp_force_heater
+            name: Outside Temp Force Heater
+          - entity: number.grant_aerona_heat_pump_dhw_heater_delay
+            name: DHW Heater Delay
+          - entity: number.grant_aerona_heat_pump_backup_heater_delay
+            name: Backup Heater Delay
 
       - type: horizontal-stack
         cards:

@@ -43,9 +43,15 @@ The integration is functional but has not been deployed to a production Home Ass
 | Heating Hysteresis | 240 | 0-5 °C | Circuit 1 switching hysteresis |
 | Heating Curve | 273 | 0-4 | Weather compensation curve gradient |
 | Heating Curve Shift | 275 | -20 to 20 °C | Curve parallel shift offset |
+| Circuit 1 Boost Time | 1521 | 0-180 min | Boost heating timer |
 | DHW Set Point | 103 | 20-55 °C | Hot water target temperature |
 | DHW Hysteresis | 104 | 0-10 °C | Hot water switching hysteresis |
 | DHW Extension of Work | 113 | 0-30 min | Extra DHW heating time |
+| DHW Correction Temperature | 481 | 0-20 °C | DHW temperature correction offset |
+| Panel Temperature Correction | 10413 | -5 to 5 °C | Panel sensor correction |
+| Summer Mode Activation Temp | 702 | 17-30 °C | Outdoor temp to enter summer mode |
+| Winter Mode Activation Temp | 703 | 0-19 °C | Outdoor temp to enter winter mode |
+| Heating Temperature Correction | 1402 | 0-20 °C | Circuit temperature correction offset |
 
 ### Writable Select Entities (from `editParams`)
 
@@ -55,6 +61,20 @@ The integration is functional but has not been deployed to a production Home Ass
 | Heating Operation Mode | 236 | Off, Day, Night, Schedule | Circuit 1 operating mode |
 | DHW Work Mode | 119 | Off, On, Schedule | Hot water operating mode |
 | DHW Boost | 115 | Off, On | Temporary DHW boost |
+| Heat Pump Mode | 1133 | Off, On, Schedule | Heat pump operating mode |
+
+### Bitmask Toggle Selects (from `editParams`)
+
+These operate on individual bits within bitmask settings parameters.
+
+| Entity | Settings Param | Bit Mask | Options | Description |
+|---|---|---|---|---|
+| DHW Specify Priority | 101 (`HDWSETTINGS`) | 16 | Yes / No | DHW priority over heating |
+| External Temp Sensor Support | 69 (`TempSettings`) | 1 | Yes / No | External temperature sensor enabled |
+| Temperature Sensor Source | 69 (`TempSettings`) | 2 | Heat Pump / ecoMulti | Source of temperature readings |
+| Cooling Support | 485 (`HeatingCooling`) | 1 | Yes / No | Cooling mode enabled |
+| Heat Pump Lock | 462 (`HeatSourceAllowWorkSett`) | 1 | Yes / No | Lock heat pump operation |
+| DHW Support | 101 (`HDWSETTINGS`) | 1 | Yes / No | Domestic hot water enabled |
 
 ### Other Features
 
