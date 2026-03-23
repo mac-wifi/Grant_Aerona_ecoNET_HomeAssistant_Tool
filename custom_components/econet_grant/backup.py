@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from homeassistant.components.persistent_notification import async_create as pn_async_create
 from homeassistant.core import HomeAssistant
 
 from .api import EconetApi
@@ -39,14 +40,32 @@ async def async_backup_settings(
     snapshot_name: str = "Default",
 ) -> bool:
     """Save all current editParams values to a named snapshot file."""
+    pn_async_create(
+        hass,
+        message=f"Backing up **'{snapshot_name}'** settings...",
+        title="EcoNet Grant - Backup In Progress",
+        notification_id=f"{DOMAIN}_backup_result",
+    )
     edit_params = await api.fetch_edit_params()
     if edit_params is None:
         _LOGGER.error("Cannot backup: editParams fetch failed")
+        pn_async_create(
+            hass,
+            message="Backup failed: could not fetch editParams from the device.",
+            title="EcoNet Grant - Backup Failed",
+            notification_id=f"{DOMAIN}_backup_result",
+        )
         return False
 
     data = edit_params.get("data", {})
     if not data:
         _LOGGER.error("Cannot backup: editParams.data is empty")
+        pn_async_create(
+            hass,
+            message="Backup failed: editParams data was empty.",
+            title="EcoNet Grant - Backup Failed",
+            notification_id=f"{DOMAIN}_backup_result",
+        )
         return False
 
     snapshot = {
@@ -64,11 +83,21 @@ async def async_backup_settings(
                 "maxv": param.get("maxv"),
             }
 
+    param_count = len(snapshot["parameters"])
     path = _snapshot_path(hass, snapshot_name)
     path.write_text(json.dumps(snapshot, indent=2))
     _LOGGER.info(
         "Saved snapshot '%s' with %d parameters to %s",
-        snapshot_name, len(snapshot["parameters"]), path,
+        snapshot_name, param_count, path,
+    )
+    pn_async_create(
+        hass,
+        message=(
+            f"Backup **'{snapshot_name}'** completed successfully.\n\n"
+            f"**{param_count}** editable parameters saved to `{path.name}`."
+        ),
+        title="EcoNet Grant - Backup Complete",
+        notification_id=f"{DOMAIN}_backup_result",
     )
     return True
 
@@ -125,7 +154,8 @@ async def async_restore_settings(
             )
         report = "\n".join(report_lines)
         _LOGGER.warning(report)
-        hass.components.persistent_notification.async_create(
+        pn_async_create(
+            hass,
             message=report,
             title="EcoNet Grant - Restore Preview (Safe Mode)",
             notification_id=f"{DOMAIN}_restore_preview",
@@ -156,5 +186,4 @@ async def async_restore_settings(
 
 def list_snapshots(hass: HomeAssistant) -> list[str]:
     """Return names of all saved snapshots."""
-    path = _snapshot_dir(hass)
-    return [f.stem for f in path.glob("*.json")]
+    return [f.stem for f in _snapshot_dir(hass).glob("*.json")]

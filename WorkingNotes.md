@@ -62,3 +62,16 @@ Backup heater delay: 30min > 37min → editParams data["147"] heaterBuffDel: val
 DHW heater delay: 15min > 19 min → editParams data["146"] heaterDhwDel: value (min 0, max 240, unit min)
 Outside temp start heater: 10c > 12c → editParams data["144"] heatersPermTemp: value (min -20, max 20, unit °C)
 Outside temp force heater: -10 > -8c → editParams data["145"] heatersForceTemp: value (min -20, max 20, unit °C)
+
+Testing Round 10
+Circuit 1 Circuit Type: Radiators > Fan Coil → editParams data["269"] Circuit1TypeSettings: 1=Radiators, 3=Fan Coil
+  (Also: data["231"] Circuit1Settings bit 17 toggles; data["600"] Circuit1Picture tracks same value)
+  (Dynamic: data["273"] Circuit1CurveRadiator disappears for Fan Coil; data["586"] MixCirc1HeatCurveFanCoil appears; data["739"] Circuit1MixerCoolBaseTemp appears)
+Circuit 1 Regulation Method: Weather > Fixed → editParams data["231"] Circuit1Settings bit 11 (mask 2048): 1=Weather, 0=Fixed
+  (Dynamic: data["275"] Circuit1Curveshift and data["586"] MixCirc1HeatCurveFanCoil disappear in Fixed mode)
+Circuit 1 Thermostat Pump Blockade: Yes > No → editParams data["231"] Circuit1Settings bit 10 (mask 1024): 1=Yes, 0=No
+  (Note: same parameter and bit as Circuit 1 Thermostat Pump Blockade from Round 8 — likely a single setting, not truly separate circuits)
+Backup Heater: Yes > No → editParams data["143"] heatersSett bit 0 (mask 1): 1=Yes, 0=No
+  (Dynamic: data["144"] heatersPermTemp, ["145"] heatersForceTemp, ["146"] heaterDhwDel, ["147"] heaterBuffDel disappear when No)
+DHW Heater: No > Yes → editParams data["143"] heatersSett bit 1 (mask 2): 1=Yes, 0=No
+  (Dynamic: data["144"] heatersPermTemp, ["145"] heatersForceTemp reappear; data["1530"] immersionBoosttimeLeft and ["1531"] immersionBoostsettings appear)
