@@ -192,6 +192,10 @@ views:
             name: DHW Support
           - entity: select.grant_aerona_heat_pump_hydraulic_scheme
             name: Hydraulic Scheme
+          - entity: select.grant_aerona_heat_pump_heating_circuit_type
+            name: Heating Circuit Type
+          - entity: select.grant_aerona_heat_pump_heating_regulation_method
+            name: Heating Regulation Method
           - entity: select.grant_aerona_heat_pump_off_circuits_during_charging
             name: Off Circuits During Charging
           - entity: select.grant_aerona_heat_pump_dhw_recirculation_support
@@ -202,6 +206,10 @@ views:
       - type: entities
         title: Backup Heater
         entities:
+          - entity: select.grant_aerona_heat_pump_backup_heater
+            name: Backup Heater
+          - entity: select.grant_aerona_heat_pump_dhw_heater
+            name: DHW Heater
           - entity: select.grant_aerona_heat_pump_backup_heater_operation_in_defrost
             name: Operation in Defrost
           - entity: number.grant_aerona_heat_pump_outside_temp_start_heater

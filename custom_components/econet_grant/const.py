@@ -397,6 +397,14 @@ SELECT_DEFINITIONS: dict[str, dict] = {
             2: "Low Loss Header",
         },
     },
+    "Circuit1TypeSettings": {
+        "param_index": "269",
+        "name": "Heating Circuit Type",
+        "options": {
+            1: "Radiators",
+            3: "Fan Coil",
+        },
+    },
 }
 
 # --- Bitmask toggle selects (Yes/No toggles within a settings bitmask) ---
@@ -491,6 +499,30 @@ BITMASK_SELECT_DEFINITIONS: dict[str, dict] = {
         "settings_param": "143",
         "bit_mask": 16,
         "name": "Backup Heater Operation in Defrost",
+        "on_label": "Yes",
+        "off_label": "No",
+        "on_clears_bit": False,
+    },
+    "Circuit1RegulationMethod": {
+        "settings_param": "231",
+        "bit_mask": 2048,
+        "name": "Heating Regulation Method",
+        "on_label": "Weather",
+        "off_label": "Fixed",
+        "on_clears_bit": False,
+    },
+    "BackupHeater": {
+        "settings_param": "143",
+        "bit_mask": 1,
+        "name": "Backup Heater",
+        "on_label": "Yes",
+        "off_label": "No",
+        "on_clears_bit": False,
+    },
+    "DHWHeater": {
+        "settings_param": "143",
+        "bit_mask": 2,
+        "name": "DHW Heater",
         "on_label": "Yes",
         "off_label": "No",
         "on_clears_bit": False,
