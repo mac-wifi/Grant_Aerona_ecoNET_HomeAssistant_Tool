@@ -86,6 +86,8 @@ These operate on individual bits within bitmask settings parameters.
 
 ## Installation
 
+> **Full step-by-step guide:** [docs/INSTALL.md](docs/INSTALL.md) covers everything from a clean HAOS install through to verification, including helpers, automations, and optional InfluxDB/Grafana setup.
+
 ### Prerequisites (recommended)
 
 If you want Grafana dashboards with historical temperature and performance graphs:
