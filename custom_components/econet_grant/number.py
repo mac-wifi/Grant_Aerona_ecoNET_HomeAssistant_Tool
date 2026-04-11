@@ -22,6 +22,7 @@ from .const import (
     NUMBER_DEFINITIONS,
     SERVICE_API,
     SERVICE_COORDINATOR,
+    SERVICE_DATABASE,
     SERVICE_SLOW_COORDINATOR,
 )
 from .coordinator import EconetFastCoordinator, EconetSlowCoordinator
@@ -122,12 +123,18 @@ class EconetNumber(CoordinatorEntity[EconetFastCoordinator], NumberEntity):
         entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
         return entry_data.get(SERVICE_CHANGE_DETECTOR)
 
+    def _get_database(self):
+        """Get the database from hass.data."""
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        return entry_data.get(SERVICE_DATABASE)
+
     async def async_set_native_value(self, value: float) -> None:
         """Write a new value to the ecoNET device."""
         if self._safe_mode:
             await _safe_mode_queue(self.hass, self._api, self._key, self._param_index, value)
             return
 
+        old_value = self._attr_native_value
         change_detector = self._get_change_detector()
         if change_detector:
             change_detector.mark_self_write(self._key)
@@ -137,6 +144,18 @@ class EconetNumber(CoordinatorEntity[EconetFastCoordinator], NumberEntity):
             self._attr_native_value = value
             self.async_write_ha_state()
             _LOGGER.info("Set %s to %s", self._key, value)
+            db = self._get_database()
+            if db:
+                await db.async_log_change(
+                    self.hass,
+                    {
+                        "name": self._key,
+                        "index": self._param_index,
+                        "old_value": old_value,
+                        "new_value": value,
+                    },
+                    source="user",
+                )
         else:
             _LOGGER.error("Failed to set %s to %s", self._key, value)
             if change_detector:

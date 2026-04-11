@@ -173,3 +173,24 @@ views:
         entities:
           - entity: button.grant_aerona_heat_pump_restore_default_settings
             name: Restore Default Settings
+
+      - type: heading
+        heading: Diagnostics
+        heading_style: title
+
+      - type: entities
+        title: Integration Status
+        show_header_toggle: false
+        entities:
+          - entity: sensor.grant_aerona_heat_pump_safe_mode
+            name: Safe Mode
+          - entity: sensor.grant_aerona_heat_pump_guardian_status
+            name: Guardian
+          - entity: sensor.grant_aerona_heat_pump_settings_version
+            name: Settings Version
+          - entity: sensor.grant_aerona_heat_pump_database_size
+            name: Database Size
+          - entity: sensor.grant_aerona_heat_pump_recent_changes_24h
+            name: Changes (24h)
+          - entity: sensor.grant_aerona_heat_pump_remote_menu
+            name: Remote Menu

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
@@ -21,15 +22,20 @@ from .change_detector import ChangeDetector
 from .const import (
     CONF_HOST,
     CONF_PASSWORD,
+    CONF_RETENTION_DAYS,
     CONF_SAFE_MODE,
     CONF_USERNAME,
+    DATA_RETENTION_DAYS,
+    DATABASE_FILENAME,
     DEFAULT_SAFE_MODE,
     DOMAIN,
     SERVICE_API,
     SERVICE_COORDINATOR,
+    SERVICE_DATABASE,
     SERVICE_SLOW_COORDINATOR,
 )
 from .coordinator import EconetFastCoordinator, EconetSlowCoordinator
+from .database import EconetDatabase
 from .guardian import HeatingGuardian
 
 _LOGGER = logging.getLogger(__name__)
@@ -67,22 +73,109 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await fast_coordinator.async_config_entry_first_refresh()
     await slow_coordinator.async_config_entry_first_refresh()
 
+    db = EconetDatabase(Path(hass.config.config_dir) / DATABASE_FILENAME)
+    await db.async_setup(hass)
+
+    retention_days = entry.options.get(CONF_RETENTION_DAYS, DATA_RETENTION_DAYS)
+    await db.async_purge_old_data(hass, retention_days)
+
     change_detector = ChangeDetector(hass)
     guardian = HeatingGuardian(hass, api, change_detector)
 
     # Process the initial slow data for change detection baseline
     if slow_coordinator.data:
         edit_params = slow_coordinator.data.get("editParams", {})
+        sys_params = slow_coordinator.data.get("sysParams", {})
         change_detector.process_edit_params(edit_params)
+        change_detector.process_sys_params(sys_params)
+
+    # Record the initial data from both coordinators
+    if fast_coordinator.data:
+        await db.async_record_readings(hass, fast_coordinator.data)
+    if slow_coordinator.data:
+        edit_params = slow_coordinator.data.get("editParams", {})
+        sys_params = slow_coordinator.data.get("sysParams", {})
+        if edit_params:
+            await db.async_record_settings(hass, edit_params)
+        if sys_params:
+            await db.async_record_sys_params(hass, sys_params)
+
+    _state: dict[str, Any] = {
+        "last_settings_ver": None,
+        "last_editable_params_ver": None,
+        "last_schedules_ver": None,
+    }
+
+    if fast_coordinator.data:
+        _state["last_settings_ver"] = fast_coordinator.data.get("settingsVer")
+        _state["last_editable_params_ver"] = fast_coordinator.data.get("editableParamsVer")
+        _state["last_schedules_ver"] = fast_coordinator.data.get("schedulesVer")
+
+    @callback
+    def _on_fast_update() -> None:
+        """Record regParams readings and watch version counters for changes."""
+        if fast_coordinator.data is None:
+            return
+        hass.async_create_task(
+            db.async_record_readings(hass, fast_coordinator.data)
+        )
+
+        new_settings_ver = fast_coordinator.data.get("settingsVer")
+        new_edit_ver = fast_coordinator.data.get("editableParamsVer")
+        new_sched_ver = fast_coordinator.data.get("schedulesVer")
+
+        trigger_refresh = False
+        if new_settings_ver is not None and new_settings_ver != _state["last_settings_ver"]:
+            _LOGGER.warning(
+                "settingsVer changed: %s -> %s, triggering settings refresh",
+                _state["last_settings_ver"], new_settings_ver,
+            )
+            _state["last_settings_ver"] = new_settings_ver
+            trigger_refresh = True
+
+        if new_edit_ver is not None and new_edit_ver != _state["last_editable_params_ver"]:
+            _LOGGER.warning(
+                "editableParamsVer changed: %s -> %s",
+                _state["last_editable_params_ver"], new_edit_ver,
+            )
+            _state["last_editable_params_ver"] = new_edit_ver
+            trigger_refresh = True
+
+        if new_sched_ver is not None and new_sched_ver != _state["last_schedules_ver"]:
+            _LOGGER.warning(
+                "schedulesVer changed: %s -> %s",
+                _state["last_schedules_ver"], new_sched_ver,
+            )
+            _state["last_schedules_ver"] = new_sched_ver
+            trigger_refresh = True
+
+        if trigger_refresh:
+            hass.async_create_task(slow_coordinator.async_request_refresh())
+
+    fast_coordinator.async_add_listener(_on_fast_update)
 
     @callback
     def _on_slow_update() -> None:
-        """Run change detection and guardian on slow coordinator updates."""
+        """Run change detection, guardian, and database recording on slow polls."""
         if slow_coordinator.data is None:
             return
         edit_params = slow_coordinator.data.get("editParams", {})
-        change_detector.process_edit_params(edit_params)
+        sys_params = slow_coordinator.data.get("sysParams", {})
+
+        changes = change_detector.process_edit_params(edit_params)
+        for change in changes:
+            source = change.pop("source", "external")
+            hass.async_create_task(db.async_log_change(hass, change, source))
+
+        sys_changes = change_detector.process_sys_params(sys_params)
+        for change in sys_changes:
+            source = change.pop("source", "external")
+            hass.async_create_task(db.async_log_change(hass, change, source))
+
         hass.async_create_task(guardian.check_and_revert(edit_params))
+        hass.async_create_task(db.async_record_settings(hass, edit_params))
+        if sys_params:
+            hass.async_create_task(db.async_record_sys_params(hass, sys_params))
 
     slow_coordinator.async_add_listener(_on_slow_update)
 
@@ -90,6 +183,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         SERVICE_API: api,
         SERVICE_COORDINATOR: fast_coordinator,
         SERVICE_SLOW_COORDINATOR: slow_coordinator,
+        SERVICE_DATABASE: db,
         SERVICE_CHANGE_DETECTOR: change_detector,
         SERVICE_GUARDIAN: guardian,
     }
@@ -112,15 +206,26 @@ def _register_services(hass: HomeAssistant, entry: ConfigEntry) -> None:
         name = call.data.get("snapshot_name", "Default")
         api = hass.data[DOMAIN][entry.entry_id][SERVICE_API]
         safe_mode = entry.options.get(CONF_SAFE_MODE, DEFAULT_SAFE_MODE)
-        change_detector = hass.data[DOMAIN][entry.entry_id][SERVICE_CHANGE_DETECTOR]
+        change_detector_inst = hass.data[DOMAIN][entry.entry_id][SERVICE_CHANGE_DETECTOR]
+        db_inst = hass.data[DOMAIN][entry.entry_id][SERVICE_DATABASE]
 
         if not safe_mode:
             path = _snapshot_path(hass, name)
             if path.exists():
                 snapshot = json.loads(path.read_text())
-                for param in snapshot.get("parameters", {}).values():
+                for idx, param in snapshot.get("parameters", {}).items():
                     if isinstance(param, dict) and "name" in param:
-                        change_detector.mark_self_write(param["name"])
+                        change_detector_inst.mark_self_write(param["name"])
+                        await db_inst.async_log_change(
+                            hass,
+                            {
+                                "name": param["name"],
+                                "index": idx,
+                                "old_value": "",
+                                "new_value": param.get("value", ""),
+                            },
+                            source="restore",
+                        )
 
         result = await async_restore_settings(hass, api, snapshot_name=name, safe_mode=safe_mode)
         _LOGGER.info("Restore result: %s", result)

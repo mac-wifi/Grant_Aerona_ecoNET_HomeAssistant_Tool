@@ -16,8 +16,10 @@ from .api import AuthError, EconetClient, EconetApi
 from .const import (
     CONF_HOST,
     CONF_PASSWORD,
+    CONF_RETENTION_DAYS,
     CONF_SAFE_MODE,
     CONF_USERNAME,
+    DATA_RETENTION_DAYS,
     DEFAULT_SAFE_MODE,
     DEFAULT_USERNAME,
     DOMAIN,
@@ -97,11 +99,17 @@ class EconetGrantOptionsFlow(OptionsFlow):
         current_safe_mode = self._config_entry.options.get(
             CONF_SAFE_MODE, DEFAULT_SAFE_MODE
         )
+        current_retention = self._config_entry.options.get(
+            CONF_RETENTION_DAYS, DATA_RETENTION_DAYS
+        )
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_SAFE_MODE, default=current_safe_mode): bool,
+                    vol.Optional(
+                        CONF_RETENTION_DAYS, default=current_retention
+                    ): vol.All(vol.Coerce(int), vol.Range(min=30, max=7300)),
                 }
             ),
         )

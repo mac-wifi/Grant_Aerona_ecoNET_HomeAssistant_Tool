@@ -25,7 +25,11 @@
       "init": {
         "title": "EcoNet Grant Aerona Options",
         "data": {
-          "safe_mode": "Safe mode (require approval for writes)"
+          "safe_mode": "Safe mode (require approval for writes)",
+          "retention_days": "Data retention (days)"
+        },
+        "data_description": {
+          "retention_days": "Number of days to keep sensor readings and settings history (30-7300). Default: 3650 (10 years)."
         }
       }
     }

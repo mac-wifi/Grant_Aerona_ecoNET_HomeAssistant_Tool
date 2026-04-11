@@ -13,10 +13,14 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    CRITICAL_SYS_PARAMS,
     DOMAIN,
     EVENT_SETTING_CHANGED,
+    EVENT_SYS_PARAM_CHANGED,
     EVENT_URGENT_CHANGE,
     URGENT_PARAMETERS,
+    VOLATILE_PARAMETERS,
+    VOLATILE_SYS_PARAMS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,6 +32,7 @@ class ChangeDetector:
     def __init__(self, hass: HomeAssistant) -> None:
         self._hass = hass
         self._previous_snapshot: dict[str, Any] | None = None
+        self._previous_sys_params: dict[str, Any] | None = None
         self._self_writes: set[str] = set()
 
     def mark_self_write(self, param_name: str) -> None:
@@ -54,22 +59,26 @@ class ChangeDetector:
             _LOGGER.info("Change detector: initial snapshot captured (%d parameters)", len(current_snapshot))
             return []
 
-        changes = _diff_values(self._previous_snapshot, current_snapshot)
+        raw_changes = _diff_values(self._previous_snapshot, current_snapshot)
         self._previous_snapshot = current_snapshot
 
+        changes = [c for c in raw_changes if c["name"] not in VOLATILE_PARAMETERS]
         if not changes:
             return []
 
-        external_changes: list[dict[str, Any]] = []
+        all_changes: list[dict[str, Any]] = []
         for change in changes:
             param_name = change["name"]
 
             if param_name in self._self_writes:
-                _LOGGER.debug("Ignoring self-write for %s", param_name)
+                _LOGGER.debug("Self-write confirmed for %s", param_name)
                 self._self_writes.discard(param_name)
+                change["source"] = "user"
+                all_changes.append(change)
                 continue
 
-            external_changes.append(change)
+            change["source"] = "external"
+            all_changes.append(change)
             _LOGGER.info(
                 "External change detected: %s changed from %s to %s",
                 param_name, change["old_value"], change["new_value"],
@@ -88,7 +97,96 @@ class ChangeDetector:
                 self._hass.bus.async_fire(EVENT_URGENT_CHANGE, event_data)
                 _LOGGER.warning("URGENT change: %s", param_name)
 
-        return external_changes
+        external_changes = [c for c in all_changes if c.get("source") == "external"]
+        if external_changes:
+            lines = []
+            for change in external_changes:
+                lines.append(
+                    f"- **{change['name']}**: {change['old_value']} → {change['new_value']}"
+                )
+            message = "Settings changed externally:\n\n" + "\n".join(lines)
+            self._hass.components.persistent_notification.async_create(
+                message=message,
+                title="EcoNet Grant - Settings Changed",
+                notification_id=f"{DOMAIN}_external_changes",
+            )
+
+        return all_changes
+
+
+    def process_sys_params(self, sys_params: dict[str, Any]) -> list[dict[str, Any]]:
+        """Compare current sysParams to previous snapshot, fire events for changes.
+
+        Returns a list of detected changes for logging/audit.
+        """
+        if not sys_params:
+            return []
+
+        if self._previous_sys_params is None:
+            self._previous_sys_params = deepcopy(sys_params)
+            _LOGGER.info("Change detector: initial sysParams snapshot captured")
+            return []
+
+        changes: list[dict[str, Any]] = []
+        for key, new_value in sys_params.items():
+            if key in VOLATILE_SYS_PARAMS:
+                continue
+            old_value = self._previous_sys_params.get(key)
+            if old_value == new_value:
+                continue
+
+            change = {
+                "name": key,
+                "index": None,
+                "old_value": old_value,
+                "new_value": new_value,
+                "source": "external",
+            }
+            changes.append(change)
+
+            severity = "critical" if key in CRITICAL_SYS_PARAMS else "info"
+            _LOGGER.log(
+                logging.CRITICAL if severity == "critical" else logging.WARNING,
+                "sysParams change: %s: %s -> %s",
+                key, old_value, new_value,
+            )
+
+            self._hass.bus.async_fire(EVENT_SYS_PARAM_CHANGED, {
+                "param_name": key,
+                "old_value": old_value,
+                "new_value": new_value,
+                "severity": severity,
+            })
+
+            if key == "remoteMenu" and str(new_value).lower() == "true":
+                self._hass.components.persistent_notification.async_create(
+                    message=(
+                        "**CRITICAL:** `remoteMenu` has changed to `true`. "
+                        "RM API endpoints may now be available. Investigate immediately."
+                    ),
+                    title="EcoNet Grant - Remote Menu ENABLED",
+                    notification_id=f"{DOMAIN}_remote_menu_alert",
+                )
+
+            if key == "alarms":
+                self._hass.components.persistent_notification.async_create(
+                    message=f"Alarm state changed: {new_value}",
+                    title="EcoNet Grant - Alarm Change",
+                    notification_id=f"{DOMAIN}_alarm_change",
+                )
+
+            if key in CRITICAL_SYS_PARAMS:
+                self._hass.components.persistent_notification.async_create(
+                    message=(
+                        f"**CRITICAL:** `{key}` changed from `{old_value}` to `{new_value}`. "
+                        "This should never happen -- investigate immediately."
+                    ),
+                    title="EcoNet Grant - Critical System Change",
+                    notification_id=f"{DOMAIN}_critical_{key}",
+                )
+
+        self._previous_sys_params = deepcopy(sys_params)
+        return changes
 
 
 def _extract_values(data: dict[str, Any]) -> dict[str, dict[str, Any]]:

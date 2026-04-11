@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import AuthError, ApiError, EconetApi
+from .api import AuthError, EconetApi
 from .const import DOMAIN, FAST_POLL_INTERVAL, SLOW_POLL_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
@@ -52,6 +52,7 @@ class EconetFastCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "currUnits": reg_params.get("currUnits", {}),
             "settingsVer": reg_params.get("settingsVer"),
             "editableParamsVer": reg_params.get("editableParamsVer"),
+            "schedulesVer": reg_params.get("schedulesVer"),
             "tilesParams": reg_params.get("tilesParams", []),
             "schemaParams": reg_params.get("schemaParams", {}),
         }

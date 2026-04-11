@@ -9,13 +9,18 @@ CONF_HOST = "host"
 CONF_USERNAME = "username"
 CONF_PASSWORD = "password"
 CONF_SAFE_MODE = "safe_mode"
+CONF_RETENTION_DAYS = "retention_days"
 
 DEFAULT_USERNAME = "admin"
 DEFAULT_SAFE_MODE = True
+DATA_RETENTION_DAYS = 3650  # 10 years default
 
 SERVICE_COORDINATOR = "coordinator"
 SERVICE_SLOW_COORDINATOR = "slow_coordinator"
 SERVICE_API = "api"
+SERVICE_DATABASE = "database"
+
+DATABASE_FILENAME = "econet_grant.db"
 
 DEVICE_MANUFACTURER = "Grant"
 DEVICE_MODEL = "Aerona (ecoMAX360i)"
@@ -536,6 +541,30 @@ URGENT_PARAMETERS: set[str] = {
     "HDWTSetPoint",
 }
 
+# Volatile editParams that change automatically (boost timers count down)
+VOLATILE_PARAMETERS: set[str] = {
+    "Circuit1boosttimeleft",
+    "Circuit2boosttimeleft",
+    "Circuit3boosttimeleft",
+    "Circuit4boosttimeleft",
+    "Circuit5boosttimeleft",
+    "Circuit6boosttimeleft",
+    "Circuit7boosttimeleft",
+}
+
+# Volatile sysParams fields that fluctuate constantly (ignore for change detection)
+VOLATILE_SYS_PARAMS: set[str] = {
+    "signal",
+    "quality",
+}
+
+# sysParams fields that should never change -- alert as critical if they do
+CRITICAL_SYS_PARAMS: set[str] = {
+    "controllerID",
+    "uid",
+}
+
 # Events fired by the integration
 EVENT_SETTING_CHANGED = f"{DOMAIN}_setting_changed"
 EVENT_URGENT_CHANGE = f"{DOMAIN}_urgent_change"
+EVENT_SYS_PARAM_CHANGED = f"{DOMAIN}_sys_param_changed"
