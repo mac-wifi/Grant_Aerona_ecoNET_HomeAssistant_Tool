@@ -14,7 +14,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .api import EconetApi
 from .change_detector import ChangeDetector
-from .const import DOMAIN, NUMBER_DEFINITIONS
+from .const import DOMAIN, NUMBER_DEFINITIONS, SERVICE_DATABASE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -95,6 +95,23 @@ class HeatingGuardian:
                 title="EcoNet Grant - Guardian Revert",
                 notification_id=f"{DOMAIN}_guardian_revert",
             )
+            # Log the guardian revert to the database
+            for entry_data in self._hass.data.get(DOMAIN, {}).values():
+                if SERVICE_DATABASE in entry_data:
+                    db = entry_data[SERVICE_DATABASE]
+                    self._hass.async_create_task(
+                        db.async_log_change(
+                            self._hass,
+                            {
+                                "name": GUARDIAN_PARAM,
+                                "index": GUARDIAN_INDEX,
+                                "old_value": current_value,
+                                "new_value": self._desired_temp,
+                            },
+                            source="guardian",
+                        )
+                    )
+                    break
         else:
             _LOGGER.error("Guardian: FAILED to revert Heating")
             self._change_detector.clear_self_write(GUARDIAN_PARAM)

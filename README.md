@@ -8,7 +8,7 @@ This project was created to remotely manage a holiday home heat pump, allowing t
 
 ## Current Status
 
-**Version:** 0.1.0 (active development)
+**Version:** 0.2.0 (active development)
 
 The integration is functional but has not been deployed to a production Home Assistant instance yet. All parameter mappings have been confirmed through manual before/after testing against the live ecoNET controller using the vendor's iOS app.
 
@@ -82,11 +82,31 @@ These operate on individual bits within bitmask settings parameters.
 - **Change Detection**: Monitors `editParams` for external changes (e.g. someone adjusting settings via the ecoNET app or panel). Fires `econet_grant_setting_changed` events and `econet_grant_urgent_change` for critical parameters.
 - **Circuit 1 Guardian**: Can lock the heating day temperature to a desired value and automatically revert if changed externally.
 - **Backup & Restore**: Services to snapshot all editable parameters and restore them later (e.g. after guest checkout).
-- **Dashboard YAML**: A ready-made Lovelace dashboard in `dashboards/econet.yaml`.
+- **Dashboard YAML**: A ready-made Lovelace dashboard in `dashboards/econet_grant_dashboard.yaml`.
 
 ## Installation
 
-This integration is not available via HACS. Manual installation only:
+### Prerequisites (recommended)
+
+If you want Grafana dashboards with historical temperature and performance graphs:
+
+1. Install the **InfluxDB** addon from the Home Assistant Add-on Store
+2. Configure the **InfluxDB integration** in HA (Settings > Devices & Services > Add Integration > InfluxDB)
+3. This captures all sensor data from the moment the EcoNet integration starts -- no data migration needed later
+
+If you skip this step, the integration still works fully. Sensor data is stored in HA's built-in recorder and in the integration's own SQLite database. You can add InfluxDB later, but you will only have data from that point forward.
+
+### Install via HACS (recommended)
+
+1. Open HACS in your Home Assistant instance
+2. Click the three dots menu > Custom repositories
+3. Add this repository URL with category "Integration"
+4. Click "Download" on the EcoNet Grant Aerona card
+5. Restart Home Assistant
+6. Go to Settings > Devices & Services > Add Integration > "EcoNet Grant Aerona"
+7. Enter your ecoNET device's local IP address, username, and password
+
+### Manual Installation
 
 1. Copy the `custom_components/econet_grant/` folder into your Home Assistant `custom_components/` directory
 2. Restart Home Assistant
@@ -129,13 +149,7 @@ export ECONET_PASS="your_password"
 
 This saves `regParams.json`, `editParams.json`, and `sysParams.json` to timestamped directories under `exports/`.
 
-### Comparing exports
-
-```bash
-python3 tools/compare_exports.py exports/before_20260228_142520 exports/after_20260228_143143
-```
-
-This reports every changed key across all three endpoint files, which is how all the parameter index mappings in this integration were discovered.
+Exports can be compared manually using standard JSON diff tools (`diff`, `jq`, etc.) to discover parameter index mappings. This is how all the parameter mappings in this integration were identified.
 
 Note: `exports/` is gitignored because the files contain device identifiers and password hashes.
 

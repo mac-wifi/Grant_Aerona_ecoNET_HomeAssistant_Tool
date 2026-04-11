@@ -299,3 +299,117 @@ views:
                 snapshot_name: "Guest Mode"
             confirmation:
               text: "Restore settings to the Guest Mode snapshot?"
+
+  # ============================================================
+  # Tab 5: Admin
+  # ============================================================
+  - title: Admin
+    path: admin
+    icon: mdi:cog
+    cards:
+      - type: entities
+        title: Integration Status
+        show_header_toggle: false
+        entities:
+          - entity: sensor.grant_aerona_heat_pump_safe_mode
+            name: Safe Mode
+            icon: mdi:shield-lock
+          - entity: sensor.grant_aerona_heat_pump_guardian_status
+            name: Heating Guardian
+            icon: mdi:shield-home
+          - entity: sensor.grant_aerona_heat_pump_last_reading
+            name: Last Sensor Poll
+            icon: mdi:clock-check
+          - entity: sensor.grant_aerona_heat_pump_last_settings_check
+            name: Last Settings Check
+            icon: mdi:clock-alert
+          - entity: sensor.grant_aerona_heat_pump_settings_version
+            name: Settings Version
+            icon: mdi:counter
+          - entity: sensor.grant_aerona_heat_pump_database_size
+            name: Database Size
+            icon: mdi:database
+          - entity: sensor.grant_aerona_heat_pump_recent_changes_24h
+            name: Changes (24h)
+            icon: mdi:delta
+
+      - type: conditional
+        conditions:
+          - entity: sensor.grant_aerona_heat_pump_remote_menu
+            state: "true"
+        card:
+          type: markdown
+          content: >
+            ## WARNING: Remote Menu is ENABLED
+
+            The ecoNET controller has `remoteMenu: true`. This was previously
+            `false`. RM API endpoints may now be available. Investigate immediately
+            -- this could indicate a firmware update or configuration change.
+
+      - type: markdown
+        title: Configuration
+        content: >
+          **To change integration settings** (safe mode, data retention):
+
+          Settings > Devices & Services > EcoNet Grant Aerona > Configure
+
+
+          **To view detailed logs:**
+
+          Settings > System > Logs > filter by `econet_grant`
+
+      - type: horizontal-stack
+        cards:
+          - type: button
+            name: Backup Settings
+            icon: mdi:content-save-all
+            tap_action:
+              action: call-service
+              service: econet_grant.backup_settings
+              service_data:
+                snapshot_name: "Default"
+            confirmation:
+              text: "Save current settings as 'Default' snapshot?"
+
+          - type: button
+            name: Restore Default
+            icon: mdi:backup-restore
+            tap_action:
+              action: call-service
+              service: econet_grant.restore_settings
+              service_data:
+                snapshot_name: "Default"
+            confirmation:
+              text: "Restore all settings from the 'Default' snapshot?"
+
+      - type: horizontal-stack
+        cards:
+          - type: button
+            name: Enable Guardian (21C)
+            icon: mdi:shield-check
+            tap_action:
+              action: call-service
+              service: econet_grant.set_guardian_temp
+              service_data:
+                temperature: 21
+            confirmation:
+              text: "Enable Heating Guardian at 21C?"
+
+          - type: button
+            name: Disable Guardian
+            icon: mdi:shield-off
+            tap_action:
+              action: call-service
+              service: econet_grant.set_guardian_temp
+              service_data: {}
+            confirmation:
+              text: "Disable Heating Guardian?"
+
+      - type: markdown
+        title: About
+        content: >
+          **EcoNet Grant Aerona** v0.2.0
+
+          Monitors and controls a Grant Aerona heat pump via the ecoNET local API.
+
+          [Documentation](https://github.com/mac-wifi/Grant_Aerona_ecoNET_HomeAssistant_Tool)

@@ -23,6 +23,7 @@ from .const import (
     SELECT_DEFINITIONS,
     SERVICE_API,
     SERVICE_COORDINATOR,
+    SERVICE_DATABASE,
     SERVICE_SLOW_COORDINATOR,
 )
 from .coordinator import EconetFastCoordinator, EconetSlowCoordinator
@@ -137,6 +138,11 @@ class EconetSelect(CoordinatorEntity[EconetFastCoordinator], SelectEntity):
         entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
         return entry_data.get(SERVICE_CHANGE_DETECTOR)
 
+    def _get_database(self):
+        """Get the database from hass.data."""
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        return entry_data.get(SERVICE_DATABASE)
+
     async def async_select_option(self, option: str) -> None:
         """Write a new mode to the ecoNET device."""
         api_value = self._label_to_value.get(option)
@@ -148,6 +154,7 @@ class EconetSelect(CoordinatorEntity[EconetFastCoordinator], SelectEntity):
             await _safe_mode_notify(self.hass, self._key, self._param_index, option, api_value)
             return
 
+        old_option = self._attr_current_option
         change_detector = self._get_change_detector()
         if change_detector:
             change_detector.mark_self_write(self._key)
@@ -157,6 +164,18 @@ class EconetSelect(CoordinatorEntity[EconetFastCoordinator], SelectEntity):
             self._attr_current_option = option
             self.async_write_ha_state()
             _LOGGER.info("Set %s to %s (value=%d)", self._key, option, api_value)
+            db = self._get_database()
+            if db:
+                await db.async_log_change(
+                    self.hass,
+                    {
+                        "name": self._key,
+                        "index": self._param_index,
+                        "old_value": old_option,
+                        "new_value": option,
+                    },
+                    source="user",
+                )
         else:
             _LOGGER.error("Failed to set %s to %s (value=%d)", self._key, option, api_value)
             if change_detector:
@@ -232,6 +251,10 @@ class EconetBitmaskSelect(CoordinatorEntity[EconetFastCoordinator], SelectEntity
         entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
         return entry_data.get(SERVICE_CHANGE_DETECTOR)
 
+    def _get_database(self):
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        return entry_data.get(SERVICE_DATABASE)
+
     async def async_select_option(self, option: str) -> None:
         """Toggle the bitmask bit to match the selected option."""
         edit_params = (
@@ -259,6 +282,7 @@ class EconetBitmaskSelect(CoordinatorEntity[EconetFastCoordinator], SelectEntity
             )
             return
 
+        old_option = self._attr_current_option
         change_detector = self._get_change_detector()
         if change_detector:
             change_detector.mark_self_write(self._key)
@@ -268,6 +292,18 @@ class EconetBitmaskSelect(CoordinatorEntity[EconetFastCoordinator], SelectEntity
             self._attr_current_option = option
             self.async_write_ha_state()
             _LOGGER.info("Set %s to %s (bitmask %s → %d)", self._key, option, self._settings_param, new_value)
+            db = self._get_database()
+            if db:
+                await db.async_log_change(
+                    self.hass,
+                    {
+                        "name": self._key,
+                        "index": self._settings_param,
+                        "old_value": old_option,
+                        "new_value": option,
+                    },
+                    source="user",
+                )
         else:
             _LOGGER.error("Failed to set %s to %s", self._key, option)
             if change_detector:
