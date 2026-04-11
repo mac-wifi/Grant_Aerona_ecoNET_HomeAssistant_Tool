@@ -1,6 +1,7 @@
 # EcoNet Grant Aerona - Home Assistant Integration
 
-> **Warning: This is a work-in-progress project built with AI-assisted coding (Cursor IDE). It is provided as-is with no warranty. Use entirely at your own risk. This integration writes to a live heat pump controller -- incorrect use could affect your heating system.**
+> [!CAUTION]
+> **Work in progress -- use at your own risk.** This is an active development project built with AI-assisted coding (Cursor IDE). It is provided as-is with no warranty. This integration writes to a live heat pump controller -- incorrect use could affect your heating system.
 
 A custom Home Assistant integration for monitoring and controlling a **Grant Aerona** heat pump via the **ecoNET** local REST API (ecoMAX360i controller).
 
