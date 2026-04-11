@@ -35,15 +35,22 @@ secrets.yaml
 .env
 .econet_credentials
 
-# Exports (contain device UID, SSID, password hashes)
+# Local data exports
 exports/
 
-# Development notes and reference data (contain personal/device info)
+# Development notes, planning, and reference data
 Notes.md
+WorkingNotes.md
+PLAN.md
 Reference/
+param_map.json
+docs/
 
-# Development tools (not needed in the published integration)
+# Development tools
 tools/
+
+# Old/superseded dashboard
+dashboards/econet.yaml
 
 # Cursor
 .cursor/
