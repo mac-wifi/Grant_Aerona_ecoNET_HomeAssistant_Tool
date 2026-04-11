@@ -94,7 +94,9 @@ If you want Grafana dashboards with historical temperature and performance graph
 2. Configure the **InfluxDB integration** in HA (Settings > Devices & Services > Add Integration > InfluxDB)
 3. This captures all sensor data from the moment the EcoNet integration starts -- no data migration needed later
 
-If you skip this step, the integration still works fully. Sensor data is stored in HA's built-in recorder and in the integration's own SQLite database. You can add InfluxDB later, but you will only have data from that point forward.
+If you skip this step, the integration still works fully. Sensor data is stored in HA's built-in recorder (default 10 days of raw state history; long-term hourly statistics are kept indefinitely) and in the integration's own SQLite database (default 10-year retention, configurable in integration options). You can add InfluxDB later, but you will only have InfluxDB data from that point forward.
+
+> **Note:** The integration uses Python's built-in `sqlite3` module (part of the standard library) for its own database. No additional packages or add-ons are needed -- SQLite is already available in every Home Assistant installation.
 
 ### Install via HACS (recommended)
 
@@ -105,6 +107,7 @@ If you skip this step, the integration still works fully. Sensor data is stored 
 5. Restart Home Assistant
 6. Go to Settings > Devices & Services > Add Integration > "EcoNet Grant Aerona"
 7. Enter your ecoNET device's local IP address, username, and password
+8. Set up the dashboard (see [Dashboard Setup](#dashboard-setup) below)
 
 ### Manual Installation
 
@@ -112,6 +115,34 @@ If you skip this step, the integration still works fully. Sensor data is stored 
 2. Restart Home Assistant
 3. Go to **Settings > Devices & Services > Add Integration** and search for "EcoNet Grant Aerona"
 4. Enter your ecoNET device's local IP address, username, and password (these are the local device credentials, not your econet24.com cloud account)
+5. Set up the dashboard (see [Dashboard Setup](#dashboard-setup) below)
+
+### Dashboard Setup
+
+The integration includes a ready-made Lovelace dashboard, but **Home Assistant does not automatically register it**. You need to add it manually:
+
+1. Copy `dashboards/econet_grant_dashboard.yaml` to your HA config directory:
+   ```
+   <ha_config>/dashboards/econet_grant_dashboard.yaml
+   ```
+
+2. Add the following to your `configuration.yaml`:
+   ```yaml
+   lovelace:
+     mode: storage
+     dashboards:
+       econet-grant:
+         mode: yaml
+         title: Grant Aerona Heat Pump
+         icon: mdi:heat-pump-outline
+         filename: dashboards/econet_grant_dashboard.yaml
+   ```
+
+3. Restart Home Assistant
+
+4. The **Grant Aerona Heat Pump** dashboard will now appear in the sidebar. It has 5 tabs: Temperature, Performance, Settings, Guest, and Admin.
+
+> **Tip:** If you already have a `lovelace:` section in your `configuration.yaml`, just add the `econet-grant:` block under the existing `dashboards:` key.
 
 ## Architecture
 
