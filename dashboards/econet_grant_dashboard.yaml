@@ -21,7 +21,7 @@
 #   - input_boolean.circuit1_guardian_enabled helper created
 #   - input_datetime.guest_checkout_date helper created
 #   - input_boolean.guest_checkout_active helper created
-#   - Grafana add-on running at port 3000
+#   - Grafana app running at port 3000 (replace <HA_IP> in iframe URLs with your HA IP)
 # ============================================================
 
 title: Grant Aerona Heat Pump
@@ -107,9 +107,10 @@ views:
           - entity: input_number.circuit1_desired_temp
             name: Desired Temperature
 
+      # Grafana iframe: replace <HA_IP> with your Home Assistant IP address
       - type: iframe
         title: Temperature Graphs (Grafana)
-        url: "http://192.168.x.x:3000/d/econet-temperature?orgId=1&kiosk=tv"
+        url: "http://<HA_IP>:3000/d/econet-temperature?orgId=1&kiosk=tv"
         aspect_ratio: 60%
 
   # -------------------------------------------------------
@@ -159,9 +160,10 @@ views:
             entity: select.grant_aerona_heat_pump_heat_pump_mode
             name: Heat Pump Mode
 
+      # Grafana iframe: replace <HA_IP> with your Home Assistant IP address
       - type: iframe
         title: Performance Graphs (Grafana)
-        url: "http://192.168.x.x:3000/d/econet-performance?orgId=1&kiosk=tv"
+        url: "http://<HA_IP>:3000/d/econet-performance?orgId=1&kiosk=tv"
         aspect_ratio: 60%
 
   # -------------------------------------------------------
@@ -243,9 +245,10 @@ views:
             confirmation:
               text: "Restore all settings to the Default snapshot?"
 
+      # Grafana iframe: replace <HA_IP> with your Home Assistant IP address
       - type: iframe
         title: System Graphs (Grafana)
-        url: "http://192.168.x.x:3000/d/econet-system?orgId=1&kiosk=tv"
+        url: "http://<HA_IP>:3000/d/econet-system?orgId=1&kiosk=tv"
         aspect_ratio: 60%
 
   # -------------------------------------------------------

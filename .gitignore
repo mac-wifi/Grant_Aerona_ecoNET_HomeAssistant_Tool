@@ -38,5 +38,12 @@ secrets.yaml
 # Exports (contain device UID, SSID, password hashes)
 exports/
 
+# Development notes and reference data (contain personal/device info)
+Notes.md
+Reference/
+
+# Development tools (not needed in the published integration)
+tools/
+
 # Cursor
 .cursor/
