@@ -26,9 +26,11 @@
         "title": "EcoNet Grant Aerona Options",
         "data": {
           "safe_mode": "Safe mode (require approval for writes)",
+          "push_notifications": "Push notifications for setting changes",
           "retention_days": "Data retention (days)"
         },
         "data_description": {
+          "push_notifications": "Send a push notification to all connected devices when a setting is changed externally (via the vendor app or control panel).",
           "retention_days": "Number of days to keep sensor readings and settings history (30-7300). Default: 3650 (10 years)."
         }
       }

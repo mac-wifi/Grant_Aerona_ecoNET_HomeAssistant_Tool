@@ -11,10 +11,13 @@ from copy import deepcopy
 from typing import Any
 
 from homeassistant.components.persistent_notification import async_create as pn_async_create
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    CONF_PUSH_NOTIFICATIONS,
     CRITICAL_SYS_PARAMS,
+    DEFAULT_PUSH_NOTIFICATIONS,
     DOMAIN,
     EVENT_SETTING_CHANGED,
     EVENT_SYS_PARAM_CHANGED,
@@ -30,11 +33,28 @@ _LOGGER = logging.getLogger(__name__)
 class ChangeDetector:
     """Detects external parameter changes between slow coordinator polls."""
 
-    def __init__(self, hass: HomeAssistant) -> None:
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self._hass = hass
+        self._entry = entry
         self._previous_snapshot: dict[str, Any] | None = None
         self._previous_sys_params: dict[str, Any] | None = None
         self._self_writes: set[str] = set()
+
+    @property
+    def _push_enabled(self) -> bool:
+        return self._entry.options.get(
+            CONF_PUSH_NOTIFICATIONS, DEFAULT_PUSH_NOTIFICATIONS
+        )
+
+    async def _async_send_push(self, title: str, message: str) -> None:
+        """Send a push notification via notify.notify."""
+        try:
+            await self._hass.services.async_call(
+                "notify", "notify",
+                {"title": title, "message": message},
+            )
+        except Exception:
+            _LOGGER.exception("Failed to send push notification")
 
     def mark_self_write(self, param_name: str) -> None:
         """Mark a parameter as being written by this integration."""
@@ -120,7 +140,6 @@ class ChangeDetector:
                     f"- **{change['name']}**: {change['old_value']} → {change['new_value']}"
                 )
             message = "Settings changed externally:\n\n" + "\n".join(lines)
-            _LOGGER.info("Creating persistent notification for %d external change(s)", len(external_changes))
             try:
                 pn_async_create(
                     self._hass,
@@ -130,6 +149,18 @@ class ChangeDetector:
                 )
             except Exception:
                 _LOGGER.exception("Failed to create persistent notification")
+
+            if self._push_enabled:
+                plain_lines = [
+                    f'{c["name"]}: {c["old_value"]} → {c["new_value"]}'
+                    for c in external_changes
+                ]
+                push_message = "Settings changed:\n" + "\n".join(plain_lines)
+                self._hass.async_create_task(
+                    self._async_send_push(
+                        "EcoNet: Settings Changed", push_message
+                    )
+                )
 
         return all_changes
 
@@ -179,34 +210,49 @@ class ChangeDetector:
             })
 
             if key == "remoteMenu" and str(new_value).lower() == "true":
+                msg = (
+                    "CRITICAL: remoteMenu has changed to true. "
+                    "RM API endpoints may now be available. Investigate immediately."
+                )
                 pn_async_create(
                     self._hass,
-                    message=(
-                        "**CRITICAL:** `remoteMenu` has changed to `true`. "
-                        "RM API endpoints may now be available. Investigate immediately."
-                    ),
+                    message=f"**{msg}**",
                     title="EcoNet Grant - Remote Menu ENABLED",
                     notification_id=f"{DOMAIN}_remote_menu_alert",
                 )
+                if self._push_enabled:
+                    self._hass.async_create_task(
+                        self._async_send_push("URGENT: EcoNet Remote Menu", msg)
+                    )
 
             if key == "alarms":
+                msg = f"Alarm state changed: {new_value}"
                 pn_async_create(
                     self._hass,
-                    message=f"Alarm state changed: {new_value}",
+                    message=msg,
                     title="EcoNet Grant - Alarm Change",
                     notification_id=f"{DOMAIN}_alarm_change",
                 )
+                if self._push_enabled:
+                    self._hass.async_create_task(
+                        self._async_send_push("EcoNet: Alarm Change", msg)
+                    )
 
             if key in CRITICAL_SYS_PARAMS:
+                msg = (
+                    f"CRITICAL: {key} changed from {old_value} to {new_value}. "
+                    "This should never happen -- investigate immediately."
+                )
                 pn_async_create(
                     self._hass,
-                    message=(
-                        f"**CRITICAL:** `{key}` changed from `{old_value}` to `{new_value}`. "
-                        "This should never happen -- investigate immediately."
-                    ),
+                    message=f"**{msg}**",
                     title="EcoNet Grant - Critical System Change",
                     notification_id=f"{DOMAIN}_critical_{key}",
                 )
+                if self._push_enabled:
+                    self._hass.async_create_task(
+                        self._async_send_push("URGENT: EcoNet Critical Change", msg)
+                    )
 
         self._previous_sys_params = deepcopy(sys_params)
         return changes

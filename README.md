@@ -80,7 +80,7 @@ These operate on individual bits within bitmask settings parameters.
 ### Other Features
 
 - **Safe Mode**: All write operations are blocked by default and shown as persistent notifications, allowing manual review before anything is sent to the controller. Disable in integration options when ready to write.
-- **Change Detection**: Monitors `editParams` for external changes (e.g. someone adjusting settings via the ecoNET app or panel). Fires `econet_grant_setting_changed` events and `econet_grant_urgent_change` for critical parameters. Sends persistent notifications listing what changed.
+- **Change Detection**: Monitors `editParams` for external changes (e.g. someone adjusting settings via the ecoNET app or panel). Fires `econet_grant_setting_changed` events and `econet_grant_urgent_change` for critical parameters. Creates persistent notifications (bell icon) and sends push notifications to all connected devices (enabled by default, toggle in integration options).
 - **Backup & Restore**: Services to snapshot all editable parameters and restore them later (e.g. after guest checkout).
 - **Dashboard YAML**: A ready-made Lovelace dashboard in `dashboards/econet_grant_dashboard.yaml`.
 
@@ -435,36 +435,29 @@ After creating both helpers, the dashboard's Guest tab should work without error
 
 ### 10. Install Automations
 
-The repository includes two automation YAML files under `ha_config/automations/`. These are optional but recommended.
+The repository includes a guest checkout automation YAML file under `ha_config/automations/`. This is optional but recommended if you use the guest checkout feature.
+
+> **Note:** Push notifications for setting changes are built into the integration (enabled by default). No automation is needed for those -- toggle the option in **Settings > Devices & Services > EcoNet Grant Aerona > Configure**.
 
 #### Option A: Import via the UI (recommended)
 
-For each file below, open it, copy the contents, and paste it into **Settings > Automations & Scenes > Create Automation > Edit as YAML**.
+Open the file below, copy the contents, and paste it into **Settings > Automations & Scenes > Create Automation > Edit as YAML**.
 
 | File | Purpose |
 |------|---------|
 | `ha_config/automations/guest_checkout.yaml` | Restores default settings at 10 AM on the guest checkout date |
-| `ha_config/automations/notifications.yaml` | Sends notifications when settings are changed externally |
 
-> **Note:** When pasting, remove the leading `- ` list marker from each automation block if the HA editor expects a single automation per entry. The YAML files contain list items (starting with `- id:`).
+> **Note:** When pasting, remove the leading `- ` list marker if the HA editor expects a single automation per entry. The YAML file contains a list item (starting with `- id:`).
 
 #### Option B: Include via configuration.yaml
 
-If you prefer file-based automations, copy the YAML files into `/homeassistant/automations/` and include them:
+If you prefer file-based automations, copy the YAML file into `/homeassistant/automations/` and include it:
 
 ```yaml
 automation: !include_dir_merge_list automations/
 ```
 
 Then restart Home Assistant.
-
-#### Customise notifications
-
-The notification automations use `notify.notify` (the default notification service). Edit them to use your preferred service:
-
-- **Mobile app:** `notify.mobile_app_<your_phone>`
-- **Email:** `notify.email` (requires SMTP integration)
-- **Pushover / Twilio:** Uncomment the relevant blocks in `notifications.yaml`
 
 ---
 
@@ -520,7 +513,7 @@ Use this checklist to confirm everything is working. Tick off each item as you g
 #### Helpers & Automations
 
 - [ ] Both helpers exist in **Settings > Helpers**
-- [ ] Notification automation: visible in the automations list
+- [ ] Push notifications: toggle is enabled in integration options (Settings > Devices & Services > EcoNet Grant Aerona > Configure)
 
 #### Write Operations (when ready)
 
@@ -578,7 +571,7 @@ This is working as intended. Every write attempt in Safe Mode generates a notifi
 | Service calls | `econet_grant.backup_settings`, `econet_grant.restore_settings` |
 | Dashboard file | `dashboards/econet_grant_dashboard.yaml` |
 | HA config additions | `configuration.yaml` -- lovelace block, InfluxDB filtering block (connection via UI) |
-| Automations | `ha_config/automations/` -- guest checkout, notifications |
+| Automations | `ha_config/automations/` -- guest checkout (push notifications are built-in) |
 | Helpers needed | `input_datetime.guest_checkout_date`, `input_boolean.guest_checkout_active` |
 | Logs | Settings > System > Logs (filter for `econet_grant`) |
 | GitHub | [mac-wifi/Grant_Aerona_ecoNET_HomeAssistant_Tool](https://github.com/mac-wifi/Grant_Aerona_ecoNET_HomeAssistant_Tool) |

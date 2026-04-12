@@ -16,10 +16,12 @@ from .api import AuthError, EconetClient, EconetApi
 from .const import (
     CONF_HOST,
     CONF_PASSWORD,
+    CONF_PUSH_NOTIFICATIONS,
     CONF_RETENTION_DAYS,
     CONF_SAFE_MODE,
     CONF_USERNAME,
     DATA_RETENTION_DAYS,
+    DEFAULT_PUSH_NOTIFICATIONS,
     DEFAULT_SAFE_MODE,
     DEFAULT_USERNAME,
     DOMAIN,
@@ -63,7 +65,10 @@ class EconetGrantConfigFlow(ConfigFlow, domain=DOMAIN):
                     return self.async_create_entry(
                         title=f"EcoNet Grant ({host})",
                         data=user_input,
-                        options={CONF_SAFE_MODE: DEFAULT_SAFE_MODE},
+                        options={
+                            CONF_SAFE_MODE: DEFAULT_SAFE_MODE,
+                            CONF_PUSH_NOTIFICATIONS: DEFAULT_PUSH_NOTIFICATIONS,
+                        },
                     )
                 errors["base"] = "cannot_connect"
             except AuthError:
@@ -99,6 +104,9 @@ class EconetGrantOptionsFlow(OptionsFlow):
         current_safe_mode = self._config_entry.options.get(
             CONF_SAFE_MODE, DEFAULT_SAFE_MODE
         )
+        current_push = self._config_entry.options.get(
+            CONF_PUSH_NOTIFICATIONS, DEFAULT_PUSH_NOTIFICATIONS
+        )
         current_retention = self._config_entry.options.get(
             CONF_RETENTION_DAYS, DATA_RETENTION_DAYS
         )
@@ -107,6 +115,7 @@ class EconetGrantOptionsFlow(OptionsFlow):
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_SAFE_MODE, default=current_safe_mode): bool,
+                    vol.Required(CONF_PUSH_NOTIFICATIONS, default=current_push): bool,
                     vol.Optional(
                         CONF_RETENTION_DAYS, default=current_retention
                     ): vol.All(vol.Coerce(int), vol.Range(min=30, max=7300)),

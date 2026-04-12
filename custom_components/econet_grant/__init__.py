@@ -77,7 +77,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     retention_days = entry.options.get(CONF_RETENTION_DAYS, DATA_RETENTION_DAYS)
     await db.async_purge_old_data(hass, retention_days)
 
-    change_detector = ChangeDetector(hass)
+    change_detector = ChangeDetector(hass, entry)
 
     # Process the initial slow data for change detection baseline
     if slow_coordinator.data:

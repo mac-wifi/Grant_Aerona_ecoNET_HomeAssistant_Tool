@@ -10,9 +10,11 @@ CONF_USERNAME = "username"
 CONF_PASSWORD = "password"
 CONF_SAFE_MODE = "safe_mode"
 CONF_RETENTION_DAYS = "retention_days"
+CONF_PUSH_NOTIFICATIONS = "push_notifications"
 
 DEFAULT_USERNAME = "admin"
 DEFAULT_SAFE_MODE = True
+DEFAULT_PUSH_NOTIFICATIONS = True
 DATA_RETENTION_DAYS = 3650  # 10 years default
 
 SERVICE_COORDINATOR = "coordinator"
