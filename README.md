@@ -9,7 +9,7 @@ This project was created to remotely manage a holiday home heat pump, allowing t
 
 ## Current Status
 
-**Version:** 0.3.0 (active development)
+**Version:** 0.4.0 (active development)
 
 The integration is functional but has not been deployed to a production Home Assistant instance yet. All parameter mappings have been confirmed through manual before/after testing against the live ecoNET controller using the vendor's iOS app.
 
@@ -82,7 +82,7 @@ These operate on individual bits within bitmask settings parameters.
 - **Safe Mode**: All write operations are blocked by default and shown as persistent notifications, allowing manual review before anything is sent to the controller. Disable in integration options when ready to write.
 - **Change Detection**: Monitors `editParams` for external changes (e.g. someone adjusting settings via the ecoNET app or panel). Fires `econet_grant_setting_changed` events and `econet_grant_urgent_change` for critical parameters. Creates persistent notifications (bell icon) and sends push notifications to all connected devices (enabled by default, toggle in integration options).
 - **Backup & Restore**: Services to snapshot all editable parameters and restore them later (e.g. after guest checkout).
-- **Dashboard YAML**: A ready-made Lovelace dashboard in `dashboards/econet_grant_dashboard.yaml`.
+- **Dashboard YAML**: A ready-made Lovelace dashboard shipped in `custom_components/econet_grant/extras/econet_grant_dashboard.yaml` (also at `dashboards/` in the repo). Uses Mushroom Cards and Mini Graph Card for a modern look.
 
 ## Architecture
 
@@ -337,26 +337,40 @@ This lets you verify the integration is reading correctly before you allow it to
 
 ### 7. Dashboard Setup
 
-The integration includes a ready-made Lovelace dashboard with 5 tabs: Temperature, Performance, System, Guest, and Admin. Deploy it now so you can use the built-in snapshot button in the next step.
+The integration includes a ready-made Lovelace dashboard with 6 tabs: Favourites, Circuit 1, Hot Water, System, Guest, and Admin. It uses two custom frontend cards for a modern look. Deploy it now so you can use the built-in snapshot button in the next step.
 
-#### 7a. Copy the dashboard file
+#### 7a. Install required HACS frontend cards
 
-Copy `dashboards/econet_grant_dashboard.yaml` from the repository into your HA config directory:
+The dashboard uses two custom card libraries. Install both from HACS:
+
+1. Open **HACS** from the sidebar
+2. Go to **Frontend** (tab at top)
+3. Click **Explore & Download Repositories** (bottom right)
+4. Search for **Mushroom** and install it
+5. Search for **Mini Graph Card** and install it
+6. When prompted, **reload the browser** (or clear cache / hard refresh with Ctrl+Shift+R)
+
+#### 7b. Copy the dashboard file
+
+If you installed via HACS, the dashboard file is already on your system at:
 
 ```
-/homeassistant/dashboards/econet_grant_dashboard.yaml
+/homeassistant/custom_components/econet_grant/extras/econet_grant_dashboard.yaml
 ```
 
-If the `dashboards/` directory doesn't exist under `/homeassistant/`, create it first.
+You need to copy it to a location where HA can use it as a YAML dashboard. Open the **Terminal & SSH** app and run:
 
-Using the **Terminal & SSH** app:
 ```bash
 mkdir -p /homeassistant/dashboards
+cp /homeassistant/custom_components/econet_grant/extras/econet_grant_dashboard.yaml \
+   /homeassistant/dashboards/econet_grant_dashboard.yaml
 ```
 
-Then copy the file using Samba, SSH/SCP, or the File Editor app.
+> **Alternative:** If you prefer, use the **File Editor** app or **Samba** share to copy the file manually. The source and destination paths are shown above.
 
-#### 7b. Register the dashboard
+> **Manual installation?** If you cloned the repo instead of using HACS, the file is at `dashboards/econet_grant_dashboard.yaml` in the repo. Copy it to `/homeassistant/dashboards/`.
+
+#### 7c. Register the dashboard
 
 Add the following to your `/homeassistant/configuration.yaml`:
 
@@ -373,22 +387,33 @@ lovelace:
 
 > If you already have a `lovelace:` section, just add the `econet-grant:` block under the existing `dashboards:` key.
 
-#### 7c. Check configuration
+#### 7d. Check configuration
 
 Before restarting, verify your YAML is valid:
 
 1. Go to **Developer Tools** (in the sidebar) > **YAML** tab
 2. Click **Check Configuration**
 3. If you see *"Configuration will not prevent Home Assistant from starting"*, you're good to proceed
-4. If errors are reported, fix the `configuration.yaml` edits from step 7b before continuing
+4. If errors are reported, fix the `configuration.yaml` edits from step 7c before continuing
 
-#### 7d. Restart and verify
+#### 7e. Restart and verify
 
 1. **Restart Home Assistant:** Settings > System > Restart
 2. The **Grant Aerona Heat Pump** dashboard will appear in the sidebar
-3. Open it and verify the Temperature tab shows live gauge readings
+3. Open it and verify the Favourites tab shows Mushroom cards with live readings and a temperature history graph
 
 > **Note:** Some dashboard cards depend on helpers that haven't been created yet. The Guest tab will show errors until you complete [Step 9](#9-create-helpers).
+
+#### 7f. Updating the dashboard after a HACS update
+
+When you update the integration via HACS, a new version of the dashboard file arrives at `custom_components/econet_grant/extras/`. To apply it, re-run the copy command from Step 7b:
+
+```bash
+cp /homeassistant/custom_components/econet_grant/extras/econet_grant_dashboard.yaml \
+   /homeassistant/dashboards/econet_grant_dashboard.yaml
+```
+
+Then hard-refresh the browser (Ctrl+Shift+R). No HA restart is needed -- YAML dashboards are re-read on page load.
 
 ---
 
@@ -504,9 +529,10 @@ Use this checklist to confirm everything is working. Tick off each item as you g
 #### Dashboard
 
 - [ ] **Grant Aerona Heat Pump** appears in the sidebar
-- [ ] Temperature tab: gauges show live temperatures
-- [ ] Performance tab: compressor/pump/fan cards display data
-- [ ] Settings tab: number and select entities are controllable
+- [ ] Favourites tab: Mushroom cards show live readings; temperature history graph displays
+- [ ] Circuit 1 tab: CH temperature history graph and all heating controls display
+- [ ] Hot Water tab: HW temperature history graph and all hot water controls display
+- [ ] System tab: operating modes, system readings, and backup heater settings display
 - [ ] Guest tab: checkout date helper and toggle are functional
 - [ ] Admin tab: safe mode status and backup/restore buttons work
 
@@ -569,7 +595,7 @@ This is working as intended. Every write attempt in Safe Mode generates a notifi
 | Integration domain | `econet_grant` |
 | Entity ID prefix | `grant_aerona_heat_pump_*` |
 | Service calls | `econet_grant.backup_settings`, `econet_grant.restore_settings` |
-| Dashboard file | `dashboards/econet_grant_dashboard.yaml` |
+| Dashboard file | `custom_components/econet_grant/extras/econet_grant_dashboard.yaml` (copy to `/homeassistant/dashboards/`) |
 | HA config additions | `configuration.yaml` -- lovelace block, InfluxDB filtering block (connection via UI) |
 | Automations | `ha_config/automations/` -- guest checkout (push notifications are built-in) |
 | Helpers needed | `input_datetime.guest_checkout_date`, `input_boolean.guest_checkout_active` |
