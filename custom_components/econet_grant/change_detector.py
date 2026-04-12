@@ -15,6 +15,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    BITMASK_SELECT_DEFINITIONS,
     CONF_PUSH_NOTIFICATIONS,
     CRITICAL_SYS_PARAMS,
     DEFAULT_PUSH_NOTIFICATIONS,
@@ -22,11 +23,33 @@ from .const import (
     EVENT_SETTING_CHANGED,
     EVENT_SYS_PARAM_CHANGED,
     EVENT_URGENT_CHANGE,
+    NUMBER_DEFINITIONS,
+    SELECT_DEFINITIONS,
     URGENT_PARAMETERS,
     VOLATILE_PARAMETERS,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _build_display_name_map() -> dict[str, str]:
+    """Build API-param-name -> friendly display name from all entity definitions."""
+    mapping: dict[str, str] = {}
+    for api_key, defn in NUMBER_DEFINITIONS.items():
+        mapping[api_key] = defn["name"]
+    for api_key, defn in SELECT_DEFINITIONS.items():
+        mapping[api_key] = defn["name"]
+    for api_key, defn in BITMASK_SELECT_DEFINITIONS.items():
+        mapping[api_key] = defn["name"]
+    return mapping
+
+
+_DISPLAY_NAMES = _build_display_name_map()
+
+
+def _friendly(param_name: str) -> str:
+    """Return the friendly display name for a parameter, falling back to the API name."""
+    return _DISPLAY_NAMES.get(param_name, param_name)
 
 
 class ChangeDetector:
@@ -135,8 +158,9 @@ class ChangeDetector:
         if external_changes:
             lines = []
             for change in external_changes:
+                display = _friendly(change["name"])
                 lines.append(
-                    f"- **{change['name']}**: {change['old_value']} → {change['new_value']}"
+                    f"- **{display}**: {change['old_value']} → {change['new_value']}"
                 )
             message = "Settings changed externally:\n\n" + "\n".join(lines)
             try:
@@ -151,7 +175,7 @@ class ChangeDetector:
 
             if self._push_enabled:
                 plain_lines = [
-                    f'{c["name"]}: {c["old_value"]} → {c["new_value"]}'
+                    f'{_friendly(c["name"])}: {c["old_value"]} → {c["new_value"]}'
                     for c in external_changes
                 ]
                 push_message = "Settings changed:\n" + "\n".join(plain_lines)
