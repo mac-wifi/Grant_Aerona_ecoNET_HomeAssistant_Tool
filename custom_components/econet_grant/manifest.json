@@ -7,5 +7,5 @@
   "documentation": "https://github.com/mac-wifi/Grant_Aerona_ecoNET_HomeAssistant_Tool",
   "iot_class": "local_polling",
   "requirements": ["aiohttp>=3.8.0"],
-  "version": "0.3.2"
+  "version": "0.3.3"
 }
