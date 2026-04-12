@@ -55,27 +55,31 @@ class ChangeDetector:
             return []
 
         current_snapshot = _extract_values(data)
-        _LOGGER.debug("Change detector: snapshot has %d parameters", len(current_snapshot))
 
         if self._previous_snapshot is None:
             self._previous_snapshot = current_snapshot
-            _LOGGER.info("Change detector: initial snapshot captured (%d parameters)", len(current_snapshot))
+            _LOGGER.warning(
+                "Change detector: initial snapshot captured (%d parameters)",
+                len(current_snapshot),
+            )
             return []
 
+        _LOGGER.warning(
+            "Change detector: comparing %d params (previous) vs %d params (current)",
+            len(self._previous_snapshot), len(current_snapshot),
+        )
         raw_changes = _diff_values(self._previous_snapshot, current_snapshot)
         self._previous_snapshot = current_snapshot
 
-        if raw_changes:
-            _LOGGER.info(
-                "Change detector: %d raw change(s) found before filtering",
-                len(raw_changes),
-            )
+        _LOGGER.warning(
+            "Change detector: %d raw change(s) found, %d after volatile filter",
+            len(raw_changes),
+            len([c for c in raw_changes if c["name"] not in VOLATILE_PARAMETERS]),
+        )
 
         changes = [c for c in raw_changes if c["name"] not in VOLATILE_PARAMETERS]
         if not changes:
             return []
-
-        _LOGGER.info("Change detector: %d change(s) after filtering volatiles", len(changes))
 
         all_changes: list[dict[str, Any]] = []
         for change in changes:
