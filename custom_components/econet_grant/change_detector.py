@@ -24,7 +24,6 @@ from .const import (
     EVENT_URGENT_CHANGE,
     URGENT_PARAMETERS,
     VOLATILE_PARAMETERS,
-    VOLATILE_SYS_PARAMS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -78,20 +77,20 @@ class ChangeDetector:
 
         if self._previous_snapshot is None:
             self._previous_snapshot = current_snapshot
-            _LOGGER.warning(
+            _LOGGER.info(
                 "Change detector: initial snapshot captured (%d parameters)",
                 len(current_snapshot),
             )
             return []
 
-        _LOGGER.warning(
+        _LOGGER.debug(
             "Change detector: comparing %d params (previous) vs %d params (current)",
             len(self._previous_snapshot), len(current_snapshot),
         )
         raw_changes = _diff_values(self._previous_snapshot, current_snapshot)
         self._previous_snapshot = current_snapshot
 
-        _LOGGER.warning(
+        _LOGGER.debug(
             "Change detector: %d raw change(s) found, %d after volatile filter",
             len(raw_changes),
             len([c for c in raw_changes if c["name"] not in VOLATILE_PARAMETERS]),
@@ -180,7 +179,7 @@ class ChangeDetector:
 
         changes: list[dict[str, Any]] = []
         for key, new_value in sys_params.items():
-            if key in VOLATILE_SYS_PARAMS:
+            if key in VOLATILE_PARAMETERS:
                 continue
             old_value = self._previous_sys_params.get(key)
             if old_value == new_value:
@@ -197,7 +196,7 @@ class ChangeDetector:
 
             severity = "critical" if key in CRITICAL_SYS_PARAMS else "info"
             _LOGGER.log(
-                logging.CRITICAL if severity == "critical" else logging.WARNING,
+                logging.CRITICAL if severity == "critical" else logging.INFO,
                 "sysParams change: %s: %s -> %s",
                 key, old_value, new_value,
             )

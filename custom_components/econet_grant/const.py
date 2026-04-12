@@ -557,7 +557,9 @@ URGENT_PARAMETERS: set[str] = {
     "HDWTSetPoint",
 }
 
-# Volatile editParams that change automatically (boost timers count down)
+# Volatile parameters that fluctuate automatically and should be excluded from
+# change detection across ALL API endpoints (editParams, sysParams, etc.).
+# This is a single master list — do not create per-endpoint volatile lists.
 VOLATILE_PARAMETERS: set[str] = {
     "Circuit1boosttimeleft",
     "Circuit2boosttimeleft",
@@ -566,10 +568,7 @@ VOLATILE_PARAMETERS: set[str] = {
     "Circuit5boosttimeleft",
     "Circuit6boosttimeleft",
     "Circuit7boosttimeleft",
-}
-
-# Volatile sysParams fields that fluctuate constantly (ignore for change detection)
-VOLATILE_SYS_PARAMS: set[str] = {
+    "GrantReg03Float",
     "signal",
     "quality",
 }

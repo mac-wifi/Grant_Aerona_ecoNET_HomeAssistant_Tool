@@ -123,7 +123,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         trigger_refresh = False
         if new_settings_ver is not None and new_settings_ver != _state["last_settings_ver"]:
-            _LOGGER.warning(
+            _LOGGER.info(
                 "settingsVer changed: %s -> %s, triggering settings refresh",
                 _state["last_settings_ver"], new_settings_ver,
             )
@@ -131,7 +131,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             trigger_refresh = True
 
         if new_edit_ver is not None and new_edit_ver != _state["last_editable_params_ver"]:
-            _LOGGER.warning(
+            _LOGGER.info(
                 "editableParamsVer changed: %s -> %s",
                 _state["last_editable_params_ver"], new_edit_ver,
             )
@@ -139,7 +139,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             trigger_refresh = True
 
         if new_sched_ver is not None and new_sched_ver != _state["last_schedules_ver"]:
-            _LOGGER.warning(
+            _LOGGER.info(
                 "schedulesVer changed: %s -> %s",
                 _state["last_schedules_ver"], new_sched_ver,
             )
