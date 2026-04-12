@@ -45,7 +45,7 @@ views:
 
           - type: gauge
             entity: sensor.grant_aerona_heat_pump_dhw_temperature
-            name: DHW
+            name: HW
             min: 0
             max: 70
             severity:
@@ -67,37 +67,37 @@ views:
         title: Temperature Controls
         entities:
           - entity: select.grant_aerona_heat_pump_circuit_1_operation_mode
-            name: Heating Operation Mode
+            name: CH Operation Mode
           - entity: number.grant_aerona_heat_pump_circuit_1_comfort_temperature
-            name: Heating Comfort Temp
+            name: CH Day Temp
           - entity: number.grant_aerona_heat_pump_circuit_1_eco_temperature
-            name: Heating Eco Temp
+            name: CH Night Temp
           - entity: number.grant_aerona_heat_pump_circuit_1_base_temperature
-            name: Heating Base Temp
+            name: CH Base Temp
           - entity: number.grant_aerona_heat_pump_dhw_set_point
-            name: DHW Set Point
+            name: HW Set Point
           - entity: number.grant_aerona_heat_pump_summer_mode_activation_temperature
-            name: Summer Mode Activation Temp
+            name: Summer Threshold
           - entity: number.grant_aerona_heat_pump_winter_mode_activation_temperature
-            name: Winter Mode Activation Temp
+            name: Winter Threshold
           - entity: number.grant_aerona_heat_pump_heating_temperature_correction
-            name: Heating Temperature Correction
+            name: Heating Temp Correction
           - entity: number.grant_aerona_heat_pump_dhw_correction_temperature
-            name: DHW Correction Temperature
+            name: HW Correction Temp
           - entity: number.grant_aerona_heat_pump_setpoint_temperature_correction_cooling
-            name: Setpoint Temp Correction - Cooling
+            name: Cooling Setpoint Adj
           - entity: number.grant_aerona_heat_pump_heating_crit_temp_ignore_after_dhw
-            name: Heating Crit Temp Ignore After DHW
+            name: Crit Temp Ignore
           - entity: select.grant_aerona_heat_pump_heating_thermostat_pump_blockade
-            name: Heating Thermostat Pump Blockade
+            name: CH Pump Blockade
           - entity: number.grant_aerona_heat_pump_dhw_pump_start_temp
-            name: DHW Pump Start Temp
+            name: HW Pump Start Temp
           - entity: number.grant_aerona_heat_pump_dhw_recirculation_operation_time
-            name: DHW Recirculation Operation Time
+            name: HW Recirc Run Time
           - entity: number.grant_aerona_heat_pump_dhw_recirculation_pause_time
-            name: DHW Recirculation Pause Time
+            name: HW Recirc Pause
           - entity: select.grant_aerona_heat_pump_dhw_specify_priority
-            name: DHW Specify Priority
+            name: HW Specify Priority
 
       # Grafana iframe: replace <HA_IP> with your Home Assistant IP address
       - type: iframe
@@ -175,27 +175,27 @@ views:
         title: System Settings
         entities:
           - entity: select.grant_aerona_heat_pump_external_temperature_sensor_support
-            name: External Temp Sensor Support
+            name: Ext Temp Sensor
           - entity: select.grant_aerona_heat_pump_temperature_sensor_source
-            name: Temperature Sensor Source
+            name: Temp Sensor Source
           - entity: select.grant_aerona_heat_pump_cooling_support
             name: Cooling Support
           - entity: select.grant_aerona_heat_pump_heat_pump_lock
             name: Heat Pump Lock
           - entity: select.grant_aerona_heat_pump_dhw_support
-            name: DHW Support
+            name: HW Support
           - entity: select.grant_aerona_heat_pump_hydraulic_scheme
             name: Hydraulic Scheme
           - entity: select.grant_aerona_heat_pump_heating_circuit_type
-            name: Heating Circuit Type
+            name: CH Circuit Type
           - entity: select.grant_aerona_heat_pump_heating_regulation_method
-            name: Heating Regulation Method
+            name: CH Regulation Method
           - entity: select.grant_aerona_heat_pump_off_circuits_during_charging
-            name: Off Circuits During Charging
+            name: Off Circuits on HW
           - entity: select.grant_aerona_heat_pump_dhw_recirculation_support
-            name: DHW Recirculation Support
+            name: HW Recirc Support
           - entity: select.grant_aerona_heat_pump_dhw_start_from_temp
-            name: DHW Start From Temp
+            name: HW Start From Temp
 
       - type: entities
         title: Backup Heater
@@ -203,7 +203,7 @@ views:
           - entity: select.grant_aerona_heat_pump_backup_heater
             name: Backup Heater
           - entity: select.grant_aerona_heat_pump_dhw_heater
-            name: DHW Heater
+            name: HW Heater
           - entity: select.grant_aerona_heat_pump_backup_heater_operation_in_defrost
             name: Operation in Defrost
           - entity: number.grant_aerona_heat_pump_outside_temp_start_heater
@@ -211,7 +211,7 @@ views:
           - entity: number.grant_aerona_heat_pump_outside_temp_force_heater
             name: Outside Temp Force Heater
           - entity: number.grant_aerona_heat_pump_dhw_heater_delay
-            name: DHW Heater Delay
+            name: HW Heater Delay
           - entity: number.grant_aerona_heat_pump_backup_heater_delay
             name: Backup Heater Delay
 
@@ -303,6 +303,38 @@ views:
     icon: mdi:cog
     cards:
       - type: entities
+        title: Snapshot & Backup
+        show_header_toggle: false
+        entities:
+          - entity: sensor.grant_aerona_heat_pump_last_default_snapshot
+            name: Last Default Snapshot
+            icon: mdi:content-save-check
+
+      - type: horizontal-stack
+        cards:
+          - type: button
+            name: Take Default Snapshot
+            icon: mdi:content-save-all
+            tap_action:
+              action: call-service
+              service: econet_grant.backup_settings
+              service_data:
+                snapshot_name: "Default"
+            confirmation:
+              text: "Save current settings as 'Default' snapshot?"
+
+          - type: button
+            name: Restore Default
+            icon: mdi:backup-restore
+            tap_action:
+              action: call-service
+              service: econet_grant.restore_settings
+              service_data:
+                snapshot_name: "Default"
+            confirmation:
+              text: "Restore all settings from the 'Default' snapshot?"
+
+      - type: entities
         title: Integration Status
         show_header_toggle: false
         entities:
@@ -350,34 +382,10 @@ views:
 
           Settings > System > Logs > filter by `econet_grant`
 
-      - type: horizontal-stack
-        cards:
-          - type: button
-            name: Backup Settings
-            icon: mdi:content-save-all
-            tap_action:
-              action: call-service
-              service: econet_grant.backup_settings
-              service_data:
-                snapshot_name: "Default"
-            confirmation:
-              text: "Save current settings as 'Default' snapshot?"
-
-          - type: button
-            name: Restore Default
-            icon: mdi:backup-restore
-            tap_action:
-              action: call-service
-              service: econet_grant.restore_settings
-              service_data:
-                snapshot_name: "Default"
-            confirmation:
-              text: "Restore all settings from the 'Default' snapshot?"
-
       - type: markdown
         title: About
         content: >
-          **EcoNet Grant Aerona** v0.2.0
+          **EcoNet Grant Aerona** v0.3.0
 
           Monitors and controls a Grant Aerona heat pump via the ecoNET local API.
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -70,6 +71,7 @@ async def async_backup_settings(
 
     snapshot = {
         "snapshot_name": snapshot_name,
+        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "editableParamsVer": edit_params.get("editableParamsVer"),
         "parameters": {},
     }
@@ -187,3 +189,29 @@ async def async_restore_settings(
 def list_snapshots(hass: HomeAssistant) -> list[str]:
     """Return names of all saved snapshots."""
     return [f.stem for f in _snapshot_dir(hass).glob("*.json")]
+
+
+def get_snapshot_info(hass: HomeAssistant, name: str = "Default") -> dict[str, Any] | None:
+    """Return metadata about a named snapshot, or None if it doesn't exist.
+
+    Falls back to the file modification time if the snapshot was created
+    before the ``created_at`` field was added.
+    """
+    path = _snapshot_path(hass, name)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text())
+        created_at = data.get("created_at")
+        if not created_at:
+            mtime = path.stat().st_mtime
+            created_at = datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat(
+                timespec="seconds"
+            )
+        return {
+            "created_at": created_at,
+            "param_count": len(data.get("parameters", {})),
+            "snapshot_name": data.get("snapshot_name", name),
+        }
+    except (json.JSONDecodeError, OSError):
+        return None

@@ -9,7 +9,7 @@ This project was created to remotely manage a holiday home heat pump, allowing t
 
 ## Current Status
 
-**Version:** 0.2.0 (active development)
+**Version:** 0.3.0 (active development)
 
 The integration is functional but has not been deployed to a production Home Assistant instance yet. All parameter mappings have been confirmed through manual before/after testing against the live ecoNET controller using the vendor's iOS app.
 
@@ -118,8 +118,8 @@ Step-by-step instructions for installing the integration on a clean Home Assista
 5. [Alternative: Manual Installation](#4-alt-manual-installation)
 6. [Configure the Integration](#5-configure-the-integration)
 7. [Understand Safe Mode](#6-understand-safe-mode)
-8. [Take a Baseline Backup](#7-take-a-baseline-backup)
-9. [Dashboard Setup](#8-dashboard-setup)
+8. [Dashboard Setup](#7-dashboard-setup)
+9. [Take a Baseline Backup](#8-take-a-baseline-backup)
 10. [Create Helpers](#9-create-helpers)
 11. [Install Automations](#10-install-automations)
 12. [Optional: Grafana](#11-optional-grafana)
@@ -335,26 +335,11 @@ This lets you verify the integration is reading correctly before you allow it to
 
 ---
 
-### 7. Take a Baseline Backup
+### 7. Dashboard Setup
 
-Before changing any settings, save a snapshot of the current configuration:
+The integration includes a ready-made Lovelace dashboard with 5 tabs: Temperature, Performance, System, Guest, and Admin. Deploy it now so you can use the built-in snapshot button in the next step.
 
-1. Go to **Developer Tools > Actions** (called "Services" in older HA versions)
-2. In the **Action** dropdown, search for **EcoNet Grant Aerona: Backup Settings** (`econet_grant.backup_settings`)
-3. Set **Snapshot Name** to `Default`
-4. Click **Perform Action**
-
-This creates a "Default" snapshot of all editable parameters. You can restore to this state at any time using the `econet_grant.restore_settings` service.
-
-> **Why now?** The backup captures the controller's current state. Taking it before you or the integration change anything gives you a known-good baseline to roll back to.
-
----
-
-### 8. Dashboard Setup
-
-The integration includes a ready-made Lovelace dashboard with 5 tabs: Temperature, Performance, Settings, Guest, and Admin.
-
-#### 8a. Copy the dashboard file
+#### 7a. Copy the dashboard file
 
 Copy `dashboards/econet_grant_dashboard.yaml` from the repository into your HA config directory:
 
@@ -371,7 +356,7 @@ mkdir -p /homeassistant/dashboards
 
 Then copy the file using Samba, SSH/SCP, or the File Editor app.
 
-#### 8b. Register the dashboard
+#### 7b. Register the dashboard
 
 Add the following to your `/homeassistant/configuration.yaml`:
 
@@ -388,22 +373,37 @@ lovelace:
 
 > If you already have a `lovelace:` section, just add the `econet-grant:` block under the existing `dashboards:` key.
 
-#### 8c. Check configuration
+#### 7c. Check configuration
 
 Before restarting, verify your YAML is valid:
 
 1. Go to **Developer Tools** (in the sidebar) > **YAML** tab
 2. Click **Check Configuration**
 3. If you see *"Configuration will not prevent Home Assistant from starting"*, you're good to proceed
-4. If errors are reported, fix the `configuration.yaml` edits from step 8b before continuing
+4. If errors are reported, fix the `configuration.yaml` edits from step 7b before continuing
 
-#### 8d. Restart and verify
+#### 7d. Restart and verify
 
 1. **Restart Home Assistant:** Settings > System > Restart
 2. The **Grant Aerona Heat Pump** dashboard will appear in the sidebar
 3. Open it and verify the Temperature tab shows live gauge readings
 
 > **Note:** Some dashboard cards depend on helpers that haven't been created yet. The Guest tab will show errors until you complete [Step 9](#9-create-helpers).
+
+---
+
+### 8. Take a Baseline Backup
+
+Before changing any settings, save a snapshot of the current configuration using the dashboard you just deployed:
+
+1. Open the **Grant Aerona Heat Pump** dashboard from the sidebar
+2. Go to the **Admin** tab
+3. Click the **Take Default Snapshot** button (you'll be asked to confirm)
+4. A persistent notification will confirm the snapshot was saved
+
+The **Last Default Snapshot** field on the Admin tab shows when the snapshot was taken and how many parameters it contains. You can restore to this state at any time using the **Restore Default** button next to it.
+
+> **Why now?** The backup captures the controller's current state. Taking it before you or the integration change anything gives you a known-good baseline to roll back to.
 
 ---
 

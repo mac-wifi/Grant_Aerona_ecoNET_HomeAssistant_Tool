@@ -18,6 +18,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import EconetApi
+from .backup import get_snapshot_info
 from .const import (
     CONF_SAFE_MODE,
     DEFAULT_SAFE_MODE,
@@ -94,6 +95,7 @@ async def async_setup_entry(
         EconetSafeModeSensor(coordinator, api, entry),
         EconetRemoteMenuSensor(slow_coordinator, api),
         EconetRecentChangesSensor(slow_coordinator, api, db),
+        EconetLastSnapshotSensor(coordinator, api, hass),
     ])
 
     async_add_entities(entities)
@@ -405,3 +407,50 @@ class EconetRecentChangesSensor(CoordinatorEntity[EconetSlowCoordinator], Sensor
     @property
     def native_value(self) -> int:
         return self._count
+
+
+class EconetLastSnapshotSensor(CoordinatorEntity[EconetFastCoordinator], SensorEntity):
+    """Shows the date/time the 'Default' snapshot was last taken."""
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_name = "Last Default Snapshot"
+    _attr_icon = "mdi:content-save-check"
+
+    def __init__(
+        self,
+        coordinator: EconetFastCoordinator,
+        api: EconetApi,
+        hass: HomeAssistant,
+    ) -> None:
+        super().__init__(coordinator)
+        self._api = api
+        self._hass_ref = hass
+        self._attr_unique_id = f"{DOMAIN}_{api.uid}_last_default_snapshot"
+        self._info: dict[str, Any] | None = get_snapshot_info(hass, "Default")
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._api.uid or self._api.host)},
+            name="Grant Aerona Heat Pump",
+            manufacturer=DEVICE_MANUFACTURER,
+            model=DEVICE_MODEL,
+        )
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self._info = get_snapshot_info(self._hass_ref, "Default")
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> str | None:
+        if self._info and self._info.get("created_at"):
+            return self._info["created_at"]
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        if self._info:
+            return {"param_count": self._info.get("param_count", 0)}
+        return {}
