@@ -80,8 +80,7 @@ These operate on individual bits within bitmask settings parameters.
 ### Other Features
 
 - **Safe Mode**: All write operations are blocked by default and shown as persistent notifications, allowing manual review before anything is sent to the controller. Disable in integration options when ready to write.
-- **Change Detection**: Monitors `editParams` for external changes (e.g. someone adjusting settings via the ecoNET app or panel). Fires `econet_grant_setting_changed` events and `econet_grant_urgent_change` for critical parameters.
-- **Circuit 1 Guardian**: Can lock the heating day temperature to a desired value and automatically revert if changed externally.
+- **Change Detection**: Monitors `editParams` for external changes (e.g. someone adjusting settings via the ecoNET app or panel). Fires `econet_grant_setting_changed` events and `econet_grant_urgent_change` for critical parameters. Sends persistent notifications listing what changed.
 - **Backup & Restore**: Services to snapshot all editable parameters and restore them later (e.g. after guest checkout).
 - **Dashboard YAML**: A ready-made Lovelace dashboard in `dashboards/econet_grant_dashboard.yaml`.
 
@@ -205,25 +204,32 @@ You need to create a dedicated database and a user for Home Assistant. In the Ch
 
 You're now finished with the InfluxDB / Chronograf UI. The remaining steps are done in the Home Assistant config files.
 
-#### 3c. Add the password to secrets.yaml
+#### 3c. Add the InfluxDB integration via the UI
 
-Open `/homeassistant/secrets.yaml` using the **File Editor** app, **Terminal & SSH**, or any other method you prefer (Samba, VS Code remote, etc.). If the file doesn't exist yet, create it. Add the following line:
+> **Note:** As of HA Core 2025.x, InfluxDB connection settings (host, port, database, username, password) **must** be configured via the UI, not in YAML. YAML is only used for filtering options (include/exclude) and other non-connection settings.
 
-```yaml
-influxdb_password: "the-password-you-chose"
-```
+1. Go to **Settings > Devices & Services**
+2. Click **Add Integration** (bottom right)
+3. Search for **InfluxDB** and select it
+4. Choose **InfluxDB 1.x** (this matches the HA InfluxDB app)
+5. Enter the connection details:
 
-#### 3d. Configure HA to send data to InfluxDB
+| Field | Value |
+|-------|-------|
+| **Host** | `a0d7b954-influxdb` |
+| **Port** | `8086` |
+| **Database** | `econet_grant` |
+| **Username** | `homeassistant` |
+| **Password** | the password you chose in Step 3b |
 
-Add the following to `/homeassistant/configuration.yaml`:
+6. Click **Submit**
+
+#### 3d. Add entity filtering to configuration.yaml
+
+The UI handles the connection, but entity filtering is still configured in YAML. Add the following to `/homeassistant/configuration.yaml`:
 
 ```yaml
 influxdb:
-  host: a0d7b954-influxdb
-  port: 8086
-  database: econet_grant
-  username: homeassistant
-  password: !secret influxdb_password
   max_retries: 3
   default_measurement: state
   include:
@@ -232,6 +238,8 @@ influxdb:
       - number.grant_aerona_heat_pump_*
       - select.grant_aerona_heat_pump_*
 ```
+
+> **Important:** Do NOT add `host`, `port`, `database`, `username`, or `password` keys here. Those are now managed by the UI integration. If you include them, HA will show a deprecation warning and may remove them automatically.
 
 Before restarting, verify your YAML is valid: go to **Developer Tools > YAML** (tab) and click **Check Configuration**. If it reports "Configuration will not prevent Home Assistant from starting", you're good to proceed. If it shows errors, fix them in `configuration.yaml` before continuing.
 
@@ -252,7 +260,7 @@ InfluxDB is now ready and waiting. As soon as the EcoNet integration starts crea
    - **Category:** Integration
    - Click **Add**
 4. Close the dialog. The **EcoNet Grant Aerona** card should now appear
-5. Click the card > **Download** > confirm the version (v0.2.0) > **Download**
+5. Click the card > **Download** > **Download** (HACS will show a commit hash rather than a version number -- this is normal for custom repositories)
 6. **Restart Home Assistant:** Settings > System > Restart
 
 After the restart, the integration files will be in place at `custom_components/econet_grant/`.
@@ -331,10 +339,10 @@ This lets you verify the integration is reading correctly before you allow it to
 
 Before changing any settings, save a snapshot of the current configuration:
 
-1. Go to **Developer Tools > Services**
-2. Select service **EcoNet Grant Aerona: Backup Settings** (`econet_grant.backup_settings`)
+1. Go to **Developer Tools > Actions** (called "Services" in older HA versions)
+2. In the **Action** dropdown, search for **EcoNet Grant Aerona: Backup Settings** (`econet_grant.backup_settings`)
 3. Set **Snapshot Name** to `Default`
-4. Click **Call Service**
+4. Click **Perform Action**
 
 This creates a "Default" snapshot of all editable parameters. You can restore to this state at any time using the `econet_grant.restore_settings` service.
 
@@ -380,43 +388,32 @@ lovelace:
 
 > If you already have a `lovelace:` section, just add the `econet-grant:` block under the existing `dashboards:` key.
 
-#### 8c. Restart and verify
+#### 8c. Check configuration
+
+Before restarting, verify your YAML is valid:
+
+1. Go to **Developer Tools** (in the sidebar) > **YAML** tab
+2. Click **Check Configuration**
+3. If you see *"Configuration will not prevent Home Assistant from starting"*, you're good to proceed
+4. If errors are reported, fix the `configuration.yaml` edits from step 8b before continuing
+
+#### 8d. Restart and verify
 
 1. **Restart Home Assistant:** Settings > System > Restart
 2. The **Grant Aerona Heat Pump** dashboard will appear in the sidebar
 3. Open it and verify the Temperature tab shows live gauge readings
 
-> **Note:** Some dashboard cards depend on helpers that haven't been created yet. The Guardian and Guest tabs will show errors until you complete [Step 9](#9-create-helpers).
+> **Note:** Some dashboard cards depend on helpers that haven't been created yet. The Guest tab will show errors until you complete [Step 9](#9-create-helpers).
 
 ---
 
 ### 9. Create Helpers
 
-The dashboard and automations use four HA helpers. Create them via the UI:
+The dashboard and automations use two HA helpers. Create them via the UI:
 
 Go to **Settings > Devices & Services > Helpers** (tab at top) > **Create Helper**.
 
-#### Helper 1: Circuit 1 Desired Temperature
-
-| Field | Value |
-|-------|-------|
-| Type | Number |
-| Name | Circuit 1 Desired Temperature |
-| Entity ID | `input_number.circuit1_desired_temp` |
-| Minimum | 10 |
-| Maximum | 35 |
-| Step | 0.5 |
-| Unit | °C |
-
-#### Helper 2: Circuit 1 Guardian Enabled
-
-| Field | Value |
-|-------|-------|
-| Type | Toggle |
-| Name | Circuit 1 Guardian Enabled |
-| Entity ID | `input_boolean.circuit1_guardian_enabled` |
-
-#### Helper 3: Guest Checkout Date
+#### Helper 1: Guest Checkout Date
 
 | Field | Value |
 |-------|-------|
@@ -424,7 +421,7 @@ Go to **Settings > Devices & Services > Helpers** (tab at top) > **Create Helper
 | Name | Guest Checkout Date |
 | Entity ID | `input_datetime.guest_checkout_date` |
 
-#### Helper 4: Guest Checkout Active
+#### Helper 2: Guest Checkout Active
 
 | Field | Value |
 |-------|-------|
@@ -432,13 +429,13 @@ Go to **Settings > Devices & Services > Helpers** (tab at top) > **Create Helper
 | Name | Guest Checkout Active |
 | Entity ID | `input_boolean.guest_checkout_active` |
 
-After creating all four, the dashboard's Guardian and Guest tabs should work without errors.
+After creating both helpers, the dashboard's Guest tab should work without errors.
 
 ---
 
 ### 10. Install Automations
 
-The repository includes three automation YAML files under `ha_config/automations/`. These are optional but recommended.
+The repository includes two automation YAML files under `ha_config/automations/`. These are optional but recommended.
 
 #### Option A: Import via the UI (recommended)
 
@@ -446,7 +443,6 @@ For each file below, open it, copy the contents, and paste it into **Settings > 
 
 | File | Purpose |
 |------|---------|
-| `ha_config/automations/circuit1_guardian.yaml` | Connects the Guardian helpers to the integration's guardian service |
 | `ha_config/automations/guest_checkout.yaml` | Restores default settings at 10 AM on the guest checkout date |
 | `ha_config/automations/notifications.yaml` | Sends notifications when settings are changed externally |
 
@@ -503,7 +499,8 @@ Use this checklist to confirm everything is working. Tick off each item as you g
 
 - [ ] InfluxDB app is running
 - [ ] Database `econet_grant` exists (check **InfluxDB Admin > Databases** in Chronograf)
-- [ ] HA `configuration.yaml` InfluxDB section uses `grant_aerona_heat_pump_*` entity globs
+- [ ] InfluxDB integration appears in **Settings > Devices & Services** (configured via UI, not YAML)
+- [ ] `configuration.yaml` InfluxDB section contains only filtering (`include`), **not** connection keys
 - [ ] In Chronograf, go to **Explore** and query `econet_grant` to confirm readings are being recorded
 
 #### Safe Mode
@@ -522,8 +519,7 @@ Use this checklist to confirm everything is working. Tick off each item as you g
 
 #### Helpers & Automations
 
-- [ ] All four helpers exist in **Settings > Helpers**
-- [ ] Guardian automation: toggling `circuit1_guardian_enabled` triggers the automation (check **Settings > Automations** for last triggered time)
+- [ ] Both helpers exist in **Settings > Helpers**
 - [ ] Notification automation: visible in the automations list
 
 #### Write Operations (when ready)
@@ -564,10 +560,12 @@ This is working as intended. Every write attempt in Safe Mode generates a notifi
 
 #### InfluxDB shows no data
 
+- Confirm the InfluxDB integration is set up via **Settings > Devices & Services** (not just the YAML)
 - Confirm the entity globs in `configuration.yaml` use `grant_aerona_heat_pump_*` (not `econet_grant_*`)
 - Check the InfluxDB app logs for connection errors
-- Verify the password in `secrets.yaml` matches the one you set for the `homeassistant` user in InfluxDB
+- Verify the password you entered in the UI integration matches the one you set for the `homeassistant` user in InfluxDB
 - Confirm InfluxDB was installed and configured **before** the integration was added (data only flows from the point InfluxDB is configured)
+- If you see a deprecation warning about YAML connection keys (`host`, `port`, `database`, `username`, `password`), remove those keys from `configuration.yaml` and restart -- the connection is now managed via the UI
 
 ---
 
@@ -577,11 +575,11 @@ This is working as intended. Every write attempt in Safe Mode generates a notifi
 |------|-------|
 | Integration domain | `econet_grant` |
 | Entity ID prefix | `grant_aerona_heat_pump_*` |
-| Service calls | `econet_grant.backup_settings`, `econet_grant.restore_settings`, `econet_grant.set_guardian_temp` |
+| Service calls | `econet_grant.backup_settings`, `econet_grant.restore_settings` |
 | Dashboard file | `dashboards/econet_grant_dashboard.yaml` |
-| HA config additions | `configuration.yaml` -- lovelace block, InfluxDB block |
-| Automations | `ha_config/automations/` -- guardian, guest checkout, notifications |
-| Helpers needed | `input_number.circuit1_desired_temp`, `input_boolean.circuit1_guardian_enabled`, `input_datetime.guest_checkout_date`, `input_boolean.guest_checkout_active` |
+| HA config additions | `configuration.yaml` -- lovelace block, InfluxDB filtering block (connection via UI) |
+| Automations | `ha_config/automations/` -- guest checkout, notifications |
+| Helpers needed | `input_datetime.guest_checkout_date`, `input_boolean.guest_checkout_active` |
 | Logs | Settings > System > Logs (filter for `econet_grant`) |
 | GitHub | [mac-wifi/Grant_Aerona_ecoNET_HomeAssistant_Tool](https://github.com/mac-wifi/Grant_Aerona_ecoNET_HomeAssistant_Tool) |
 

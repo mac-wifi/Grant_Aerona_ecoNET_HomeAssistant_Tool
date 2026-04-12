@@ -36,7 +36,6 @@ from .const import (
 )
 from .coordinator import EconetFastCoordinator, EconetSlowCoordinator
 from .database import EconetDatabase
-from .guardian import HeatingGuardian
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -48,7 +47,6 @@ PLATFORMS: list[Platform] = [
 ]
 
 SERVICE_CHANGE_DETECTOR = "change_detector"
-SERVICE_GUARDIAN = "guardian"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -80,7 +78,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await db.async_purge_old_data(hass, retention_days)
 
     change_detector = ChangeDetector(hass)
-    guardian = HeatingGuardian(hass, api, change_detector)
 
     # Process the initial slow data for change detection baseline
     if slow_coordinator.data:
@@ -156,23 +153,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     @callback
     def _on_slow_update() -> None:
-        """Run change detection, guardian, and database recording on slow polls."""
+        """Run change detection and database recording on slow polls."""
         if slow_coordinator.data is None:
+            _LOGGER.debug("Slow coordinator update: data is None, skipping")
             return
+
         edit_params = slow_coordinator.data.get("editParams", {})
         sys_params = slow_coordinator.data.get("sysParams", {})
 
-        changes = change_detector.process_edit_params(edit_params)
-        for change in changes:
-            source = change.pop("source", "external")
-            hass.async_create_task(db.async_log_change(hass, change, source))
+        try:
+            changes = change_detector.process_edit_params(edit_params)
+            for change in changes:
+                source = change.pop("source", "external")
+                hass.async_create_task(db.async_log_change(hass, change, source))
+        except Exception:
+            _LOGGER.exception("Error in editParams change detection")
 
-        sys_changes = change_detector.process_sys_params(sys_params)
-        for change in sys_changes:
-            source = change.pop("source", "external")
-            hass.async_create_task(db.async_log_change(hass, change, source))
+        try:
+            sys_changes = change_detector.process_sys_params(sys_params)
+            for change in sys_changes:
+                source = change.pop("source", "external")
+                hass.async_create_task(db.async_log_change(hass, change, source))
+        except Exception:
+            _LOGGER.exception("Error in sysParams change detection")
 
-        hass.async_create_task(guardian.check_and_revert(edit_params))
         hass.async_create_task(db.async_record_settings(hass, edit_params))
         if sys_params:
             hass.async_create_task(db.async_record_sys_params(hass, sys_params))
@@ -185,7 +189,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         SERVICE_SLOW_COORDINATOR: slow_coordinator,
         SERVICE_DATABASE: db,
         SERVICE_CHANGE_DETECTOR: change_detector,
-        SERVICE_GUARDIAN: guardian,
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -230,14 +233,6 @@ def _register_services(hass: HomeAssistant, entry: ConfigEntry) -> None:
         result = await async_restore_settings(hass, api, snapshot_name=name, safe_mode=safe_mode)
         _LOGGER.info("Restore result: %s", result)
 
-    async def handle_set_guardian(call: ServiceCall) -> None:
-        temp = call.data.get("temperature")
-        guardian = hass.data[DOMAIN][entry.entry_id][SERVICE_GUARDIAN]
-        if temp is not None:
-            guardian.set_desired_temp(float(temp))
-        else:
-            guardian.disable()
-
     if not hass.services.has_service(DOMAIN, "backup_settings"):
         hass.services.async_register(
             DOMAIN,
@@ -255,16 +250,6 @@ def _register_services(hass: HomeAssistant, entry: ConfigEntry) -> None:
             handle_restore,
             schema=vol.Schema({
                 vol.Optional("snapshot_name", default="Default"): cv.string,
-            }),
-        )
-
-    if not hass.services.has_service(DOMAIN, "set_guardian_temp"):
-        hass.services.async_register(
-            DOMAIN,
-            "set_guardian_temp",
-            handle_set_guardian,
-            schema=vol.Schema({
-                vol.Optional("temperature"): vol.Coerce(float),
             }),
         )
 

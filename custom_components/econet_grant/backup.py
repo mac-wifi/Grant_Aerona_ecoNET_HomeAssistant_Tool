@@ -165,7 +165,7 @@ async def async_restore_settings(
     successes = 0
     failures = 0
     for item in to_restore:
-        ok = await api.set_param_by_index(item["index"], item["restore_value"])
+        ok = await api.set_param(item["name"], item["restore_value"])
         if ok:
             successes += 1
         else:

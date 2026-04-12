@@ -34,8 +34,6 @@ from .const import (
 from .coordinator import EconetFastCoordinator, EconetSlowCoordinator
 from .database import EconetDatabase
 
-SERVICE_GUARDIAN = "guardian"
-
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -82,8 +80,6 @@ async def async_setup_entry(
             EconetTilesSensor(coordinator, api, description, defn)
         )
 
-    guardian = data.get(SERVICE_GUARDIAN)
-
     entities.extend([
         EconetDiagnosticSensor(
             coordinator, api, "last_reading",
@@ -95,7 +91,6 @@ async def async_setup_entry(
         ),
         EconetSettingsVersionSensor(coordinator, api),
         EconetDatabaseSizeSensor(coordinator, api, db),
-        EconetGuardianStatusSensor(coordinator, api, guardian),
         EconetSafeModeSensor(coordinator, api, entry),
         EconetRemoteMenuSensor(slow_coordinator, api),
         EconetRecentChangesSensor(slow_coordinator, api, db),
@@ -313,38 +308,6 @@ class EconetDatabaseSizeSensor(CoordinatorEntity[EconetFastCoordinator], SensorE
     @property
     def native_value(self) -> float:
         return round(self._db.get_db_size_mb(), 2)
-
-
-class EconetGuardianStatusSensor(CoordinatorEntity[EconetFastCoordinator], SensorEntity):
-    """Shows the Heating Guardian status."""
-
-    _attr_has_entity_name = True
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_name = "Guardian Status"
-    _attr_icon = "mdi:shield-home"
-
-    def __init__(
-        self, coordinator: EconetFastCoordinator, api: EconetApi, guardian
-    ) -> None:
-        super().__init__(coordinator)
-        self._api = api
-        self._guardian = guardian
-        self._attr_unique_id = f"{DOMAIN}_{api.uid}_guardian_status"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._api.uid or self._api.host)},
-            name="Grant Aerona Heat Pump",
-            manufacturer=DEVICE_MANUFACTURER,
-            model=DEVICE_MODEL,
-        )
-
-    @property
-    def native_value(self) -> str:
-        if self._guardian is None or not self._guardian.enabled:
-            return "Disabled"
-        return f"Active ({self._guardian.desired_temp}°C)"
 
 
 class EconetSafeModeSensor(CoordinatorEntity[EconetFastCoordinator], SensorEntity):

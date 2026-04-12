@@ -6,24 +6,29 @@
 #
 # The HA InfluxDB app ships InfluxDB 1.x with Chronograf UI.
 #
+# IMPORTANT: As of HA Core 2025.x+, InfluxDB connection settings
+# (host, port, database, username, password, etc.) must be
+# configured via the UI at Settings > Devices & Services, NOT
+# in YAML. Only filtering options (include/exclude) and other
+# non-connection settings remain in YAML.
+#
 # Steps:
 #   1. Install InfluxDB app from Settings > Apps > Install app
 #   2. In Chronograf UI > InfluxDB Admin > Databases:
 #      create database "econet_grant" (infinite retention)
 #   3. In InfluxDB Admin > Users: create user "homeassistant"
 #      with a password and admin or ALL-on-econet_grant privileges
-#   4. Add the password to secrets.yaml as:
-#      influxdb_password: "your-password-here"
+#   4. Add the InfluxDB integration via the UI:
+#      Settings > Devices & Services > Add Integration > InfluxDB
+#      Enter: host=a0d7b954-influxdb, port=8086,
+#      database=econet_grant, username=homeassistant,
+#      password=<your password>
 #   5. Paste this snippet into your configuration.yaml
+#      (filtering only -- no connection keys)
 #   6. Restart Home Assistant
 # ============================================================
 
 influxdb:
-  host: a0d7b954-influxdb
-  port: 8086
-  database: econet_grant
-  username: homeassistant
-  password: !secret influxdb_password
   max_retries: 3
   default_measurement: state
   include:

@@ -36,7 +36,7 @@ API_RM_CURR_NEW_PARAM = "rmCurrNewParam"
 
 # Polling intervals (seconds)
 FAST_POLL_INTERVAL = 300  # 5 minutes for temperatures and performance
-SLOW_POLL_INTERVAL = 86400  # 24 hours for system settings
+SLOW_POLL_INTERVAL = 300  # 5 minutes for settings change detection
 
 # API retry configuration
 API_MAX_RETRIES = 5
@@ -72,7 +72,7 @@ SENSOR_DEFINITIONS: dict[str, dict] = {
         "state_class": SensorStateClass.MEASUREMENT,
     },
     "Circuit1thermostat": {
-        "name": "Heating Thermostat",
+        "name": "Circuit 1 Thermostat",
         "device_class": SensorDeviceClass.TEMPERATURE,
         "unit": UnitOfTemperature.CELSIUS,
         "state_class": SensorStateClass.MEASUREMENT,
@@ -151,7 +151,7 @@ TILES_SENSOR_DEFINITIONS: dict[str, dict] = {
 NUMBER_DEFINITIONS: dict[str, dict] = {
     "Circuit1ComfortTemp": {
         "param_index": "238",
-        "name": "Heating Day Temperature",
+        "name": "Circuit 1 Day Temperature",
         "min_value": 10,
         "max_value": 35,
         "step": 0.1,
@@ -159,7 +159,7 @@ NUMBER_DEFINITIONS: dict[str, dict] = {
     },
     "Circuit1EcoTemp": {
         "param_index": "239",
-        "name": "Heating Night Temperature",
+        "name": "Circuit 1 Night Temperature",
         "min_value": 10,
         "max_value": 35,
         "step": 0.1,
@@ -167,7 +167,7 @@ NUMBER_DEFINITIONS: dict[str, dict] = {
     },
     "Circuit1BaseTemp": {
         "param_index": "261",
-        "name": "Heating Base Temperature",
+        "name": "Circuit 1 Base Temperature",
         "min_value": 25,
         "max_value": 60,
         "step": 1,
@@ -183,7 +183,7 @@ NUMBER_DEFINITIONS: dict[str, dict] = {
     },
     "Circuit1DownHist": {
         "param_index": "240",
-        "name": "Heating Hysteresis",
+        "name": "Circuit 1 Hysteresis",
         "min_value": 0,
         "max_value": 5,
         "step": 0.1,
@@ -207,7 +207,7 @@ NUMBER_DEFINITIONS: dict[str, dict] = {
     },
     "Circuit1CurveRadiator": {
         "param_index": "273",
-        "name": "Heating Curve",
+        "name": "Circuit 1 Curve",
         "min_value": 0,
         "max_value": 4,
         "step": 0.1,
@@ -215,7 +215,7 @@ NUMBER_DEFINITIONS: dict[str, dict] = {
     },
     "Circuit1Curveshift": {
         "param_index": "275",
-        "name": "Heating Curve Shift",
+        "name": "Circuit 1 Curve Shift",
         "min_value": -20,
         "max_value": 20,
         "step": 1,
@@ -359,7 +359,7 @@ SELECT_DEFINITIONS: dict[str, dict] = {
     },
     "Circuit1WorkState": {
         "param_index": "236",
-        "name": "Heating Operation Mode",
+        "name": "Circuit 1 Operation Mode",
         "options": {
             0: "Off",
             1: "Day",
@@ -404,7 +404,7 @@ SELECT_DEFINITIONS: dict[str, dict] = {
     },
     "Circuit1TypeSettings": {
         "param_index": "269",
-        "name": "Heating Circuit Type",
+        "name": "Circuit 1 Circuit Type",
         "options": {
             1: "Radiators",
             3: "Fan Coil",
@@ -422,6 +422,7 @@ SELECT_DEFINITIONS: dict[str, dict] = {
 BITMASK_SELECT_DEFINITIONS: dict[str, dict] = {
     "HDWSpecifyPriority": {
         "settings_param": "101",
+        "settings_param_name": "HDWSETTINGS",
         "bit_mask": 16,
         "name": "DHW Specify Priority",
         "on_label": "Yes",
@@ -430,6 +431,7 @@ BITMASK_SELECT_DEFINITIONS: dict[str, dict] = {
     },
     "ExternalTempSensorSupport": {
         "settings_param": "69",
+        "settings_param_name": "TempSettings",
         "bit_mask": 1,
         "name": "External Temperature Sensor Support",
         "on_label": "Yes",
@@ -438,6 +440,7 @@ BITMASK_SELECT_DEFINITIONS: dict[str, dict] = {
     },
     "TempSensorSource": {
         "settings_param": "69",
+        "settings_param_name": "TempSettings",
         "bit_mask": 2,
         "name": "Temperature Sensor Source",
         "on_label": "Heat Pump",
@@ -446,6 +449,7 @@ BITMASK_SELECT_DEFINITIONS: dict[str, dict] = {
     },
     "CoolingSupport": {
         "settings_param": "485",
+        "settings_param_name": "HeatingCooling",
         "bit_mask": 1,
         "name": "Cooling Support",
         "on_label": "Yes",
@@ -454,6 +458,7 @@ BITMASK_SELECT_DEFINITIONS: dict[str, dict] = {
     },
     "HeatPumpLock": {
         "settings_param": "462",
+        "settings_param_name": "HeatSourceAllowWorkSett",
         "bit_mask": 1,
         "name": "Heat Pump Lock",
         "on_label": "Yes",
@@ -462,6 +467,7 @@ BITMASK_SELECT_DEFINITIONS: dict[str, dict] = {
     },
     "DHWSupport": {
         "settings_param": "101",
+        "settings_param_name": "HDWSETTINGS",
         "bit_mask": 1,
         "name": "DHW Support",
         "on_label": "Yes",
@@ -470,6 +476,7 @@ BITMASK_SELECT_DEFINITIONS: dict[str, dict] = {
     },
     "OffCircuitsDuringCharging": {
         "settings_param": "101",
+        "settings_param_name": "HDWSETTINGS",
         "bit_mask": 4096,
         "name": "Off Circuits During Charging",
         "on_label": "Yes",
@@ -478,6 +485,7 @@ BITMASK_SELECT_DEFINITIONS: dict[str, dict] = {
     },
     "DHWRecirculationSupport": {
         "settings_param": "431",
+        "settings_param_name": "CirculationSettings",
         "bit_mask": 1,
         "name": "DHW Recirculation Support",
         "on_label": "Yes",
@@ -486,6 +494,7 @@ BITMASK_SELECT_DEFINITIONS: dict[str, dict] = {
     },
     "DHWStartFromTemp": {
         "settings_param": "431",
+        "settings_param_name": "CirculationSettings",
         "bit_mask": 2,
         "name": "DHW Start From Temp",
         "on_label": "Yes",
@@ -494,14 +503,16 @@ BITMASK_SELECT_DEFINITIONS: dict[str, dict] = {
     },
     "Circuit1ThermostatPumpBlockade": {
         "settings_param": "231",
+        "settings_param_name": "Circuit1Settings",
         "bit_mask": 1024,
-        "name": "Heating Thermostat Pump Blockade",
+        "name": "Circuit 1 Thermostat Pump Blockade",
         "on_label": "Yes",
         "off_label": "No",
         "on_clears_bit": False,
     },
     "BackupHeaterInDefrost": {
         "settings_param": "143",
+        "settings_param_name": "heatersSett",
         "bit_mask": 16,
         "name": "Backup Heater Operation in Defrost",
         "on_label": "Yes",
@@ -510,14 +521,16 @@ BITMASK_SELECT_DEFINITIONS: dict[str, dict] = {
     },
     "Circuit1RegulationMethod": {
         "settings_param": "231",
+        "settings_param_name": "Circuit1Settings",
         "bit_mask": 2048,
-        "name": "Heating Regulation Method",
+        "name": "Circuit 1 Regulation Method",
         "on_label": "Weather",
         "off_label": "Fixed",
         "on_clears_bit": False,
     },
     "BackupHeater": {
         "settings_param": "143",
+        "settings_param_name": "heatersSett",
         "bit_mask": 1,
         "name": "Backup Heater",
         "on_label": "Yes",
@@ -526,6 +539,7 @@ BITMASK_SELECT_DEFINITIONS: dict[str, dict] = {
     },
     "DHWHeater": {
         "settings_param": "143",
+        "settings_param_name": "heatersSett",
         "bit_mask": 2,
         "name": "DHW Heater",
         "on_label": "Yes",

@@ -10,6 +10,7 @@ import logging
 from copy import deepcopy
 from typing import Any
 
+from homeassistant.components.persistent_notification import async_create as pn_async_create
 from homeassistant.core import HomeAssistant
 
 from .const import (
@@ -50,9 +51,11 @@ class ChangeDetector:
         """
         data = edit_params.get("data", {})
         if not data:
+            _LOGGER.warning("Change detector: editParams has no 'data' key")
             return []
 
         current_snapshot = _extract_values(data)
+        _LOGGER.debug("Change detector: snapshot has %d parameters", len(current_snapshot))
 
         if self._previous_snapshot is None:
             self._previous_snapshot = current_snapshot
@@ -62,9 +65,17 @@ class ChangeDetector:
         raw_changes = _diff_values(self._previous_snapshot, current_snapshot)
         self._previous_snapshot = current_snapshot
 
+        if raw_changes:
+            _LOGGER.info(
+                "Change detector: %d raw change(s) found before filtering",
+                len(raw_changes),
+            )
+
         changes = [c for c in raw_changes if c["name"] not in VOLATILE_PARAMETERS]
         if not changes:
             return []
+
+        _LOGGER.info("Change detector: %d change(s) after filtering volatiles", len(changes))
 
         all_changes: list[dict[str, Any]] = []
         for change in changes:
@@ -79,7 +90,7 @@ class ChangeDetector:
 
             change["source"] = "external"
             all_changes.append(change)
-            _LOGGER.info(
+            _LOGGER.warning(
                 "External change detected: %s changed from %s to %s",
                 param_name, change["old_value"], change["new_value"],
             )
@@ -105,11 +116,16 @@ class ChangeDetector:
                     f"- **{change['name']}**: {change['old_value']} → {change['new_value']}"
                 )
             message = "Settings changed externally:\n\n" + "\n".join(lines)
-            self._hass.components.persistent_notification.async_create(
-                message=message,
-                title="EcoNet Grant - Settings Changed",
-                notification_id=f"{DOMAIN}_external_changes",
-            )
+            _LOGGER.info("Creating persistent notification for %d external change(s)", len(external_changes))
+            try:
+                pn_async_create(
+                    self._hass,
+                    message=message,
+                    title="EcoNet Grant - Settings Changed",
+                    notification_id=f"{DOMAIN}_external_changes",
+                )
+            except Exception:
+                _LOGGER.exception("Failed to create persistent notification")
 
         return all_changes
 
@@ -159,7 +175,8 @@ class ChangeDetector:
             })
 
             if key == "remoteMenu" and str(new_value).lower() == "true":
-                self._hass.components.persistent_notification.async_create(
+                pn_async_create(
+                    self._hass,
                     message=(
                         "**CRITICAL:** `remoteMenu` has changed to `true`. "
                         "RM API endpoints may now be available. Investigate immediately."
@@ -169,14 +186,16 @@ class ChangeDetector:
                 )
 
             if key == "alarms":
-                self._hass.components.persistent_notification.async_create(
+                pn_async_create(
+                    self._hass,
                     message=f"Alarm state changed: {new_value}",
                     title="EcoNet Grant - Alarm Change",
                     notification_id=f"{DOMAIN}_alarm_change",
                 )
 
             if key in CRITICAL_SYS_PARAMS:
-                self._hass.components.persistent_notification.async_create(
+                pn_async_create(
+                    self._hass,
                     message=(
                         f"**CRITICAL:** `{key}` changed from `{old_value}` to `{new_value}`. "
                         "This should never happen -- investigate immediately."

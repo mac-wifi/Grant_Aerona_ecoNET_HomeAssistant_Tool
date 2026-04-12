@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from homeassistant.components.number import NumberEntity, NumberMode
+from homeassistant.components.persistent_notification import async_create as pn_async_create
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -139,7 +140,7 @@ class EconetNumber(CoordinatorEntity[EconetFastCoordinator], NumberEntity):
         if change_detector:
             change_detector.mark_self_write(self._key)
 
-        success = await self._api.set_param_by_index(self._param_index, value)
+        success = await self._api.set_param(self._key, value)
         if success:
             self._attr_native_value = value
             self.async_write_ha_state()
@@ -171,15 +172,22 @@ async def _safe_mode_queue(
 ) -> None:
     """Queue a write for manual approval via persistent notification."""
     notification_id = f"{DOMAIN}_write_{key}_{value}"
+    formatted = int(value) if value == int(value) else value
+    api_url = (
+        f"`{api.host}/econet/newParam"
+        f"?newParamName={key}&newParamValue={formatted}`"
+    )
     message = (
         f"**EcoNet Grant**: Pending write request\n\n"
         f"Parameter: **{key}**\n"
         f"New value: **{value}**\n"
         f"Param index: {param_index}\n\n"
+        f"API call that would run:\n{api_url}\n\n"
         f"Safe mode is ON. To execute this write, disable safe mode in "
         f"the integration options and set the value again."
     )
-    hass.components.persistent_notification.async_create(
+    pn_async_create(
+        hass,
         message=message,
         title="EcoNet Grant - Write Pending",
         notification_id=notification_id,

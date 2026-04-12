@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from homeassistant.components.persistent_notification import async_create as pn_async_create
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -151,7 +152,7 @@ class EconetSelect(CoordinatorEntity[EconetFastCoordinator], SelectEntity):
             return
 
         if self._safe_mode:
-            await _safe_mode_notify(self.hass, self._key, self._param_index, option, api_value)
+            await _safe_mode_notify(self.hass, self._api, self._key, self._key, option, api_value)
             return
 
         old_option = self._attr_current_option
@@ -159,7 +160,7 @@ class EconetSelect(CoordinatorEntity[EconetFastCoordinator], SelectEntity):
         if change_detector:
             change_detector.mark_self_write(self._key)
 
-        success = await self._api.set_param_by_index(self._param_index, api_value)
+        success = await self._api.set_param(self._key, api_value)
         if success:
             self._attr_current_option = option
             self.async_write_ha_state()
@@ -202,6 +203,7 @@ class EconetBitmaskSelect(CoordinatorEntity[EconetFastCoordinator], SelectEntity
         self._entry = entry
         self._key = key
         self._settings_param = defn["settings_param"]
+        self._settings_param_name = defn["settings_param_name"]
         self._bit_mask = defn["bit_mask"]
         self._on_label = defn["on_label"]
         self._off_label = defn["off_label"]
@@ -278,7 +280,7 @@ class EconetBitmaskSelect(CoordinatorEntity[EconetFastCoordinator], SelectEntity
 
         if self._safe_mode:
             await _safe_mode_notify(
-                self.hass, self._key, self._settings_param, option, new_value,
+                self.hass, self._api, self._key, self._settings_param_name, option, new_value,
             )
             return
 
@@ -287,7 +289,7 @@ class EconetBitmaskSelect(CoordinatorEntity[EconetFastCoordinator], SelectEntity
         if change_detector:
             change_detector.mark_self_write(self._key)
 
-        success = await self._api.set_param_by_index(self._settings_param, new_value)
+        success = await self._api.set_param(self._settings_param_name, new_value)
         if success:
             self._attr_current_option = option
             self.async_write_ha_state()
@@ -312,28 +314,36 @@ class EconetBitmaskSelect(CoordinatorEntity[EconetFastCoordinator], SelectEntity
 
 async def _safe_mode_notify(
     hass: HomeAssistant,
+    api: EconetApi,
     key: str,
-    param_index: str,
+    param_name: str,
     option: str,
     api_value: int,
 ) -> None:
     """Show a persistent notification instead of writing in safe mode."""
     notification_id = f"{DOMAIN}_write_{key}_{api_value}"
+    formatted = int(api_value) if api_value == int(api_value) else api_value
+    api_url = (
+        f"`{api.host}/econet/newParam"
+        f"?newParamName={param_name}&newParamValue={formatted}`"
+    )
     message = (
         f"**EcoNet Grant**: Pending write request\n\n"
         f"Parameter: **{key}**\n"
         f"New mode: **{option}** (API value: {api_value})\n"
-        f"Param index: {param_index}\n\n"
+        f"API param name: {param_name}\n\n"
+        f"API call that would run:\n{api_url}\n\n"
         f"Safe mode is ON. To execute this write, disable safe mode in "
         f"the integration options and set the value again."
     )
-    hass.components.persistent_notification.async_create(
+    pn_async_create(
+        hass,
         message=message,
         title="EcoNet Grant - Write Pending",
         notification_id=notification_id,
     )
     _LOGGER.warning(
-        "Safe mode: blocked write of %s = %s (index %s, value %d). "
+        "Safe mode: blocked write of %s = %s (param %s, value %d). "
         "Created persistent notification %s",
-        key, option, param_index, api_value, notification_id,
+        key, option, param_name, api_value, notification_id,
     )

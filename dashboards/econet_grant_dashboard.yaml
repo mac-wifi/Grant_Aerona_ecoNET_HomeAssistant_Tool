@@ -17,8 +17,6 @@
 #
 # Prerequisites:
 #   - econet_grant integration installed and configured
-#   - input_number.circuit1_desired_temp helper created
-#   - input_boolean.circuit1_guardian_enabled helper created
 #   - input_datetime.guest_checkout_date helper created
 #   - input_boolean.guest_checkout_active helper created
 #   - Grafana app running at port 3000 (replace <HA_IP> in iframe URLs with your HA IP)
@@ -37,7 +35,7 @@ views:
         cards:
           - type: gauge
             entity: sensor.grant_aerona_heat_pump_circuit_1_thermostat
-            name: Circuit 1
+            name: Heating
             min: 0
             max: 50
             severity:
@@ -68,12 +66,14 @@ views:
       - type: entities
         title: Temperature Controls
         entities:
+          - entity: select.grant_aerona_heat_pump_circuit_1_operation_mode
+            name: Heating Operation Mode
           - entity: number.grant_aerona_heat_pump_circuit_1_comfort_temperature
-            name: Circuit 1 Comfort Temp
+            name: Heating Comfort Temp
           - entity: number.grant_aerona_heat_pump_circuit_1_eco_temperature
-            name: Circuit 1 Eco Temp
+            name: Heating Eco Temp
           - entity: number.grant_aerona_heat_pump_circuit_1_base_temperature
-            name: Circuit 1 Base Temp
+            name: Heating Base Temp
           - entity: number.grant_aerona_heat_pump_dhw_set_point
             name: DHW Set Point
           - entity: number.grant_aerona_heat_pump_summer_mode_activation_temperature
@@ -98,14 +98,6 @@ views:
             name: DHW Recirculation Pause Time
           - entity: select.grant_aerona_heat_pump_dhw_specify_priority
             name: DHW Specify Priority
-
-      - type: entities
-        title: Circuit 1 Guardian
-        entities:
-          - entity: input_boolean.circuit1_guardian_enabled
-            name: Guardian Enabled
-          - entity: input_number.circuit1_desired_temp
-            name: Desired Temperature
 
       # Grafana iframe: replace <HA_IP> with your Home Assistant IP address
       - type: iframe
@@ -317,10 +309,7 @@ views:
           - entity: sensor.grant_aerona_heat_pump_safe_mode
             name: Safe Mode
             icon: mdi:shield-lock
-          - entity: sensor.grant_aerona_heat_pump_guardian_status
-            name: Heating Guardian
-            icon: mdi:shield-home
-          - entity: sensor.grant_aerona_heat_pump_last_reading
+          - entity: sensor.grant_aerona_heat_pump_last_sensor_poll
             name: Last Sensor Poll
             icon: mdi:clock-check
           - entity: sensor.grant_aerona_heat_pump_last_settings_check
@@ -384,29 +373,6 @@ views:
                 snapshot_name: "Default"
             confirmation:
               text: "Restore all settings from the 'Default' snapshot?"
-
-      - type: horizontal-stack
-        cards:
-          - type: button
-            name: Enable Guardian (21C)
-            icon: mdi:shield-check
-            tap_action:
-              action: call-service
-              service: econet_grant.set_guardian_temp
-              service_data:
-                temperature: 21
-            confirmation:
-              text: "Enable Heating Guardian at 21C?"
-
-          - type: button
-            name: Disable Guardian
-            icon: mdi:shield-off
-            tap_action:
-              action: call-service
-              service: econet_grant.set_guardian_temp
-              service_data: {}
-            confirmation:
-              text: "Disable Heating Guardian?"
 
       - type: markdown
         title: About

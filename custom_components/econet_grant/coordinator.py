@@ -59,7 +59,7 @@ class EconetFastCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
 
 class EconetSlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """Polls editParams and sysParams every 24 hours for system settings."""
+    """Polls editParams and sysParams every 5 minutes for change detection."""
 
     def __init__(self, hass: HomeAssistant, api: EconetApi, entry: ConfigEntry) -> None:
         super().__init__(
