@@ -9,9 +9,9 @@ This project was created to remotely manage a holiday home heat pump, allowing t
 
 ## Current Status
 
-**Version:** 0.4.0 (active development)
+**Version:** 0.4.1 (active development)
 
-The integration is functional but has not been deployed to a production Home Assistant instance yet. All parameter mappings have been confirmed through manual before/after testing against the live ecoNET controller using the vendor's iOS app.
+The integration is deployed and running in production on a Home Assistant OS instance, alongside a separate test HA instance used for development. All parameter mappings were confirmed through manual before/after testing against the live ecoNET controller using the vendor's iOS app.
 
 ## What Works
 
@@ -91,10 +91,10 @@ Home Assistant Server
   └── custom_components/econet_grant/
         ├── Fast coordinator (5 min)  ──GET──>  http://<econet_ip>/econet/regParams
         │     └── Sensors, Fan Speed, System Demand
-        ├── Slow coordinator (24 hr)  ──GET──>  http://<econet_ip>/econet/editParams
+        ├── Slow coordinator (5 min)  ──GET──>  http://<econet_ip>/econet/editParams + sysParams
         │     └── Number entities, Select entities, Change detection
-        └── Write operations          ──GET──>  http://<econet_ip>/econet/rmNewParam?...
-              └── Sets parameters by index with value
+        └── Write operations          ──GET──>  http://<econet_ip>/econet/newParam?newParamName=...&newParamValue=...
+              └── Sets parameters by name with value
 ```
 
 The ecoNET device exposes a local REST API with basic auth. All communication is HTTP on the local network. The integration serialises requests with a minimum 1-second gap to avoid overwhelming the controller.
