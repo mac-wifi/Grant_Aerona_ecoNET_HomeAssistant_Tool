@@ -49,8 +49,8 @@ docs/
 # Development tools
 tools/
 
-# Old/superseded dashboard
-dashboards/econet.yaml
-
 # Cursor
 .cursor/
+
+# Claude (local agent guidance)
+CLAUDE.md
