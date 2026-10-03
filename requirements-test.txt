@@ -1,0 +1,6 @@
+# Test baseline: Python 3.13 / Home Assistant 2025.3 (not a minimum-version claim).
+homeassistant==2025.3.4
+pytest==8.3.5
+pytest-asyncio==0.26.0
+pytest-socket==0.7.0
+PyYAML==6.0.2

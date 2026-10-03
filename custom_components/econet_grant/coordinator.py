@@ -13,7 +13,12 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import AuthError, EconetApi
-from .const import DOMAIN, FAST_POLL_INTERVAL, SLOW_POLL_INTERVAL
+from .const import (
+    CONF_SLOW_POLL_INTERVAL,
+    DEFAULT_SLOW_POLL_MINUTES,
+    DOMAIN,
+    FAST_POLL_INTERVAL,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,14 +64,16 @@ class EconetFastCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
 
 class EconetSlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """Polls editParams and sysParams every 5 minutes for change detection."""
+    """Polls editParams and sysParams at the configured fallback interval."""
 
     def __init__(self, hass: HomeAssistant, api: EconetApi, entry: ConfigEntry) -> None:
         super().__init__(
             hass,
             _LOGGER,
             name=f"{DOMAIN}_slow",
-            update_interval=timedelta(seconds=SLOW_POLL_INTERVAL),
+            update_interval=timedelta(minutes=entry.options.get(
+                CONF_SLOW_POLL_INTERVAL, DEFAULT_SLOW_POLL_MINUTES
+            )),
         )
         self.api = api
         self._entry = entry

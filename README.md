@@ -115,7 +115,7 @@ Home Assistant Server
   └── custom_components/econet_grant/
         ├── Fast coordinator (5 min)  ──GET──>  http://<econet_ip>/econet/regParams
         │     └── Operational sensors, version counters, SQLite readings
-        ├── Slow coordinator (5 min)  ──GET──>  http://<econet_ip>/econet/editParams + sysParams
+        ├── Slow coordinator (default 5 min, configurable) ──GET──> http://<econet_ip>/econet/editParams + sysParams
         │     └── Settings data for number/select entities, change detection, SQLite history/audit
         └── Write operations          ──GET──>  http://<econet_ip>/econet/newParam?newParamName=...&newParamValue=...
               └── Sets parameters by name; `rm*` endpoints are not supported by this controller
@@ -326,6 +326,22 @@ If the connection succeeds, you'll see a new device called **Grant Aerona Heat P
 > **Note:** These are the local device credentials, not your econet24.com cloud account.
 
 If you set up InfluxDB in Step 3, data will start flowing into the `econet_grant` database within seconds of the first sensor poll.
+
+#### Settings polling interval
+
+Under **Settings > Devices & Services > EcoNet Grant Aerona > Configure**, set
+**Settings polling interval (minutes)** to a whole number from **5 to 1440**.
+The default remains **5 minutes**, including for existing installations with no
+saved interval. Use **60** for hourly polling or **1440** for daily polling of
+`editParams` and `sysParams`. Shorter intervals catch changes that do not increment
+version counters sooner, but increase device load; polling faster than five
+minutes is not supported.
+
+`regParams` still polls every five minutes. Changes in `settingsVer`,
+`editableParamsVer`, or `schedulesVer` still request an early settings refresh,
+regardless of the chosen interval. Saving options reloads the integration to apply
+the interval without restarting Home Assistant; this also resets the in-memory
+change-detection baseline. It does not write settings to the heat pump.
 
 #### What gets created
 
@@ -646,7 +662,7 @@ This is working as intended. Every write attempt in Safe Mode generates a notifi
 - The ecoNET Remote Menu (RM) API, which provides full parameter metadata and dynamic entity creation, is not supported by the ecoMAX360i controller (`remoteMenu: false` in `sysParams`). If a future firmware update enables it, the integration could be significantly enhanced.
 - Write success currently requires only `result: "OK"`; the returned `paramName` and `paramValue` are not yet validated and there is no post-write read-back check.
 - The bundled SQLite history is currently an internal audit/raw-data store rather than a general Home Assistant or Grafana data source. Only database size and recent-change count are exposed as entities.
-- There is not yet an automated test suite; behaviour has been validated manually against the test and production Home Assistant installations.
+- An initial offline test suite covers selected safety and lifecycle behavior; it is not full Home Assistant or hardware verification. See [TESTING.md](TESTING.md) for setup, coverage limits and the single `python -m pytest` command. Hosted CI execution remains unverified.
 
 ## Related Projects
 

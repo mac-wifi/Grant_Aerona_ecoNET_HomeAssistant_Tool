@@ -11,6 +11,7 @@ CONF_PASSWORD = "password"
 CONF_SAFE_MODE = "safe_mode"
 CONF_RETENTION_DAYS = "retention_days"
 CONF_PUSH_NOTIFICATIONS = "push_notifications"
+CONF_SLOW_POLL_INTERVAL = "slow_poll_interval"
 
 DEFAULT_USERNAME = "admin"
 DEFAULT_SAFE_MODE = True
@@ -39,6 +40,9 @@ API_RM_CURR_NEW_PARAM = "rmCurrNewParam"
 # Polling intervals (seconds)
 FAST_POLL_INTERVAL = 300  # 5 minutes for temperatures and performance
 SLOW_POLL_INTERVAL = 300  # 5 minutes for settings change detection
+DEFAULT_SLOW_POLL_MINUTES = SLOW_POLL_INTERVAL // 60
+MIN_SLOW_POLL_MINUTES = 5
+MAX_SLOW_POLL_MINUTES = 1440
 
 # API retry configuration
 API_MAX_RETRIES = 5

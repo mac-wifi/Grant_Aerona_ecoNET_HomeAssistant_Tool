@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from decimal import Decimal, InvalidOperation
 import logging
 import time
 from typing import Any
@@ -189,7 +190,7 @@ class EconetApi:
             API_NEW_PARAM,
             {"newParamName": param_name, "newParamValue": str(value)},
         )
-        return _check_write_result(data, param_name, value)
+        return _check_write_result(data, param_name, value, expected_name=param_name)
 
     async def set_param_by_index(self, index: str | int, value: float | int) -> bool:
         """Set a parameter by numeric index via /econet/rmNewParam."""
@@ -218,11 +219,45 @@ class EconetApi:
             return False
 
 
-def _check_write_result(data: dict | None, label: str, value: Any) -> bool:
-    if data is None or data.get("result") != "OK":
+def _check_write_result(
+    data: dict | None, label: str, value: Any, *, expected_name: str | None = None,
+) -> bool:
+    """Validate an API acknowledgement, not a poll-confirmed physical change."""
+    if not isinstance(data, dict) or data.get("result") != "OK":
         _LOGGER.error("Failed to set %s = %s, response: %s", label, value, data)
         return False
-    _LOGGER.info("Successfully set %s = %s", label, value)
+    if expected_name is not None and "paramName" in data and data["paramName"] != expected_name:
+        _LOGGER.warning(
+            "Write response name mismatch for %s = %s: paramName=%r",
+            label, value, data["paramName"],
+        )
+        return False
+    if "paramValue" in data:
+        try:
+            reported = Decimal(str(data["paramValue"]))
+            requested = Decimal(str(value))
+            matches = reported.is_finite() and requested.is_finite() and reported == requested
+        except InvalidOperation:
+            matches = False
+        if not matches:
+            _LOGGER.warning(
+                "Write response value mismatch for %s = %s: paramValue=%r",
+                label, value, data["paramValue"],
+            )
+            return False
+    missing = [field for field in ("paramName", "paramValue") if field not in data]
+    if missing:
+        _LOGGER.warning(
+            "Write response for %s = %s is missing %s; accepting API OK "
+            "without full response validation",
+            label, value, ", ".join(missing),
+        )
+    _LOGGER.info(
+        "API acknowledged write for %s = %s: paramName=%r, paramValue=%r "
+        "(not poll-confirmed)",
+        label, value, data.get("paramName", "<missing>"),
+        data.get("paramValue", "<missing>"),
+    )
     return True
 
 
