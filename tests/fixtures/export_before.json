@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-01-01T00:00:00+00:00",
+  "endpoints": {
+    "regParams": {"settingsVer": 1, "curr": {"GrantOutgoingTemp": 32.0}},
+    "editParams": {"data": {
+      "238": {"name": "Circuit1ComfortTemp", "value": 20, "minv": 10, "maxv": 35},
+      "103": {"name": "HDWTSetPoint", "value": 50},
+      "901": {"name": "SyntheticRemoved", "value": null}
+    }},
+    "sysParams": {"uid": "[REDACTED]", "controllerID": "[REDACTED]", "remoteMenu": false, "softVer": "test-firmware", "alarms": []}
+  }
+}

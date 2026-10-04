@@ -705,6 +705,84 @@ This is working as intended. Every write attempt in Safe Mode generates a notifi
 - The bundled SQLite history is currently an internal audit/raw-data store rather than a general Home Assistant or Grafana data source. Only database size and recent-change count are exposed as entities.
 - An initial offline test suite covers selected safety and lifecycle behavior; it is not full Home Assistant or hardware verification. See [TESTING.md](TESTING.md) for setup, coverage limits and the single `python -m pytest` command. Hosted CI execution remains unverified.
 
+## Read-only before/after export and comparison
+
+The standalone utilities in `scripts/` use Python 3.10+ and the standard library;
+they do not require Home Assistant or third-party packages. Run them from a local
+repository checkout, keeping `export_econet.py` and `compare_econet.py` together.
+They are not integration services or restore files, and are not installed into
+Home Assistant by the HACS integration package. Their presence in this checkout
+does not imply a published release.
+
+**Privacy:** sanitisation is best-effort, not a guarantee of anonymity. It redacts
+recognised credential, UID/controller identity, serial, host/IP/MAC and network
+fields, known sensitive strings echoed elsewhere, and address-like text. Unknown
+firmware fields or free text can still contain private data. Redaction can also
+hide useful differences or over-redact innocent strings. Review **both snapshots
+and the comparison** before sharing. Never commit real captures or comparisons,
+even if they appear sanitised; only synthetic fixtures belong in Git. Keep output
+in a private directory (the existing `exports/` path is ignored) and avoid shared
+or cloud-synchronised folders. Ignore rules are not an access-control mechanism.
+
+### Owner-operated workflow
+
+Only do this when you deliberately choose to investigate a setting on your own
+device. The utilities never make a setting change themselves.
+
+1. Capture the **before** state. Replace the placeholders with your explicit
+   local device origin and local username; there are no private connection defaults:
+
+   ```sh
+   python3 scripts/export_econet.py --origin 'http://<econet-host>' \
+     --username '<local-username>' --output-dir exports/before
+   ```
+
+   Enter the local API password at the hidden terminal prompt. There is no password
+   argument or credential file lookup; an unavailable hidden prompt fails rather
+   than echoing the password. Host and username arguments may be visible in shell
+   history/process listings. Never put credentials in the URL. Basic Auth over
+   HTTP is unencrypted: use only a trusted LAN, or an explicit `https://` origin
+   if your device supports it (normal certificate verification remains enabled).
+2. In the vendor app, make **one owner-chosen change**, noting the setting and
+   old/new values. Wait for the vendor app to show the saved value.
+3. Capture the **after** state with the same command but `--output-dir exports/after`.
+   Each successful run prints the path of a separate `econet-<UTC timestamp>.json`.
+4. Compare the two exact printed paths, substituting them below:
+
+   ```sh
+   python3 scripts/compare_econet.py exports/before/econet-<timestamp>.json \
+     exports/after/econet-<timestamp>.json > exports/comparison.json
+   ```
+
+Each snapshot contains `schema_version: 1`, a timezone-aware `captured_at`, and
+an `endpoints` object containing only `regParams`, `editParams`, and `sysParams`.
+Capture performs three sequential GETs with a one-second gap and 15-second request
+timeouts, not an atomic controller transaction. It never accesses write or Remote
+Menu endpoints, follows redirects, uses environment proxies, or retries. All three
+responses must pass structural validation before a final snapshot is published;
+failed/partial/invalid downloads do not become valid snapshots. Files are created
+privately (0600 on POSIX) and existing captures are not overwritten. Atomic final
+publication requires a local filesystem supporting hard links. Unsupported payload
+shapes fail closed rather than being silently treated as empty data.
+
+Comparison is entirely offline. Its JSON array contains `endpoint`, `name`,
+`index`, `change` (`changed`, `added`, `removed`), `old`, and `new`. Editable values
+use the API name and string index; other fields, including editable metadata, use
+escaped JSON Pointer paths (for example `/curr/GrantOutgoingTemp` or
+`/data/238/maxv`) with `index: null`. Arrays are compared as whole values. The change
+kind distinguishes a missing value from JSON `null`; renamed/reindexed parameters
+appear as removal/addition. Unchanged values and capture timestamps are omitted;
+no differences produces `[]`. Volatile readings/version counters are intentionally
+included, so not every difference is caused by your vendor-app change. Redacted
+values cannot reveal whether the underlying secret changed.
+
+Both tools return 0 on success, 1 on capture/input failure, and 2 on invalid CLI
+arguments. Comparison differences still return 0. On failure, no comparison JSON
+is printed; a shell-redirected output file may exist but will be empty, not `[]`.
+Missing, malformed, incomplete or unsupported-version snapshots are rejected.
+These utilities were exercised only with synthetic snapshots and mocked HTTP;
+no real controller capture or real-data sanitisation validation is claimed.
+
 ## Related Projects
 
 - [ecoNET-300 Home Assistant Integration](https://github.com/jontofront/ecoNET-300-Home-Assistant-Integration) -- A similar project for different ecoNET hardware (pellet boilers). Some API knowledge was referenced from this project.
