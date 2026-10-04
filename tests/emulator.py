@@ -17,6 +17,7 @@ class EconetEmulator:
         self.sys = self._load("sys_params")
         self.success = self._load("newparam_success")
         self.mode = "ok"
+        self.write_modes = []  # optional per-attempt responses for timeout recovery
         self.writes = []
         self.requests = []
         self.app = web.Application()
@@ -44,22 +45,23 @@ class EconetEmulator:
         name = request.query["newParamName"]
         value = float(request.query["newParamValue"])
         self.writes.append((name, value))
-        if self.mode == "timeout":
+        mode = self.write_modes.pop(0) if self.write_modes else self.mode
+        if mode == "timeout":
             await asyncio.sleep(0.2)
             raise web.HTTPGatewayTimeout()
-        if self.mode == "http_error":
+        if mode == "http_error":
             raise web.HTTPServiceUnavailable()
-        if self.mode == "malformed_json":
+        if mode == "malformed_json":
             return web.Response(text="{invalid", content_type="application/json")
         response = {**self.success, "paramName": name, "paramValue": value}
-        if self.mode == "name_mismatch":
+        if mode == "name_mismatch":
             response["paramName"] = "SyntheticOtherParameter"
-        elif self.mode == "value_mismatch":
+        elif mode == "value_mismatch":
             response["paramValue"] = value + 1
-        elif self.mode == "non_ok":
+        elif mode == "non_ok":
             response["result"] = "ERROR"
-        elif self.mode == "ok":
+        elif mode == "ok":
             self.guest_change(name, value)
         else:
-            raise ValueError(f"Unknown emulator mode: {self.mode}")
+            raise ValueError(f"Unknown emulator mode: {mode}")
         return web.json_response(response)

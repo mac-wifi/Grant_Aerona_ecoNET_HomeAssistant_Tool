@@ -13,18 +13,23 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import AuthError, EconetClient, EconetApi
+from .revert import CONF_REVERT_NOTIFY_SERVICE
 from .const import (
     CONF_HOST,
     CONF_PASSWORD,
     CONF_PUSH_NOTIFICATIONS,
     CONF_RETENTION_DAYS,
     CONF_SAFE_MODE,
+    CONF_SLOW_POLL_INTERVAL,
     CONF_USERNAME,
     DATA_RETENTION_DAYS,
     DEFAULT_PUSH_NOTIFICATIONS,
     DEFAULT_SAFE_MODE,
+    DEFAULT_SLOW_POLL_MINUTES,
     DEFAULT_USERNAME,
     DOMAIN,
+    MIN_SLOW_POLL_MINUTES,
+    MAX_SLOW_POLL_MINUTES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -110,12 +115,24 @@ class EconetGrantOptionsFlow(OptionsFlow):
         current_retention = self._config_entry.options.get(
             CONF_RETENTION_DAYS, DATA_RETENTION_DAYS
         )
+        current_slow_poll = self._config_entry.options.get(
+            CONF_SLOW_POLL_INTERVAL, DEFAULT_SLOW_POLL_MINUTES
+        )
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_SAFE_MODE, default=current_safe_mode): bool,
                     vol.Required(CONF_PUSH_NOTIFICATIONS, default=current_push): bool,
+                    vol.Optional(
+                        CONF_REVERT_NOTIFY_SERVICE,
+                        default=self._config_entry.options.get(CONF_REVERT_NOTIFY_SERVICE, ""),
+                    ): vol.All(str, vol.Match(r"^(?:mobile_app_[a-z0-9_]+)?$")),
+                    vol.Optional(
+                        CONF_SLOW_POLL_INTERVAL, default=current_slow_poll
+                    ): vol.All(int, vol.Range(
+                        min=MIN_SLOW_POLL_MINUTES, max=MAX_SLOW_POLL_MINUTES
+                    )),
                     vol.Optional(
                         CONF_RETENTION_DAYS, default=current_retention
                     ): vol.All(vol.Coerce(int), vol.Range(min=30, max=7300)),

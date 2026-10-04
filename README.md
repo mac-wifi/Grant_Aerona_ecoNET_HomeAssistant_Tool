@@ -343,6 +343,47 @@ regardless of the chosen interval. Saving options reloads the integration to app
 the interval without restarting Home Assistant; this also resets the in-memory
 change-detection baseline. It does not write settings to the heat pump.
 
+#### Optional: individual manual Revert notifications
+
+In integration **Configure** options, leave **Revert notification service** blank
+to keep the existing notify-only behaviour. To opt in, enable **Push notifications
+for setting changes** and enter one Companion App service name such as
+`mobile_app_your_phone`, without the `notify.` prefix. Find the actual service
+under **Developer Tools > Actions**. Saving options reloads the integration and
+invalidates any outstanding Revert buttons.
+
+Eligible external changes receive an additional mobile notification showing the
+API parameter name and old/new values, with an individual **Revert** button. The
+existing persistent change alert remains available even if the target is missing
+or mobile delivery fails; ordinary push alerts may also appear. Detection alone
+never writes. Safe Mode still blocks Revert, even after a deliberate tap.
+
+Each button is single-use, expires after 15 minutes, and belongs to that loaded
+integration entry. At most 32 actions are retained in memory; older actions can
+be evicted. Changed settings, reloads, unloads and restarts invalidate actions.
+Unknown, read-only, volatile and bitmask parameters are not offered. Before a
+write, the integration fetches fresh settings and checks identity, value and
+editable bounds; a concurrent settings poll can conservatively cancel the action.
+The controller has no atomic compare-and-set: a change after that check cannot
+be ruled out.
+
+One authorised tap starts one bounded operation, not necessarily one HTTP
+request. Existing transport handling may resend the **same parameter/value**
+after a timeout, up to **five total attempts** (initial plus at most four retries).
+Requests remain serialised with at least one second after the preceding request
+completes, including timeouts. A response stops timeout retries; explicit errors
+and response mismatches are not retried. Duplicate taps cannot start another
+operation. There is no scheduled retry, automatic revert, or Revert All.
+
+Only an API-acknowledged success is logged with `source=revert`; this is not
+physical-state confirmation. After an unconfirmed/failed operation, check the
+controller before trying again: a timed-out request might have been applied.
+The next settings poll shows the observed state and may also notify about the
+revert itself. Revert deliberately does not add self-write suppression markers,
+so later guest changes remain visible; the separate deferred restore issue #11
+is unchanged. Local HA/emulator tests cover this path, not real phone delivery or
+heat-pump behaviour.
+
 #### What gets created
 
 After successful configuration, you'll have entities with the prefix `grant_aerona_heat_pump_`:

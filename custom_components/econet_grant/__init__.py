@@ -36,6 +36,7 @@ from .const import (
 )
 from .coordinator import EconetFastCoordinator, EconetSlowCoordinator
 from .database import EconetDatabase
+from .revert import RevertActions
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -78,6 +79,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await db.async_purge_old_data(hass, retention_days)
 
     change_detector = ChangeDetector(hass, entry)
+    revert_actions = RevertActions(hass, entry, api, db)
 
     # Process the initial slow data for change detection baseline
     if slow_coordinator.data:
@@ -85,6 +87,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         sys_params = slow_coordinator.data.get("sysParams", {})
         change_detector.process_edit_params(edit_params)
         change_detector.process_sys_params(sys_params)
+        revert_actions.observe(edit_params, [])
 
     # Record the initial data from both coordinators
     if fast_coordinator.data:
@@ -149,7 +152,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if trigger_refresh:
             hass.async_create_task(slow_coordinator.async_request_refresh())
 
-    fast_coordinator.async_add_listener(_on_fast_update)
+    entry.async_on_unload(fast_coordinator.async_add_listener(_on_fast_update))
 
     @callback
     def _on_slow_update() -> None:
@@ -163,8 +166,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         try:
             changes = change_detector.process_edit_params(edit_params)
+            revert_actions.observe(edit_params, changes)
             for change in changes:
-                source = change.pop("source", "external")
+                source = change.get("source", "external")
                 hass.async_create_task(db.async_log_change(hass, change, source))
         except Exception:
             _LOGGER.exception("Error in editParams change detection")
@@ -181,7 +185,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if sys_params:
             hass.async_create_task(db.async_record_sys_params(hass, sys_params))
 
-    slow_coordinator.async_add_listener(_on_slow_update)
+    entry.async_on_unload(slow_coordinator.async_add_listener(_on_slow_update))
 
     hass.data[DOMAIN][entry.entry_id] = {
         SERVICE_API: api,
@@ -192,9 +196,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    revert_actions.start()
+    entry.async_on_unload(revert_actions.close)
     _register_services(hass, entry)
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
     return True
+
+
+async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload coordinators so changed polling options take effect immediately."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 def _register_services(hass: HomeAssistant, entry: ConfigEntry) -> None:

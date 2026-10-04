@@ -35,7 +35,7 @@ def entry():
 def hass(tmp_path, real_hass):
     return SimpleNamespace(
         data={}, config=SimpleNamespace(config_dir=str(tmp_path)),
-        bus=SimpleNamespace(async_fire=Mock()),
+        bus=SimpleNamespace(async_fire=Mock(), async_listen=Mock(return_value=Mock())),
         services=SimpleNamespace(
             has_service=Mock(return_value=False), async_register=Mock(),
             async_call=AsyncMock(),
