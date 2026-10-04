@@ -1,0 +1,14 @@
+{
+  "settingsVer": 1,
+  "editableParamsVer": 1,
+  "schedulesVer": 0,
+  "curr": {
+    "GrantOutgoingTemp": 32.0,
+    "GrantReturnTemp": 27.0,
+    "TempCWU": 50.0,
+    "TempWthr": 5.0,
+    "GrantWorkState": 1,
+    "Circuit1thermostat": 20.0,
+    "currentFlow": 19.0
+  }
+}

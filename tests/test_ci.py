@@ -11,7 +11,8 @@ def test_workflow_runs_same_discovered_suite():
     assert workflow["permissions"] == {"contents": "read"}
     job = workflow["jobs"]["tests"]
     steps = job["steps"]
-    assert any(step.get("with", {}).get("python-version") == "3.13" for step in steps)
+    # Keep CI on the real-HA harness's Python baseline.
+    assert any(step.get("with", {}).get("python-version") == "3.14" for step in steps)
     assert [step["run"] for step in steps if "run" in step] == [
         "python -m pip install -r requirements-test.txt", "python -m pytest",
     ]

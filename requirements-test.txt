@@ -1,6 +1,4 @@
-# Test baseline: Python 3.13 / Home Assistant 2025.3 (not a minimum-version claim).
-homeassistant==2025.3.4
-pytest==8.3.5
-pytest-asyncio==0.26.0
-pytest-socket==0.7.0
-PyYAML==6.0.2
+# Test baseline: Python 3.14 / Home Assistant 2026.9.4 (not a minimum-version claim).
+# This harness release pins Home Assistant and the pytest plugin versions exactly.
+pytest-homeassistant-custom-component==0.13.367
+PyYAML==6.0.3

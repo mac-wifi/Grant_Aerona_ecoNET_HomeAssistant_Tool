@@ -1,0 +1,8 @@
+{
+  "uid": "synthetic-test-device",
+  "controllerID": "synthetic-controller",
+  "softVer": "test-firmware",
+  "remoteMenu": false,
+  "settingsVer": 1,
+  "alarms": []
+}

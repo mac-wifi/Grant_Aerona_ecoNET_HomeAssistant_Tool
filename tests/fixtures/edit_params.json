@@ -1,8 +1,8 @@
 {
   "editableParamsVer": 1,
   "data": {
-    "100": {"name": "Circuit1ComfortTemp", "value": 20, "minv": 10, "maxv": 30, "edit": true},
-    "101": {"name": "HDWSETTINGS", "value": 5, "minv": 0, "maxv": 255, "edit": true},
-    "102": {"name": "SyntheticReadOnly", "value": 7, "edit": false}
+    "238": {"name": "Circuit1ComfortTemp", "value": 20, "minv": 10, "maxv": 35, "edit": true},
+    "101": {"name": "HDWSETTINGS", "value": 5, "minv": 0, "maxv": 0, "edit": true},
+    "103": {"name": "HDWTSetPoint", "value": 50, "minv": 35, "maxv": 55, "edit": true}
   }
 }
