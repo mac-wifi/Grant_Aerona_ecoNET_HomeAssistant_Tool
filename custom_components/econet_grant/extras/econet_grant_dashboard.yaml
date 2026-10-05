@@ -23,7 +23,7 @@
 #   - HACS frontend cards installed: Mushroom, Mini Graph Card
 #   - input_datetime.guest_checkout_date helper created
 #   - input_boolean.guest_checkout_active helper created
-#   - Optional: Grafana on port 3000 (replace <HA_IP> in iframe URLs)
+#   - Optional: Grafana via its authenticated Open Web UI (see README Step 11)
 # ============================================================
 
 title: Grant Aerona Heat Pump
@@ -411,11 +411,17 @@ views:
             confirmation:
               text: "Restore all settings to the Default snapshot?"
 
-      # Grafana iframe: replace <HA_IP> with your Home Assistant IP address
-      - type: iframe
+      # No fixed Ingress URL, HTTP iframe or anonymous access required.
+      - type: markdown
         title: System Graphs (Grafana)
-        url: "http://<HA_IP>:3000/d/econet-system?orgId=1&kiosk=tv"
-        aspect_ratio: 60%
+        content: >-
+          Optional: open the Grafana app using **Open Web UI** or its Home
+          Assistant sidebar entry, then select **EcoNet Grant - System**.
+          Import the repository's Grafana dashboards first (README Step 11).
+          Ingress uses Home Assistant authentication; a copied Ingress URL is
+          not a supported permanent iframe link. For standalone Grafana, use
+          your authenticated HTTPS URL in a separate tab. If Grafana is not
+          installed, this optional section needs no configuration.
 
   # -------------------------------------------------------
   # TAB 5: Guest

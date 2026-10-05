@@ -1,19 +1,23 @@
-# Grafana provisioning: InfluxDB datasource
-# Place this file in Grafana's provisioning/datasources/ directory
-# or configure manually via Grafana UI > Configuration > Data Sources
+# Optional Grafana provisioning for InfluxDB 1.x (not Flux/2.x).
+# Set these environment variables in the Grafana process, or enter values in
+# its datasource UI. INFLUXDB_URL is reachable FROM Grafana, not the browser.
+# Use a dedicated user with READ only on econet_grant. Do not commit secrets.
+# Dashboards bind to this exact UID; match it when configuring via the UI.
 
 apiVersion: 1
 
 datasources:
   - name: InfluxDB - EcoNet Grant
+    uid: econet-influxdb
     type: influxdb
     access: proxy
-    url: http://a0d7b954-influxdb:8086
+    url: ${INFLUXDB_URL}
+    user: ${INFLUXDB_READ_USER}
     jsonData:
-      version: Flux
-      organization: home
-      defaultBucket: econet_grant
+      dbName: econet_grant
+      version: InfluxQL
+      httpMode: GET
     secureJsonData:
-      token: "${INFLUXDB_TOKEN}"
-    isDefault: true
+      password: $INFLUXDB_READ_PASSWORD
+    isDefault: false
     editable: true

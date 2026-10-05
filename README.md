@@ -214,7 +214,7 @@ Installing InfluxDB before the integration captures entity-state history from th
 2. Search for **InfluxDB** and install it
 3. Start the app and open the web UI (Chronograf)
 
-The HA InfluxDB app ships **InfluxDB 1.x** with Chronograf as the web interface. You'll see a default `_internal` database and pre-created users (`chronograf`, `kapacitor`) -- this is normal.
+These examples target **InfluxDB 1.x** with Chronograf as the web interface. Check the installed app's version; the examples are not Flux/InfluxDB 2.x configuration. A default `_internal` database and pre-created users (`chronograf`, `kapacitor`) are normal for this setup.
 
 #### 3b. Create the database and user
 
@@ -223,16 +223,16 @@ You need to create a dedicated database and a user for Home Assistant. In the Ch
 1. Click **InfluxDB Admin** in the left sidebar
 2. On the **Databases** tab, click **Create Database**
 3. Enter `econet_grant` as the name and press Enter
-4. The database is created with an infinite retention policy by default -- leave this as-is
+4. Choose a retention policy appropriate to your disk space and history needs. The example queries use the database's default retention policy.
 5. Switch to the **Users** tab and click **Create User**
 6. Enter username `homeassistant` and a password of your choice, then click **Create**
-7. Click **Grant admin** to give the user admin permissions, or at minimum grant **WRITE** and **READ** on the `econet_grant` database
+7. Grant **WRITE** and **READ** on `econet_grant` only, not global admin. Enable InfluxDB authentication if not already enabled; database grants do not protect a server with authentication disabled. Create a separate Grafana user with **READ only** on `econet_grant` (Step 11).
 
 You're now finished with the InfluxDB / Chronograf UI. The remaining steps are done in the Home Assistant config files.
 
 #### 3c. Add the InfluxDB integration via the UI
 
-> **Note:** As of HA Core 2025.x, InfluxDB connection settings (host, port, database, username, password) **must** be configured via the UI, not in YAML. YAML is only used for filtering options (include/exclude) and other non-connection settings.
+Use the current Home Assistant InfluxDB UI for connection settings; keep only filtering and schema options in YAML as below. See the [Home Assistant InfluxDB documentation](https://www.home-assistant.io/integrations/influxdb/) for version-specific setup.
 
 1. Go to **Settings > Devices & Services**
 2. Click **Add Integration** (bottom right)
@@ -242,8 +242,8 @@ You're now finished with the InfluxDB / Chronograf UI. The remaining steps are d
 
 | Field | Value |
 |-------|-------|
-| **Host** | `a0d7b954-influxdb` |
-| **Port** | `8086` |
+| **Host** | `<INFLUXDB_HOST>` reachable from HA; use the hostname shown by your installed app |
+| **Port** | `<INFLUXDB_PORT>` (normally `8086` for InfluxDB 1.x) |
 | **Database** | `econet_grant` |
 | **Username** | `homeassistant` |
 | **Password** | the password you chose in Step 3b |
@@ -257,6 +257,7 @@ The UI handles the connection, but entity filtering is still configured in YAML.
 ```yaml
 influxdb:
   max_retries: 3
+  measurement_attr: unit_of_measurement
   default_measurement: state
   include:
     entity_globs:
@@ -265,7 +266,7 @@ influxdb:
       - select.grant_aerona_heat_pump_*
 ```
 
-> **Important:** Do NOT add `host`, `port`, `database`, `username`, or `password` keys here. Those are now managed by the UI integration. If you include them, HA will show a deprecation warning and may remove them automatically.
+Do not duplicate UI-managed connection credentials in this snippet. Merge into any existing `influxdb:` section, rather than creating a second one. Adjust the globs if your device or entity IDs were renamed; they filter full HA IDs. Do not add a measurement override unless you also change the Grafana queries.
 
 Before restarting, verify your YAML is valid: go to **Developer Tools > YAML** (tab) and click **Check Configuration**. If it reports "Configuration will not prevent Home Assistant from starting", you're good to proceed. If it shows errors, fix them in `configuration.yaml` before continuing.
 
@@ -273,7 +274,7 @@ Before restarting, verify your YAML is valid: go to **Developer Tools > YAML** (
 
 **Settings > System > Restart**
 
-InfluxDB is now ready and waiting. As soon as the EcoNet integration starts creating entities (after Step 5), data will flow into InfluxDB automatically.
+With a working connection and matching filters, subsequent HA entity-state events are exported. Confirm data arrives using Step 11; unchanged states need not produce a point on every poll. This does not query or backfill the integration's SQLite database.
 
 ---
 
@@ -573,16 +574,63 @@ Then restart Home Assistant.
 
 ### 11. Optional: Grafana
 
-If you installed InfluxDB in Step 3 and want visual dashboards with historical graphs:
+The three examples use **InfluxDB 1.x / InfluxQL**, with HA exporting entity states as in Step 3. They do not query `econet_grant.db`, reconstruct earlier history, or require a new entity or provider. Download `grafana/` and `ha_config/` from the repository; these top-level examples are not installed by HACS with the integration.
 
-1. Go to **Settings > Apps > Install app**
-2. Search for **Grafana** and install it
-3. Start the app (runs on port 3000)
-4. Open the Grafana web UI and add InfluxDB as a data source (InfluxQL query language, URL `http://a0d7b954-influxdb:8086`, database `econet_grant`, user `homeassistant`)
-5. Import the dashboards from `grafana/dashboards/` in the repository (system, temperature, performance JSON files)
-6. In `/homeassistant/dashboards/econet_grant_dashboard.yaml`, replace the literal `<HA_IP>` in the System-tab iframe URL with the address used to reach your Home Assistant/Grafana host
+#### Datasource and import
 
-> **Note:** The Lovelace dashboard's System tab includes a Grafana iframe that expects Grafana on port 3000. That panel will show an error if Grafana is not installed; everything else still works.
+1. Install and start the Grafana app, then use **Open Web UI** (or its HA sidebar entry). Standalone Grafana also works with an authenticated URL you manage.
+2. In Grafana, add an **InfluxDB** datasource under **Connections > Data sources**, selecting **InfluxQL**, not Flux. Use a server URL reachable **from Grafana**, e.g. `https://<INFLUXDB_HOST>:<INFLUXDB_PORT>`, with the scheme/port actually configured by your server. Keep TLS verification enabled for HTTPS; private app-network HTTP is a different connection from browser embedding. Do not expose InfluxDB publicly.
+3. Set database `econet_grant`, the dedicated **READ-only** database username and password from Step 3, and HTTP method **GET**. These are database credentials, not your HA/Grafana login; do not enable an extra HTTP Basic Auth layer unless your proxy requires one. Choose **Save & test**, then verify an actual read in Explore. A successful connection test alone does not prove entity data exists. Database selection is not access control: enforce read-only grants server-side.
+4. The supplied dashboards bind every query to datasource UID **`econet-influxdb`** (not the display name). Either provision `grafana/datasources/influxdb.yaml` using your Grafana installation's supported provisioning mechanism, or configure via the UI and replace every `econet-influxdb` UID in the three JSON files with your datasource's actual UID before import. The provisioning example uses `jsonData.dbName` and environment placeholders `INFLUXDB_URL`, `INFLUXDB_READ_USER`, `INFLUXDB_READ_PASSWORD`; these must be set in the **Grafana process**, not HA's YAML or your browser. If your HAOS app does not expose provisioning/environment configuration, use the UI route. Never put secrets in dashboard JSON or commit filled-in provisioning files.
+5. Use **Dashboards > New > Import**, upload each of `temperature.json`, `performance.json`, and `system.json` from `grafana/dashboards/`, choose a folder and import. These are dashboard models, not HTTP API `{dashboard, overwrite}` envelopes. Their stable dashboard UIDs are `econet-temperature`, `econet-performance`, `econet-system`; check before replacing an existing dashboard with the same UID.
+6. Start with **Last 24 hours** (System defaults to **Last 7 days**), then widen the range to include known exported events. Use the panel's Query inspector to check the resolved datasource, request and returned fields. The stat panel shows the latest setpoints **within the selected range**, not guaranteed current controller values.
+
+#### Schema and entity mapping
+
+With `measurement_attr: unit_of_measurement` and `default_measurement: state`, numeric temperatures use measurement **`°C`**, frequency **`Hz`**, pump speed **`rpm`**, with numeric field **`value`**. Unitless text modes use measurement **`state`**, string field **`state`**, not `value`. Each point has separate **`domain`** and **`entity_id`** tags; the latter is the object ID **without** `sensor.`, `number.` or `select.`. HA `unknown`/`unavailable` states are not plotted as zero. Custom units (e.g. °F), measurement overrides, or renamed entities require matching query changes.
+
+Fresh default entity IDs used by these examples:
+
+| API definition | HA entity ID | Measurement / field |
+|---|---|---|
+| `Circuit1thermostat` | `sensor.grant_aerona_heat_pump_ch_thermostat` | `°C` / `value` |
+| `Circuit1ComfortTemp` | `number.grant_aerona_heat_pump_ch_day_temp` | `°C` / `value` |
+| `TempCWU` | `sensor.grant_aerona_heat_pump_hw_temperature` | `°C` / `value` |
+| `HDWTSetPoint` | `number.grant_aerona_heat_pump_hw_set_point` | `°C` / `value` |
+| `GrantOutdoorTemp` | `sensor.grant_aerona_heat_pump_outdoor_temperature` | `°C` / `value` |
+| `GrantOutgoingTemp` | `sensor.grant_aerona_heat_pump_flow_temperature` | `°C` / `value` |
+| `GrantReturnTemp` | `sensor.grant_aerona_heat_pump_return_temperature` | `°C` / `value` |
+| `GrantCompressorFreq` | `sensor.grant_aerona_heat_pump_compressor_frequency` | `Hz` / `value` |
+| `GrantPumpSpeed` | `sensor.grant_aerona_heat_pump_pump_speed` | `rpm` / `value` |
+| `HeatSourceCalcPresetTemp` | `sensor.grant_aerona_heat_pump_heat_source_preset_temp` | `°C` / `value` |
+| `TempBuforDown` | `sensor.grant_aerona_heat_pump_buffer_temp_lower` | `°C` / `value` |
+| `workState2` | `select.grant_aerona_heat_pump_work_mode` | `state` / `state` |
+
+Verify IDs in **Developer Tools > States** or the entity registry. Existing installations can retain legacy Circuit 1/DHW labels and IDs; custom device names and collision suffixes also change IDs. Changing a display label does not migrate stored InfluxDB tags. Adjust the HA include filters and each query's domain/object-ID pair to your actual IDs; do not rename live entities just to fit an example. Old `sensor.econet_grant_*` examples are not authoritative registry IDs.
+
+The CH Day setting is not always the active target (Night/Schedule modes differ). Work Mode is the configured Summer/Winter/Auto select, not a nonexistent work-state sensor or compressor-running indication. Buffer and other readings may be absent on a controller: hide those panels or accept no data, rather than inventing a sensor. Performance shows existing temperatures, frequency and speed only; it does not infer COP. The former Flux differential join is omitted, and the System overview is scoped to flow/return rather than every temperature in your HA database.
+
+#### No-data diagnosis (read only)
+
+In Grafana Explore, select the same datasource and switch to the raw InfluxQL editor. Check the schema with `SHOW MEASUREMENTS`, `SHOW FIELD KEYS FROM "°C"`, and `SHOW TAG VALUES FROM "°C" WITH KEY = "entity_id"`. For example:
+
+```sql
+SELECT "value" FROM "°C"
+WHERE "domain" = 'sensor'
+  AND "entity_id" = 'grant_aerona_heat_pump_ch_thermostat'
+  AND time > now() - 7d
+ORDER BY time DESC LIMIT 10
+```
+
+If empty, check in order: datasource UID and InfluxQL selection; database and default retention policy; Grafana-to-InfluxDB connectivity and read grants; HA InfluxDB connection/logs and include filters; exact measurement/unit, field and domain/object-ID tags; then time range/timezone and whether any state events occurred since export started. Text queries must select `"state"` from `"state"`; `mean("value")` cannot graph Winter/Auto. Missing sensors, unchanged values, unavailable periods and expired retention can all mean no points. Widen the range for infrequently changed setpoints/modes; the text timeline has no inferred state before its first returned event. Do not change heating settings merely to populate a graph. There is no automatic SQLite backfill.
+
+#### Access from the HA dashboard
+
+The canonical Lovelace System tab now has instructions rather than a failing default iframe. Prefer **Open Web UI** / the app's sidebar entry: [Home Assistant Ingress](https://developers.home-assistant.io/docs/apps/presentation/#ingress) authenticates access through HA. That developer API does not promise a permanent copy-and-paste Lovelace iframe URL. Do not hard-code a session/Ingress path, disable authentication, enable anonymous access, or weaken framing/cookie protections to make embedding work. For standalone Grafana, open its authenticated HTTPS URL in a separate tab; an HTTP iframe in HTTPS HA is mixed content and should not be assumed to work.
+
+**Validation status:** repository tests parse all example JSON/YAML and statically check query grammar, datasource binding and measurement/field/tag pairs against a synthetic, sanitised HA schema fixture and integration definitions. They do **not** execute InfluxQL, render Grafana, or test login/Ingress. **UNVERIFIED owner validation:** clean HAOS/Grafana install, authenticated datasource read, all three dashboard imports, real entity mapping, text timeline rendering, time range/no-data behaviour and remote/Companion access. Record installed versions and results before treating this as an end-to-end verified setup.
+
+References: [HA InfluxDB schema/configuration](https://www.home-assistant.io/integrations/influxdb/), [HA state-to-point implementation](https://github.com/home-assistant/core/blob/2026.2.3/homeassistant/components/influxdb/__init__.py), [Grafana InfluxDB datasource configuration/provisioning](https://grafana.com/docs/grafana/latest/datasources/influxdb/configure-influxdb-data-source/).
 
 ---
 
@@ -653,7 +701,7 @@ Use this checklist to confirm everything is working. Tick off each item as you g
 #### Dashboard shows errors
 
 - Ensure both helpers from [Step 9](#9-create-helpers) exist with the exact entity IDs listed
-- The System-tab Grafana panel will show an error if Grafana is not installed or `<HA_IP>` has not been replaced -- this is expected if you skipped Step 11
+- The System-tab Grafana card is informational. If you skipped Step 11, no Grafana setup is required; see that step for optional import and no-data diagnosis.
 
 #### Entity IDs don't match expected format
 

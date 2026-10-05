@@ -1,0 +1,20 @@
+{
+  "description": "Synthetic HA entity-state schema, not captured production data or executed InfluxQL results. Default unit_of_measurement measurement with default_measurement=state; no overrides.",
+  "source": "https://github.com/home-assistant/core/blob/2026.2.3/homeassistant/components/influxdb/__init__.py",
+  "database": "econet_grant",
+  "series": [
+    {"key": "Circuit1thermostat", "measurement": "°C", "tags": {"domain": "sensor", "entity_id": "grant_aerona_heat_pump_ch_thermostat"}, "fields": {"value": 20.5}},
+    {"key": "Circuit1ComfortTemp", "measurement": "°C", "tags": {"domain": "number", "entity_id": "grant_aerona_heat_pump_ch_day_temp"}, "fields": {"value": 21.0}},
+    {"key": "TempCWU", "measurement": "°C", "tags": {"domain": "sensor", "entity_id": "grant_aerona_heat_pump_hw_temperature"}, "fields": {"value": 45.0}},
+    {"key": "HDWTSetPoint", "measurement": "°C", "tags": {"domain": "number", "entity_id": "grant_aerona_heat_pump_hw_set_point"}, "fields": {"value": 48.0}},
+    {"key": "GrantOutdoorTemp", "measurement": "°C", "tags": {"domain": "sensor", "entity_id": "grant_aerona_heat_pump_outdoor_temperature"}, "fields": {"value": 8.5}},
+    {"key": "GrantOutgoingTemp", "measurement": "°C", "tags": {"domain": "sensor", "entity_id": "grant_aerona_heat_pump_flow_temperature"}, "fields": {"value": 35.0}},
+    {"key": "GrantReturnTemp", "measurement": "°C", "tags": {"domain": "sensor", "entity_id": "grant_aerona_heat_pump_return_temperature"}, "fields": {"value": 30.0}},
+    {"key": "GrantCompressorFreq", "measurement": "Hz", "tags": {"domain": "sensor", "entity_id": "grant_aerona_heat_pump_compressor_frequency"}, "fields": {"value": 40.0}},
+    {"key": "GrantPumpSpeed", "measurement": "rpm", "tags": {"domain": "sensor", "entity_id": "grant_aerona_heat_pump_pump_speed"}, "fields": {"value": 1200.0}},
+    {"key": "HeatSourceCalcPresetTemp", "measurement": "°C", "tags": {"domain": "sensor", "entity_id": "grant_aerona_heat_pump_heat_source_preset_temp"}, "fields": {"value": 36.0}},
+    {"key": "TempBuforDown", "measurement": "°C", "tags": {"domain": "sensor", "entity_id": "grant_aerona_heat_pump_buffer_temp_lower"}, "fields": {"value": 29.0}},
+    {"key": "workState2", "measurement": "state", "tags": {"domain": "select", "entity_id": "grant_aerona_heat_pump_work_mode"}, "fields": {"state": "Winter"}}
+  ],
+  "skipped_states": ["unknown", "unavailable", ""]
+}

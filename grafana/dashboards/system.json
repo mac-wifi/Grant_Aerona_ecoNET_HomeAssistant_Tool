@@ -1,5 +1,5 @@
 {
-  "dashboard": {
+
     "id": null,
     "uid": "econet-system",
     "title": "EcoNet Grant - System",
@@ -14,7 +14,9 @@
     "panels": [
       {
         "id": 1,
-        "title": "Work State Over Time",
+        "title": "Work Mode Over Time",
+        "datasource": { "type": "influxdb", "uid": "econet-influxdb" },
+        "description": "Configured Summer/Winter/Auto mode, not compressor running state. Text states use the state field.",
         "type": "state-timeline",
         "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
         "fieldConfig": {
@@ -28,14 +30,17 @@
         "targets": [
           {
             "refId": "A",
-            "datasource": { "type": "influxdb", "uid": "" },
-            "query": "from(bucket: \"econet_grant\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r.entity_id == \"sensor.econet_grant_work_state\")\n  |> filter(fn: (r) => r._field == \"value\")\n  |> aggregateWindow(every: 5m, fn: last, createEmpty: false)"
+            "datasource": { "type": "influxdb", "uid": "econet-influxdb" },
+            "rawQuery": true,
+            "resultFormat": "table",
+            "query": "SELECT \"state\" FROM \"state\" WHERE $timeFilter AND (\"domain\" = 'select' AND \"entity_id\" = 'grant_aerona_heat_pump_work_mode')"
           }
         ]
       },
       {
         "id": 2,
         "title": "Heat Source Preset Temperature",
+        "datasource": { "type": "influxdb", "uid": "econet-influxdb" },
         "type": "timeseries",
         "gridPos": { "h": 10, "w": 12, "x": 0, "y": 8 },
         "fieldConfig": {
@@ -44,7 +49,7 @@
             "custom": {
               "lineWidth": 2,
               "fillOpacity": 10,
-              "spanNulls": true
+              "spanNulls": false
             }
           },
           "overrides": []
@@ -52,14 +57,18 @@
         "targets": [
           {
             "refId": "A",
-            "datasource": { "type": "influxdb", "uid": "" },
-            "query": "from(bucket: \"econet_grant\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r.entity_id == \"sensor.econet_grant_heat_source_preset_temperature\")\n  |> filter(fn: (r) => r._field == \"value\")\n  |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)"
+            "datasource": { "type": "influxdb", "uid": "econet-influxdb" },
+            "rawQuery": true,
+            "resultFormat": "time_series",
+            "alias": "$tag_entity_id",
+            "query": "SELECT mean(\"value\") FROM \"°C\" WHERE $timeFilter AND (\"domain\" = 'sensor' AND \"entity_id\" = 'grant_aerona_heat_pump_heat_source_preset_temp') GROUP BY time($__interval), \"domain\", \"entity_id\" fill(null)"
           }
         ]
       },
       {
         "id": 3,
         "title": "Buffer Temperature",
+        "datasource": { "type": "influxdb", "uid": "econet-influxdb" },
         "type": "timeseries",
         "gridPos": { "h": 10, "w": 12, "x": 12, "y": 8 },
         "fieldConfig": {
@@ -68,7 +77,7 @@
             "custom": {
               "lineWidth": 2,
               "fillOpacity": 10,
-              "spanNulls": true
+              "spanNulls": false
             }
           },
           "overrides": []
@@ -76,14 +85,18 @@
         "targets": [
           {
             "refId": "A",
-            "datasource": { "type": "influxdb", "uid": "" },
-            "query": "from(bucket: \"econet_grant\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r.entity_id == \"sensor.econet_grant_buffer_temperature_lower\")\n  |> filter(fn: (r) => r._field == \"value\")\n  |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)"
+            "datasource": { "type": "influxdb", "uid": "econet-influxdb" },
+            "rawQuery": true,
+            "resultFormat": "time_series",
+            "alias": "$tag_entity_id",
+            "query": "SELECT mean(\"value\") FROM \"°C\" WHERE $timeFilter AND (\"domain\" = 'sensor' AND \"entity_id\" = 'grant_aerona_heat_pump_buffer_temp_lower') GROUP BY time($__interval), \"domain\", \"entity_id\" fill(null)"
           }
         ]
       },
       {
         "id": 4,
-        "title": "All Temperatures Overview",
+        "title": "Flow and Return Overview",
+        "datasource": { "type": "influxdb", "uid": "econet-influxdb" },
         "type": "timeseries",
         "gridPos": { "h": 12, "w": 24, "x": 0, "y": 18 },
         "fieldConfig": {
@@ -92,7 +105,7 @@
             "custom": {
               "lineWidth": 1,
               "fillOpacity": 5,
-              "spanNulls": true
+              "spanNulls": false
             }
           },
           "overrides": []
@@ -100,12 +113,13 @@
         "targets": [
           {
             "refId": "A",
-            "datasource": { "type": "influxdb", "uid": "" },
-            "query": "from(bucket: \"econet_grant\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"°C\")\n  |> filter(fn: (r) => r._field == \"value\")\n  |> aggregateWindow(every: 10m, fn: mean, createEmpty: false)"
+            "datasource": { "type": "influxdb", "uid": "econet-influxdb" },
+            "rawQuery": true,
+            "resultFormat": "time_series",
+            "alias": "$tag_entity_id",
+            "query": "SELECT mean(\"value\") FROM \"°C\" WHERE $timeFilter AND ((\"domain\" = 'sensor' AND \"entity_id\" = 'grant_aerona_heat_pump_flow_temperature') OR (\"domain\" = 'sensor' AND \"entity_id\" = 'grant_aerona_heat_pump_return_temperature')) GROUP BY time($__interval), \"domain\", \"entity_id\" fill(null)"
           }
         ]
       }
     ]
-  },
-  "overwrite": true
 }
