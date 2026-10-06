@@ -9,9 +9,9 @@ This project was created to remotely manage a holiday home heat pump, allowing t
 
 ## Current Status
 
-**Version:** 0.4.2 (active development)
+**Proposed version:** 0.6.0 (local release preparation; not yet published)
 
-Version 0.4.1 is deployed and running in production on a Home Assistant OS instance, alongside a separate test HA instance used for development. Version 0.4.2 updates documentation and consolidates the dashboard packaging; it does not change integration runtime logic. Parameter mappings were confirmed through manual before/after testing against the live ecoNET controller using the vendor's iOS app. An automated test suite has not yet been added.
+Version 0.4.1 is owner-reported in production. The proposed 0.6.0 release consolidates by-name write-response validation, configurable settings polling, opt-in individual manual Revert, read-only export tools, Grafana examples and offline tests. Parameter mappings were originally checked manually against one controller; the new work is tested offline with real HA Core 2026.9.4 and a synthetic loopback controller, not on production. See [TESTING.md](TESTING.md) for coverage and [RELEASE.md](RELEASE.md) for tested-commit preparation, version history, updates and rollback. No hosted CI, published release or HACS visibility is claimed by this local preparation.
 
 ## What Works
 
@@ -160,7 +160,7 @@ Step-by-step instructions for installing the integration on a clean Home Assista
 
 | Item | Details |
 |------|---------|
-| **Home Assistant OS** | Version 2024.1.0 or later (tested on Core 2026.2.3) |
+| **Home Assistant Core** | Minimum 2026.9.4, the owner-approved support and offline test baseline. Later Core versions need validation, not assumed compatibility. Production Core 2026.9.4 / HAOS 18.3 is owner-reported; the suite does not exercise HAOS. See [support evidence](RELEASE.md#home-assistant-support-evidence). |
 | **ecoNET device** | ecoNET300 module on the same LAN as your HA instance |
 | **ecoNET local credentials** | The username and password for the device's local REST API (not your econet24.com cloud account) |
 | **ecoNET IP address** | The local IP of the ecoNET300 module (check your router's DHCP table or the vendor app) |
@@ -287,10 +287,14 @@ With a working connection and matching filters, subsequent HA entity-state event
    - **Category:** Integration
    - Click **Add**
 4. Close the dialog. The **EcoNet Grant Aerona** card should now appear
-5. Click the card > **Download** > **Download** (HACS will show a commit hash rather than a version number -- this is normal for custom repositories)
+5. Open the repository > **Download**, inspect the selected version, then confirm. Without GitHub releases HACS uses the default branch and may show a short commit hash; custom repositories can also offer numbered releases. A manifest bump or Git tag alone does not publish a HACS release.
 6. **Restart Home Assistant:** Settings > System > Restart
 
 After the restart, the integration files will be in place at `custom_components/econet_grant/`.
+
+**Updates and earlier versions:** HACS > repository three-dot menu > **Update information** refreshes metadata only. To install, use **Redownload** > **Need a different version?**, select an available release, confirm, then restart Home Assistant when you choose. The selector requires repository versioning; no earlier-release choices are promised before releases exist. HACS already supplies update entities, so this integration adds none and enables no automatic update. See [release/update and rollback procedure](RELEASE.md#owner-controlled-installation-and-rollback) before changing versions.
+
+These steps follow the [current HACS dashboard documentation](https://www.hacs.xyz/docs/use/repositories/dashboard/); this repository's live update detection and version selector remain owner validation after publication.
 
 ---
 
@@ -298,11 +302,11 @@ After the restart, the integration files will be in place at `custom_components/
 
 Use this method if you prefer not to use HACS, or for quick testing.
 
-1. Download or clone the repository:
+1. Prefer downloading the source archive of the explicitly chosen release from the repository's Releases page once releases exist. Until then, a clone uses development/default-branch content, not a tested release:
    ```bash
    git clone https://github.com/mac-wifi/Grant_Aerona_ecoNET_HomeAssistant_Tool.git
    ```
-2. Copy the `custom_components/econet_grant/` folder into your HA config directory:
+2. Back up your existing installation. Copy the complete `custom_components/econet_grant/` folder (including `extras/`) from the chosen source into your HA config directory, replacing the old integration directory rather than overlaying stale files:
    ```
    /homeassistant/custom_components/econet_grant/
    ```
@@ -749,7 +753,7 @@ This is working as intended. Every write attempt in Safe Mode generates a notifi
 - The ecoNET local API is undocumented. Endpoint behaviour was determined through experimentation.
 - Not all ecoNET parameters have been mapped -- only those tested via before/after comparison.
 - The ecoNET Remote Menu (RM) API, which provides full parameter metadata and dynamic entity creation, is not supported by the ecoMAX360i controller (`remoteMenu: false` in `sysParams`). If a future firmware update enables it, the integration could be significantly enhanced.
-- Write success currently requires only `result: "OK"`; the returned `paramName` and `paramValue` are not yet validated and there is no post-write read-back check.
+- Write success requires `result: "OK"` and matching returned parameter name/value. This is API acknowledgement, not physical confirmation; there is no general post-write read-back check.
 - The bundled SQLite history is currently an internal audit/raw-data store rather than a general Home Assistant or Grafana data source. Only database size and recent-change count are exposed as entities.
 - An initial offline test suite covers selected safety and lifecycle behavior; it is not full Home Assistant or hardware verification. See [TESTING.md](TESTING.md) for setup, coverage limits and the single `python -m pytest` command. Hosted CI execution remains unverified.
 

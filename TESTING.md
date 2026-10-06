@@ -22,8 +22,10 @@ test baseline to Home Assistant 2026.9.4 through
 `pytest-homeassistant-custom-component==0.13.367`. Its distribution metadata
 requires exactly HA 2026.9.4, matching the owner-reported production Core version.
 This runs Core in a test process, not HAOS 18.3 or the production installation.
-The advertised HACS minimum (HA 2024.1) and other HA versions have not been
-verified by this baseline; it does not change the supported minimum.
+The owner-approved HACS minimum is now Core 2026.9.4, matching this test baseline;
+see [support evidence and decision](RELEASE.md#home-assistant-support-evidence).
+Other Core versions have not been verified; this is not a guarantee of future
+version compatibility.
 No test dependency is added to the shipped integration manifest.
 
 On filesystems that cannot run a virtual environment (for example a cloud drive
