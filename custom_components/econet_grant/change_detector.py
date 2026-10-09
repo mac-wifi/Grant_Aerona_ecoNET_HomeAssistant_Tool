@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.components.persistent_notification import async_create as pn_async_create
@@ -52,6 +53,17 @@ def _friendly(param_name: str) -> str:
     return _DISPLAY_NAMES.get(param_name, param_name)
 
 
+@dataclass
+class _RevertWrite:
+    """One explicit Revert attempt, separate from legacy Restore markers."""
+
+    index: str
+    name: str
+    before: int | float
+    target: int | float
+    active: bool = True
+
+
 class ChangeDetector:
     """Detects external parameter changes between slow coordinator polls."""
 
@@ -61,6 +73,7 @@ class ChangeDetector:
         self._previous_snapshot: dict[str, Any] | None = None
         self._previous_sys_params: dict[str, Any] | None = None
         self._self_writes: set[str] = set()
+        self._revert_writes: dict[str, _RevertWrite] = {}
 
     @property
     def _push_enabled(self) -> bool:
@@ -86,6 +99,38 @@ class ChangeDetector:
         """Clear a self-write marker after the next poll confirms it."""
         self._self_writes.discard(param_name)
 
+    def begin_revert(
+        self, index: str, name: str, before: int | float, target: int | float,
+    ) -> _RevertWrite:
+        """Track an authorised attempt, not an acknowledgement of success."""
+        write = _RevertWrite(index, name, before, target)
+        self._revert_writes[name] = write
+        return write
+
+    def finish_revert(self, write: _RevertWrite) -> None:
+        """After completion even an unchanged poll must retire the expectation."""
+        write.active = False
+
+    def _observed_reverts(self, current: dict[str, Any]) -> set[tuple[str, str]]:
+        """Attribute only the exact transition; never swallow a different value.
+
+        No-change polls during the HTTP operation may precede application. Once
+        it finishes, the next populated poll consumes the expectation even if
+        nothing changed. Restore's legacy markers intentionally remain separate.
+        """
+        matched = set()
+        for name, write in list(self._revert_writes.items()):
+            previous = (self._previous_snapshot or {}).get(write.index)
+            observed = current.get(write.index)
+            before = {"name": name, "value": write.before}
+            target = {"name": name, "value": write.target}
+            if (previous == before and observed == target
+                    and sum(p["name"] == name for p in current.values()) == 1):
+                matched.add((write.index, name))
+            if not write.active or observed != before:
+                self._revert_writes.pop(name, None)
+        return matched
+
     def process_edit_params(self, edit_params: dict[str, Any]) -> list[dict[str, Any]]:
         """Compare current editParams.data to previous snapshot, fire events for changes.
 
@@ -97,6 +142,7 @@ class ChangeDetector:
             return []
 
         current_snapshot = _extract_values(data)
+        observed_reverts = self._observed_reverts(current_snapshot)
 
         if self._previous_snapshot is None:
             self._previous_snapshot = current_snapshot
@@ -126,6 +172,11 @@ class ChangeDetector:
         all_changes: list[dict[str, Any]] = []
         for change in changes:
             param_name = change["name"]
+
+            if (change["index"], param_name) in observed_reverts:
+                change["source"] = "user"
+                all_changes.append(change)
+                continue
 
             if param_name in self._self_writes:
                 _LOGGER.debug("Self-write confirmed for %s", param_name)

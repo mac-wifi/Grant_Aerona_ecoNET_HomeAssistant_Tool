@@ -1,7 +1,9 @@
 """Reduced stateful ecoNET HTTP emulator; never connects to a real device."""
 import asyncio
+from contextlib import asynccontextmanager
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 from aiohttp import web
 
@@ -20,6 +22,9 @@ class EconetEmulator:
         self.write_modes = []  # optional per-attempt responses for timeout recovery
         self.writes = []
         self.requests = []
+        self.timeout_releases = []
+        self.client_attempts = []
+        self.client_completions = []
         self.app = web.Application()
         self.app.router.add_get("/econet/{endpoint}", self.handle)
 
@@ -34,6 +39,37 @@ class EconetEmulator:
         self.reg["settingsVer"] += 1
         self.sys["settingsVer"] = self.reg["settingsVer"]
 
+    def session(self, session):
+        """Real HTTP with body timeouts armed only after server receipt.
+
+        Tiny total deadlines can cancel before loopback dispatch. Timeout modes
+        send headers but withhold JSON; only then time out the real body read.
+        Normal requests retain the production client's total timeout.
+        """
+        @asynccontextmanager
+        async def get(*args, **kwargs):
+            self.client_attempts.append((args[0], kwargs.get("params")))
+            release = None
+            try:
+                async with session.get(*args, **kwargs) as response:
+                    marker = response.headers.get("X-Emulator-Lost-Body")
+                    if marker is None:
+                        yield response
+                    else:
+                        release = self.timeout_releases[int(marker)]
+
+                        async def json_body():
+                            async with asyncio.timeout(0):
+                                return await response.json()
+
+                        yield SimpleNamespace(status=response.status, json=json_body)
+            finally:
+                if release is not None:
+                    release.set()
+                self.client_completions.append(len(self.client_attempts))
+
+        return SimpleNamespace(get=get)
+
     async def handle(self, request):
         endpoint = request.match_info["endpoint"]
         self.requests.append(endpoint)
@@ -46,9 +82,18 @@ class EconetEmulator:
         value = float(request.query["newParamValue"])
         self.writes.append((name, value))
         mode = self.write_modes.pop(0) if self.write_modes else self.mode
-        if mode == "timeout":
-            await asyncio.sleep(0.2)
-            raise web.HTTPGatewayTimeout()
+        if mode in ("timeout", "applied_timeout"):
+            if mode == "applied_timeout":
+                self.guest_change(name, value)
+            release = asyncio.Event()
+            index = len(self.timeout_releases)
+            self.timeout_releases.append(release)
+            response = web.StreamResponse(headers={
+                "Content-Type": "application/json", "X-Emulator-Lost-Body": str(index),
+            })
+            await response.prepare(request)
+            await release.wait()
+            return response
         if mode == "http_error":
             raise web.HTTPServiceUnavailable()
         if mode == "malformed_json":

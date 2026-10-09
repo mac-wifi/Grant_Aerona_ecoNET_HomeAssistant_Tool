@@ -49,8 +49,9 @@ class PendingRevert:
 class RevertActions:
     """Trust only snapshots from our coordinator, not setting-change events."""
 
-    def __init__(self, hass, entry, api, db):
+    def __init__(self, hass, entry, api, db, change_detector):
         self._hass, self._entry, self._api, self._db = hass, entry, api, db
+        self._change_detector = change_detector
         self._previous = {}
         self._pending: dict[str, PendingRevert] = {}
         self._active = False
@@ -166,7 +167,13 @@ class RevertActions:
             if not fresh or not self._matches(fresh.get("data", {}), pending):
                 self._notice("Revert cancelled: setting changed or could not be verified. Check the dashboard.")
                 return
-            success = await self._api.set_param(pending.name, pending.old_value)
+            write = self._change_detector.begin_revert(
+                pending.index, pending.name, pending.new_value, pending.old_value,
+            )
+            try:
+                success = await self._api.set_param(pending.name, pending.old_value)
+            finally:
+                self._change_detector.finish_revert(write)
             if not success:
                 self._notice("Revert not confirmed. Check the controller state before trying again.")
                 return

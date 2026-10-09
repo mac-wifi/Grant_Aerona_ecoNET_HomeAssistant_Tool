@@ -27,7 +27,7 @@ def actions(hass, entry, api, monkeypatch):
     notice = Mock()
     monkeypatch.setattr(revert, "pn_async_create", notice)
     db = SimpleNamespace(async_log_change=AsyncMock())
-    manager = revert.RevertActions(hass, entry, api, db)
+    manager = revert.RevertActions(hass, entry, api, db, ChangeDetector(hass, entry))
     manager.start()
     return manager, db, tasks, notice
 
@@ -115,7 +115,7 @@ async def test_action_identity_and_inflight_guards(actions, hass, entry, api, ed
         token = "econet_grant_revert_unknown"
     elif case == "wrong_entry":
         other = SimpleNamespace(entry_id="other", options=entry.options)
-        target = revert.RevertActions(hass, other, api, db)
+        target = revert.RevertActions(hass, other, api, db, ChangeDetector(hass, other))
         target.start()
 
     async def fetch():
@@ -287,6 +287,9 @@ class TestRealHAManualRevert:
         entry.add_to_hass(real_hass)
         assert await real_hass.config_entries.async_setup(entry.entry_id)
         await real_hass.async_block_till_done()
+        from custom_components.econet_grant.const import SERVICE_API
+        client = real_hass.data[DOMAIN][entry.entry_id][SERVICE_API]._client
+        monkeypatch.setattr(client, "_session", pump.session(client._session))
         return real_hass, entry, pump, messages
 
     async def guest_offer(self, loaded):
@@ -341,12 +344,10 @@ class TestRealHAManualRevert:
     @pytest.mark.parametrize("mode", ["non_ok", "name_mismatch", "value_mismatch",
                                       "http_error", "malformed_json", "timeout"])
     async def test_api_failures_never_audit_success(self, loaded, mode):
-        from aiohttp import ClientTimeout
-        from custom_components.econet_grant.const import DOMAIN, SERVICE_API
+        from custom_components.econet_grant.const import DOMAIN
         hass, entry, pump, _ = loaded
         token = await self.guest_offer(loaded)
         pump.mode = mode
-        hass.data[DOMAIN][entry.entry_id][SERVICE_API]._client._timeout = ClientTimeout(total=0.1)
         await self.tap(hass, token)
         assert pump.writes == [("Circuit1ComfortTemp", 20)] * (5 if mode == "timeout" else 1)
         assert pump.edit["data"]["238"]["value"] == 24
@@ -405,7 +406,6 @@ class TestRealHAManualRevert:
 
     @pytest.mark.parametrize("recovers", [False, True])
     async def test_one_tap_bounded_timeout_retries(self, loaded, timed_transport, recovers):
-        from aiohttp import ClientTimeout
         from custom_components.econet_grant.const import DOMAIN, SERVICE_API, API_MAX_RETRIES
         hass, entry, pump, _ = loaded
         token = await self.guest_offer(loaded)
@@ -414,18 +414,23 @@ class TestRealHAManualRevert:
             pump.write_modes = ["timeout", "ok"]
         else:
             pump.mode = "timeout"
-        # Allow normal loopback responses time to complete on a loaded test host.
-        hass.data[DOMAIN][entry.entry_id][SERVICE_API]._client._timeout = ClientTimeout(total=0.1)
+        # Timeout the real body read only after the emulator has received it.
         hass.bus.async_fire("mobile_app_notification_action", {"action": token})
         # A simultaneous duplicate tap must not start a second operation either.
         await self.tap(hass, token)
         expected = 2 if recovers else 5
         assert pump.writes == [("Circuit1ComfortTemp", 20)] * expected
+        attempts = [params for _, params in pump.client_attempts if params]
+        assert attempts == [{"newParamName": "Circuit1ComfortTemp", "newParamValue": "20"}] * expected
+        assert len(pump.client_attempts) == len(pump.client_completions)
         rows = [row for row in await self.audit(hass) if row[3] == "revert"]
         assert rows == ([("Circuit1ComfortTemp", "24", "20", "revert")] if recovers else [])
         assert pump.edit["data"]["238"]["value"] == (20 if recovers else 24)
         notice = hass.data["persistent_notification"][f"econet_grant_revert_{entry.entry_id}"]
         assert ("accepted" in notice["message"].lower()) is recovers
+        if not recovers:
+            assert "not confirmed" in notice["message"]
+            assert "Check the controller state" in notice["message"]
         requests = list(pump.requests)
         await self.tap(hass, token)
         assert pump.requests == requests  # replay cannot even begin a new preflight
@@ -436,6 +441,84 @@ class TestRealHAManualRevert:
         client = hass.data[DOMAIN][entry.entry_id][SERVICE_API]._client
         await asyncio.gather(client.get("sysParams"), client.get("sysParams"))
         assert len(pump.writes) == expected
+
+    @pytest.mark.parametrize("recovers", [False, True])
+    async def test_applied_write_lost_response_classification(self, loaded, timed_transport, recovers):
+        from homeassistant.components.persistent_notification import async_dismiss
+        from custom_components.econet_grant.const import DOMAIN, SERVICE_SLOW_COORDINATOR, EVENT_SETTING_CHANGED
+
+        hass, entry, pump, messages = loaded
+        token = await self.guest_offer(loaded)
+        events = []
+        hass.bus.async_listen(EVENT_SETTING_CHANGED, lambda event: events.append(event.data))
+        pump.mode = "applied_timeout"
+        if recovers:
+            pump.write_modes = ["applied_timeout", "ok"]
+        await self.tap(hass, token)
+        expected = 2 if recovers else 5
+        assert pump.writes == [("Circuit1ComfortTemp", 20)] * expected
+        assert pump.edit["data"]["238"]["value"] == 20
+        assert len(pump.timeout_releases) == (1 if recovers else 5)
+        notice = hass.data["persistent_notification"][f"econet_grant_revert_{entry.entry_id}"]["message"]
+        if recovers:
+            assert "accepted by the API" in notice
+        else:
+            assert "not confirmed" in notice
+            assert "Check the controller state" in notice
+        rows = [row for row in await self.audit(hass) if row[3] == "revert"]
+        assert rows == ([("Circuit1ComfortTemp", "24", "20", "revert")] if recovers else [])
+        requests = list(pump.requests)
+        await self.tap(hass, token)
+        assert pump.requests == requests
+
+        # Remove the original guest alert so a false replacement cannot hide.
+        async_dismiss(hass, "econet_grant_external_changes")
+        messages.clear()
+        slow = hass.data[DOMAIN][entry.entry_id][SERVICE_SLOW_COORDINATOR]
+        await slow.async_refresh()
+        await hass.async_block_till_done()
+        assert events == []
+        assert messages == []
+        assert "econet_grant_external_changes" not in hass.data["persistent_notification"]
+        assert ("Circuit1ComfortTemp", "24", "20.0", "user") in await self.audit(hass)
+        assert ("Circuit1ComfortTemp", "24", "20.0", "external") not in await self.audit(hass)
+
+        pump.guest_change("Circuit1ComfortTemp", 23)
+        await slow.async_refresh()
+        await hass.async_block_till_done()
+        assert len(events) == 1
+        assert events[0]["old_value"] == 20 and events[0]["new_value"] == 23
+        assert any("23" in m["message"] and "data" in m for m in messages)
+        assert "econet_grant_external_changes" in hass.data["persistent_notification"]
+        assert ("Circuit1ComfortTemp", "20.0", "23", "external") in await self.audit(hass)
+        assert len(pump.writes) == expected
+
+    @pytest.mark.parametrize("applied", [False, True])
+    async def test_unconfirmed_revert_does_not_hide_unmatched_guest_change(self, loaded, applied):
+        from custom_components.econet_grant.const import DOMAIN, SERVICE_SLOW_COORDINATOR, EVENT_SETTING_CHANGED
+
+        hass, entry, pump, messages = loaded
+        token = await self.guest_offer(loaded)
+        pump.mode = "applied_timeout" if applied else "timeout"
+        await self.tap(hass, token)
+        assert pump.edit["data"]["238"]["value"] == (20 if applied else 24)
+        slow = hass.data[DOMAIN][entry.entry_id][SERVICE_SLOW_COORDINATOR]
+        if not applied:
+            # An unchanged first poll retires a failed write expectation.
+            await slow.async_refresh()
+            await hass.async_block_till_done()
+        events = []
+        hass.bus.async_listen(EVENT_SETTING_CHANGED, lambda event: events.append(event.data))
+        messages.clear()
+        # Before the first poll (applied case), a different guest value is external.
+        # After an unchanged poll, even the old requested target is external.
+        guest_value = 23 if applied else 20
+        pump.guest_change("Circuit1ComfortTemp", guest_value)
+        await slow.async_refresh()
+        await hass.async_block_till_done()
+        assert len(events) == 1 and events[0]["new_value"] == guest_value
+        assert any("data" in m for m in messages)
+        assert len(pump.writes) == 5
 
     async def test_safe_mode_and_unload_remove_action_listener(self, loaded):
         hass, entry, pump, _ = loaded
