@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from homeassistant.components.persistent_notification import async_create as pn_async_create
 
+from .change_detector import format_setting_change
 from .const import (
     CONF_PUSH_NOTIFICATIONS, CONF_SAFE_MODE, DEFAULT_PUSH_NOTIFICATIONS,
     DEFAULT_SAFE_MODE, DOMAIN, NUMBER_DEFINITIONS, SELECT_DEFINITIONS,
@@ -132,7 +133,7 @@ class RevertActions:
         try:
             await self._hass.services.async_call("notify", service, {
                 "title": "EcoNet: Revert setting?",
-                "message": f"{pending.name}: {pending.old_value} → {pending.new_value}",
+                "message": format_setting_change(pending.name, pending.old_value, pending.new_value),
                 "data": {"actions": [{"action": token, "title": "Revert"}]},
             }, blocking=True)
         except Exception:

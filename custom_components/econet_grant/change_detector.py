@@ -53,6 +53,67 @@ def _friendly(param_name: str) -> str:
     return _DISPLAY_NAMES.get(param_name, param_name)
 
 
+def format_setting_change(name: str, old: Any, new: Any, *, bold: bool = False) -> str:
+    """Format notification text only; never alter the raw change or write values."""
+    def line(display: str, before: str, after: str) -> str:
+        if bold:
+            display = f"**{display}**"
+        return f"{display}: {before} → {after}"
+
+    def value_label(value: Any) -> str:
+        if name in SELECT_DEFINITIONS:
+            return SELECT_DEFINITIONS[name]["options"].get(
+                _notification_integer(value), f"Unknown ({value!r})",
+            )
+        return str(value)
+
+    definitions = [definition for definition in BITMASK_SELECT_DEFINITIONS.values()
+                   if definition["settings_param_name"] == name]
+    if definitions:
+        before, after = _notification_integer(old), _notification_integer(new)
+        if before is None or after is None or before < 0 or after < 0:
+            # An invalid whole mask cannot safely be interpreted as bit states.
+            return line(_friendly(name), f"Unknown ({old!r})", f"Unknown ({new!r})")
+        changed = before ^ after
+        known = 0
+        lines = []
+        for definition in definitions:
+            mask = definition["bit_mask"]
+            known |= mask
+            if not changed & mask:
+                continue
+
+            def bit_label(value: int) -> str:
+                on = bool(value & mask) != definition.get("on_clears_bit", False)
+                return definition["on_label"] if on else definition["off_label"]
+
+            lines.append(line(definition["name"], bit_label(before), bit_label(after)))
+        unknown = changed & ~known
+        if unknown:
+            lines.append(line(
+                f"{name} unknown bits ({unknown:#x})",
+                f"{before & unknown:#x}", f"{after & unknown:#x}",
+            ))
+        if lines:
+            return "; ".join(lines)
+        # A representation-only change still needs a visible raw explanation.
+        return line(_friendly(name), f"Raw ({old!r})", f"Raw ({new!r})")
+    return line(_friendly(name), value_label(old), value_label(new))
+
+
+def _notification_integer(value: Any) -> int | None:
+    """Accept integral API values without truncating fractions or treating bools as modes."""
+    if type(value) not in (int, float, str):
+        return None
+    try:
+        integer = int(value)
+    except (ValueError, OverflowError):
+        return None
+    if isinstance(value, float) and value != integer:
+        return None
+    return integer
+
+
 @dataclass
 class _RevertWrite:
     """One explicit Revert attempt, separate from legacy Restore markers."""
@@ -209,9 +270,10 @@ class ChangeDetector:
         if external_changes:
             lines = []
             for change in external_changes:
-                display = _friendly(change["name"])
                 lines.append(
-                    f"- **{display}**: {change['old_value']} → {change['new_value']}"
+                    "- " + format_setting_change(
+                        change["name"], change["old_value"], change["new_value"], bold=True,
+                    )
                 )
             message = "Settings changed externally:\n\n" + "\n".join(lines)
             try:
@@ -226,7 +288,7 @@ class ChangeDetector:
 
             if self._push_enabled:
                 plain_lines = [
-                    f'{_friendly(c["name"])}: {c["old_value"]} → {c["new_value"]}'
+                    format_setting_change(c["name"], c["old_value"], c["new_value"])
                     for c in external_changes
                 ]
                 push_message = "Settings changed:\n" + "\n".join(plain_lines)

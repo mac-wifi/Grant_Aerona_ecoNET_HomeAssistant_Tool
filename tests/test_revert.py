@@ -66,6 +66,30 @@ async def test_only_explicit_action_writes_old_value_and_audits(
     assert "accepted" in notice.call_args.kwargs["message"].lower()
 
 
+async def test_revert_label_message_preserves_raw_write(actions, hass, api):
+    manager, db, tasks, _ = actions
+    before = {"data": {"236": {"name": "Circuit1WorkState", "value": 3,
+                               "minv": 0, "maxv": 3, "edit": True}}}
+    manager.observe(before, [])
+    after = deepcopy(before)
+    after["data"]["236"]["value"] = 1
+    manager.observe(after, [{"index": "236", "name": "Circuit1WorkState",
+                            "old_value": 3, "new_value": 1, "source": "external"}])
+    await asyncio.gather(*tasks)
+    assert hass.services.async_call.call_args.args[2]["message"] == "CH Operation Mode: Schedule → Day"
+    token = action(hass)
+    assert manager._pending[token].old_value == 3
+    assert manager._pending[token].new_value == 1
+    api.set_param.assert_not_awaited()
+    api.fetch_edit_params.return_value = after
+    await manager._handle_action(SimpleNamespace(data={"action": token}))
+    api.set_param.assert_awaited_once_with("Circuit1WorkState", 3)
+    db.async_log_change.assert_awaited_once_with(
+        hass, {"name": "Circuit1WorkState", "index": "236",
+               "old_value": 1, "new_value": 3}, source="revert",
+    )
+
+
 @pytest.mark.parametrize("case", ["safe", "expired", "changed", "renamed", "duplicate",
                                   "failed", "exception", "missing", "disabled", "closed"])
 async def test_rejects_unsafe_or_failed_actions(actions, hass, entry, api, edit_params, monkeypatch, case):

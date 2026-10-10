@@ -101,6 +101,70 @@ async def test_guest_version_change_creates_notification(loaded):
     assert pump.writes == []
 
 
+@pytest.mark.parametrize("old,new", [(3, 1), (1, 2), (2, 0), (0, 3)])
+async def test_guest_mode_notification_matches_dashboard(loaded, old, new):
+    import sqlite3
+    from pathlib import Path
+    from custom_components.econet_grant.const import EVENT_SETTING_CHANGED, SELECT_DEFINITIONS
+
+    hass, entry, pump = loaded
+    pump.edit["data"]["236"] = {"name": "Circuit1WorkState", "value": old,
+                                "minv": 0, "maxv": 3, "edit": True}
+    messages = []
+
+    async def notify(call):
+        messages.append((call.service, call.data))
+
+    hass.services.async_register("notify", "notify", notify)
+    hass.services.async_register("notify", "mobile_app_test", notify)
+    hass.config_entries.async_update_entry(entry, options={
+        **entry.options, "safe_mode": False, "push_notifications": True,
+        "revert_notify_service": "mobile_app_test",
+    })
+    await hass.async_block_till_done()
+    entities = er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
+    entity_id = next(e.entity_id for e in entities if e.entity_id.endswith("_ch_operation_mode"))
+    old_label = hass.states.get(entity_id).state
+    assert old_label == SELECT_DEFINITIONS["Circuit1WorkState"]["options"][old]
+    events = []
+    hass.bus.async_listen(EVENT_SETTING_CHANGED, lambda event: events.append(event.data))
+    pump.guest_change("Circuit1WorkState", new)
+    await hass.data[DOMAIN][entry.entry_id][SERVICE_COORDINATOR].async_refresh()
+    await hass.async_block_till_done()
+    # Selects subscribe to the fast coordinator and read the slow snapshot.
+    await hass.data[DOMAIN][entry.entry_id][SERVICE_COORDINATOR].async_refresh()
+    await hass.async_block_till_done()
+    new_label = hass.states.get(entity_id).state
+    assert new_label == SELECT_DEFINITIONS["Circuit1WorkState"]["options"][new]
+    transition = f"{old_label} → {new_label}"
+    persistent = hass.data["persistent_notification"]["econet_grant_external_changes"]["message"]
+    assert f"**CH Operation Mode**: {transition}" in persistent
+    push = next(data for service, data in messages if service == "notify")
+    actionable = next(data for service, data in messages if service == "mobile_app_test")
+    assert push["message"] == f"Settings changed:\nCH Operation Mode: {transition}"
+    assert actionable["message"] == f"CH Operation Mode: {transition}"
+    assert events == [{"param_name": "Circuit1WorkState", "param_index": "236",
+                       "old_value": old, "new_value": new}]
+    assert pump.writes == []
+
+    def audit():
+        with sqlite3.connect(Path(hass.config.config_dir) / "econet_grant.db") as conn:
+            return conn.execute(
+                "SELECT old_value, new_value, source FROM change_log WHERE param_name = ?",
+                ("Circuit1WorkState",),
+            ).fetchall()
+
+    assert await hass.async_add_executor_job(audit) == [(str(old), str(new), "external")]
+    token = actionable["data"]["actions"][0]["action"]
+    hass.bus.async_fire("mobile_app_notification_action", {"action": token})
+    await hass.async_block_till_done()
+    assert pump.writes == [("Circuit1WorkState", old)]
+    assert (str(new), str(old), "revert") in await hass.async_add_executor_job(audit)
+    hass.bus.async_fire("mobile_app_notification_action", {"action": token})
+    await hass.async_block_till_done()
+    assert pump.writes == [("Circuit1WorkState", old)]
+
+
 async def test_safe_mode_blocks_number_and_select_services(loaded):
     hass, entry, pump = loaded
     entities = er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
