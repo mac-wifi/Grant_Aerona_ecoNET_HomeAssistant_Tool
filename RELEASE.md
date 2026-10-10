@@ -6,8 +6,9 @@ separate owner approval. A local `PASS` is not a release or a production sign-of
 
 ## Proposed version and reconciliation
 
-The proposed manifest/release version is **0.6.0**, with proposed tag **v0.6.0**.
-This is a feature release relative to the committed 0.4.2 baseline, not a patch:
+The proposed manifest/release version is **0.6.1**, with proposed tag **v0.6.1**.
+This is a patch correction to the locally prepared 0.6.0 candidate; cumulatively
+it still contains new features relative to the committed 0.4.2 baseline:
 
 | Version | Evidence and meaning |
 | --- | --- |
@@ -15,13 +16,29 @@ This is a feature release relative to the committed 0.4.2 baseline, not a patch:
 | 0.4.2 | Committed baseline `524a45a`: documentation and canonical dashboard packaging. |
 | 0.4.3 | Earlier local write-validation work incremented the working manifest for matching returned parameter name/value. Not a published release. |
 | 0.5.0 | Earlier local polling-options work incremented the working manifest for configurable slow polling. Not a published release. |
-| 0.6.0 | Found in the actual working manifest during manual-Revert development, although earlier checkpoints and Git status did not consistently show it. Retained here as the single consolidated release candidate, including tests, exports, Grafana guidance and release preparation. |
+| 0.6.0 | Found in the working manifest during manual-Revert development; consolidated by release preparation `3eefa14`, including tests, exports and Grafana guidance. Historical local candidate, not a claimed published release. |
+| 0.6.1 | Owner-authorised single post-preparation PATCH bump in card t_47c836cd for reviewed readable setting-change notifications (`b9d80ce`). Includes the subsequent retry/observation remediation and local acceptance described below. No new controller functionality in the display correction. |
 
 The intermediate versions were local working-file changes, **not** a sequence of
-release commits. The release-preparation commit consolidates the manifest from
-committed 0.4.2 to 0.6.0; it does not manufacture intermediate tags or increment to
-0.7.0 merely for documentation. Inspect the actual manifest bytes: the working
+release commits. The original preparation consolidated committed 0.4.2 to 0.6.0;
+this refresh increments it once to 0.6.1, not 0.7.0 merely for documentation.
+Inspect the actual manifest bytes: the working
 filesystem previously omitted same-size edits from `git status`/`git diff`.
+
+Changes since that preparation: `6f73843` made retry evidence deterministic and
+classified exact observed manual-Revert transitions without false guest alerts;
+`37391af` recorded independent local acceptance with no product-tree change;
+`b9d80ce` added shared human-readable select and changed-bit labels for persistent,
+generic push and actionable notifications, retaining raw events/audit/write values.
+Numeric settings stay numeric; unknown or invalid mapped values remain explicit
+raw fallbacks. No auto-revert, retry-policy change or deferred #11 fix is included.
+
+The prior lead safety/privacy audit at `6f73843` does **not** cover the notification
+extension. Before publication, require a renewed full cumulative-diff notification
+safety audit and privacy evidence bound to the final candidate, plus independent
+review and exact-final-commit preflight. Local tests do not establish phone delivery,
+physical controller behavior, hosted CI or HACS installation. No new lead approval
+is implied by this release refresh.
 
 A read-only public GitHub releases API check on **2026-10-05 UTC** returned an
 empty list: no public releases were listed. This is an observation at that time,
@@ -71,8 +88,8 @@ moving reference. For example, replace the placeholder before running:
 ```sh
 python scripts/release_preflight.py \
   --commit <full-reviewed-commit-id> \
-  --tag v0.6.0 \
-  --release-version 0.6.0
+  --tag v0.6.1 \
+  --release-version 0.6.1
 ```
 
 Use the same Python interpreter as the test environment. The script:
@@ -115,12 +132,14 @@ These are **instructions, not executable enforcement**:
 1. Complete independent review and the final local acceptance handoff. Review
    release notes, safety limitations and backup/rollback options. Confirm the
    target Core version against the approved support baseline and test evidence.
+   Require the renewed full-diff notification safety/privacy audit described above;
+   the earlier candidate's audit is insufficient for this changed tree.
 2. After any owner-authorised merge, rerun preflight against the **final intended
    publication commit**, not a formerly tested branch tip. Any changed commit or
    files require a new run. Retain the full output, commit ID and manifest hash.
 3. Only with separate approval, publish from the owner's credentialed local
    clone. Tag **that exact tested commit**, not whichever commit happens to be
-   current later. The proposed release version 0.6.0 and tag v0.6.0 must match
+   current later. The proposed release version 0.6.1 and tag v0.6.1 must match
    its manifest. Do not move an existing tag to conceal different contents.
 4. Publish a GitHub **release associated with that tag**, not only a tag or a
    manifest bump. No custom ZIP packaging is needed. Check the tag's resolved
