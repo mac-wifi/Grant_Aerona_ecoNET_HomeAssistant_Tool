@@ -383,11 +383,13 @@ operation. There is no scheduled retry, automatic revert, or Revert All.
 Only an API-acknowledged success is logged with `source=revert`; this is not
 physical-state confirmation. After an unconfirmed/failed operation, check the
 controller before trying again: a timed-out request might have been applied.
-The next settings poll shows the observed state and may also notify about the
-revert itself. Revert deliberately does not add self-write suppression markers,
-so later guest changes remain visible; the separate deferred restore issue #11
-is unchanged. Local HA/emulator tests cover this path, not real phone delivery or
-heat-pump behaviour.
+The next settings poll shows the observed state. An exact match to the authorised
+Revert transition is attributed to that action without a false guest-change alert,
+including when the write was applied but its response was lost. This tracking is
+separate from Restore's self-write markers and preserves later genuine-change
+alerts; deferred Restore issue #11 is unchanged. Identical-target guest activity
+before observation remains ambiguous. Local HA/emulator tests cover this path,
+not real phone delivery or heat-pump behaviour.
 
 #### What gets created
 

@@ -62,8 +62,8 @@ access; test execution does not.
   orchestration, by-name API routing, bitmask read-modify-write (including
   inverted bits), and SQLite persistence in a temporary database.
 - `pytest-socket` blocks network sockets by default. Unix-domain sockets are
-  allowed for asyncio. Only the two emulator test modules enable TCP with an
-  allowlist containing numeric `127.0.0.1`; a test verifies that non-loopback
+  allowed for asyncio. Only tests in three emulator-using modules enable TCP,
+  with an allowlist containing numeric `127.0.0.1`; a test verifies that non-loopback
   connections remain blocked before network I/O. No device/VM/production
   endpoint or production HA configuration is used.
 - One narrowly scoped strict xfail documents deferred issue #11 through the
