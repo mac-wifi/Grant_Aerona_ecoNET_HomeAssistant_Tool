@@ -6,8 +6,8 @@ separate owner approval. A local `PASS` is not a release or a production sign-of
 
 ## Proposed version and reconciliation
 
-The proposed manifest/release version is **0.6.2**, with proposed tag **v0.6.2**.
-This is a documentation patch to the locally prepared 0.6.1 candidate; cumulatively
+The proposed manifest/release version is **0.6.3**, with proposed tag **v0.6.3**.
+This is a test-harness patch after published v0.6.2 failed hosted CI; cumulatively
 it still contains new features relative to the committed 0.4.2 baseline:
 
 | Version | Evidence and meaning |
@@ -19,11 +19,13 @@ it still contains new features relative to the committed 0.4.2 baseline:
 | 0.6.0 | Found in the working manifest during manual-Revert development; consolidated by release preparation `3eefa14`, including tests, exports and Grafana guidance. Historical local candidate, not a claimed published release. |
 | 0.6.1 | Owner-authorised single post-preparation PATCH bump in card t_47c836cd for reviewed readable setting-change notifications (`b9d80ce`). Includes the subsequent retry/observation remediation and local acceptance described below. No new controller functionality in the display correction. |
 | 0.6.2 | Owner-authorised direct correction of the README's manual-Revert attribution explanation and TESTING's TCP-enabled module count. PATCH bump required by the direct-change workflow; no runtime-code or test changes. |
+| 0.6.3 | Owner-authorised PATCH preparation after reviewed test-only socket-policy correction `a579ec6`. Function-scoped numeric-loopback permissions replace plugin-order-dependent markers; regression tests cover both plugin orders and teardown isolation. No integration runtime changes. |
 
-The intermediate versions were local working-file changes, **not** a sequence of
+The intermediate versions through 0.6.1 were local working-file changes, **not** a sequence of
 published releases. The original preparation consolidated committed 0.4.2 to 0.6.0;
 the notification refresh incremented it to 0.6.1, and this documentation correction
-increments it to 0.6.2.
+incremented it to 0.6.2. The present release-preparation card consolidates one
+additional bump to 0.6.3; no per-file or per-test bumps are intended.
 Inspect the actual manifest bytes: the working
 filesystem previously omitted same-size edits from `git status`/`git diff`.
 
@@ -37,18 +39,28 @@ raw fallbacks. No auto-revert, retry-policy change or deferred #11 fix is includ
 
 The renewed cumulative lead safety/privacy audit accepted `6ae2364` (0.6.1) for
 the owner's release decision. The owner accepted its remaining findings and limits
-and authorised these documentation corrections; this is not publication or
-deployment approval. The 0.6.2 delta contains only documentation and version
-metadata. Before publication, review that delta and retain privacy evidence and
+and authorised the 0.6.2 documentation corrections. Subsequently the owner
+authorised and performed a Mac push: the 2026-10-17 diagnosis records remote main
+and peeled **v0.6.2** at `a381e7dd6e54c955745600583bfeaad5ea6865af`.
+That published tag is immutable; do not move or reuse it for this correction.
+GitHub Actions [run 39026863699](https://github.com/mac-wifi/Grant_Aerona_ecoNET_HomeAssistant_Tool/actions/runs/39026863699)
+**failed: 9 failed, 302 passed, 1 xfailed, 59 errors**. Its failure signature was
+reproduced locally by changing plugin order; the hosted hook order itself was
+not logged. The reviewed correction passed locally in both explicit plugin
+orders, but **no new hosted PASS is claimed**. GitHub release creation was paused.
+The 0.6.3 delta is test setup/regressions, documentation and version metadata,
+not runtime behavior. Before publication, review that delta and retain privacy evidence and
 preflight bound to the final intended commit; the earlier commit's preflight is
 not evidence for a changed tree. Local tests do not establish phone delivery,
 physical controller behavior, hosted CI or HACS installation.
 
-A read-only public GitHub releases API check on **2026-10-05 UTC** returned an
-empty list: no public releases were listed. This is an observation at that time,
+A read-only public GitHub releases check recorded in the **2026-10-17** diagnosis
+still returned an empty list despite the published v0.6.2 tag. This is a dated observation,
 not a promise about future releases or private drafts. Before publication the
 owner must recheck the release/tag list and ensure the proposed version is unused.
-No release or tag was created for this preparation.
+No release or tag is created by this 0.6.3 preparation. New publication and
+production approval are still required; the earlier 0.6.2 push is not permission
+to publish 0.6.3 or install either version.
 
 ## Home Assistant support evidence
 
@@ -90,10 +102,10 @@ Pass that exact ID, not `HEAD`, a branch, an abbreviated hash or an automaticall
 moving reference. For example, replace the placeholder before running:
 
 ```sh
-python scripts/release_preflight.py \
+env -u PYTHONPATH -u PYTHONHOME python scripts/release_preflight.py \
   --commit <full-reviewed-commit-id> \
-  --tag v0.6.2 \
-  --release-version 0.6.2
+  --tag v0.6.3 \
+  --release-version 0.6.3
 ```
 
 Use the same Python interpreter as the test environment. The script:
@@ -137,15 +149,17 @@ These are **instructions, not executable enforcement**:
    release notes, safety limitations and backup/rollback options. Confirm the
    target Core version against the approved support baseline and test evidence.
    Retain the completed cumulative notification safety/privacy audit and review
-   the documentation/version delta described above for the final candidate.
+   the test/documentation/version delta described above for the final candidate.
 2. After any owner-authorised merge, rerun preflight against the **final intended
    publication commit**, not a formerly tested branch tip. Any changed commit or
    files require a new run. Retain the full output, commit ID and manifest hash.
 3. Only with separate approval, publish from the owner's credentialed local
    clone. Tag **that exact tested commit**, not whichever commit happens to be
-   current later. The proposed release version 0.6.2 and tag v0.6.2 must match
+   current later. The proposed release version 0.6.3 and tag v0.6.3 must match
    its manifest. Do not move an existing tag to conceal different contents.
-4. Publish a GitHub **release associated with that tag**, not only a tag or a
+4. Require a successful actual hosted test run for the exact intended commit
+   before creating the GitHub release. The failed v0.6.2 run is not cleared by
+   local tests. Publish a GitHub **release associated with the new tag**, not only a tag or a
    manifest bump. No custom ZIP packaging is needed. Check the tag's resolved
    commit, source archive's manifest/integration/extras and the release notes.
 5. Check the actual hosted test run for that exact commit. Local workflow parsing
@@ -154,8 +168,9 @@ These are **instructions, not executable enforcement**:
    test installation before deciding on production. HACS discovery may lag;
    **Update information** refreshes metadata but does not install code.
 
-Hosted CI, release visibility, archive delivery, live HACS update detection and
-actual earlier-release installation are **UNVERIFIED** until those owner actions
+Hosted CI for v0.6.2 is known **FAILED**; hosted success for 0.6.3, release
+visibility, archive delivery, live HACS update detection and actual earlier-release
+installation are **UNVERIFIED** until those owner actions
 are authorised and observed. No custom update entity or auto-update is added:
 HACS already provides update entities for tracked repositories.
 
