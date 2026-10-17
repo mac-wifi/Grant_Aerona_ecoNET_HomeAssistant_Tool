@@ -11,7 +11,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.econet_grant.const import DOMAIN, SERVICE_COORDINATOR, SERVICE_SLOW_COORDINATOR
 from emulator import EconetEmulator
 
-pytestmark = [pytest.mark.enable_socket, pytest.mark.allow_hosts(["127.0.0.1"])]
+pytestmark = pytest.mark.usefixtures("loopback_sockets")
 
 
 @pytest.fixture(autouse=True)

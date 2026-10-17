@@ -267,8 +267,7 @@ async def test_changed_controller_bounds_block_revert(actions, hass, api, edit_p
     db.async_log_change.assert_not_awaited()
 
 
-@pytest.mark.enable_socket
-@pytest.mark.allow_hosts(["127.0.0.1"])
+@pytest.mark.usefixtures("loopback_sockets")
 class TestRealHAManualRevert:
     """Real event bus, entry lifecycle, coordinator, HTTP client and SQLite audit."""
 

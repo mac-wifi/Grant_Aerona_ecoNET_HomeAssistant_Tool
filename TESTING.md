@@ -62,10 +62,15 @@ access; test execution does not.
   orchestration, by-name API routing, bitmask read-modify-write (including
   inverted bits), and SQLite persistence in a temporary database.
 - `pytest-socket` blocks network sockets by default. Unix-domain sockets are
-  allowed for asyncio. Only tests in three emulator-using modules enable TCP,
-  with an allowlist containing numeric `127.0.0.1`; a test verifies that non-loopback
-  connections remain blocked before network I/O. No device/VM/production
-  endpoint or production HA configuration is used.
+  allowed for asyncio. Emulator tests opt in using the function-scoped
+  `loopback_sockets` fixture, which enables socket creation and explicitly
+  restricts connections to numeric `127.0.0.1` after both plugins' setup hooks.
+  Its finalizer blocks TCP again. Do not replace this with `enable_socket` /
+  `allow_hosts` markers: their interaction with the HA hook depends on plugin
+  order. Socket-policy regressions check default blocking, real loopback I/O,
+  rejection of remote/other loopback addresses, and cleanup before the next
+  test's setup can mask a leak. Subprocess tests exercise both plugin orders.
+  No device/VM/production endpoint or production HA configuration is used.
 - One narrowly scoped strict xfail documents deferred issue #11 through the
   actual restore service handler: a no-op restore can suppress the next guest
   alert. Only the specific classification/event symptom raises its dedicated
@@ -89,7 +94,19 @@ small behavioral test to a coverage-percentage target.
 with read-only repository permissions and no deployment steps. The suite parses
 and checks its triggers, dependency setup and test command locally; this is not
 a GitHub Actions execution or full Actions schema validation. Hosted execution
-is unverified until publication and an actual run are authorised.
+failed for published v0.6.2 because of plugin-order-dependent emulator socket
+setup. The scoped fixture corrects that test setup; local passes are not a new
+hosted PASS. A successful hosted run remains a release prerequisite.
+
+When changing socket setup, also run the full suite in both explicit plugin
+orders (neither order is a workaround or a required default). Remove inherited
+Python path overrides for decisive runs, using the same isolated interpreter:
+
+```sh
+env -u PYTHONPATH -u PYTHONHOME python -m pytest -q
+env -u PYTHONPATH -u PYTHONHOME python -m pytest -q -p homeassistant -p socket
+env -u PYTHONPATH -u PYTHONHOME python -m pytest -q -p socket -p homeassistant
+```
 
 The socket guard, test discovery and strict xfail are executable controls.
 Running tests before submission/release is an instruction, not an enforced

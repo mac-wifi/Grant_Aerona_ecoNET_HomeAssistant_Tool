@@ -6,7 +6,7 @@ from custom_components.econet_grant.api import EconetApi, EconetClient
 from custom_components.econet_grant.const import API_MAX_RETRIES
 from emulator import EconetEmulator
 
-pytestmark = [pytest.mark.enable_socket, pytest.mark.allow_hosts(["127.0.0.1"])]
+pytestmark = pytest.mark.usefixtures("loopback_sockets")
 
 
 async def test_total_timeout_can_expire_before_server_receipt(aiohttp_server, monkeypatch):

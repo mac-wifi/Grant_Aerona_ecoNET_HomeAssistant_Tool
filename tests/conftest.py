@@ -4,12 +4,25 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+import pytest_socket
 from pytest_homeassistant_custom_component.plugins import hass as real_hass
 
 pytest_plugins = ["pytest_homeassistant_custom_component"]
 
 from custom_components.econet_grant import backup, change_detector, number, select
 from custom_components.econet_grant.api import EconetApi
+
+
+@pytest.fixture
+def loopback_sockets():
+    """Opt in after both plugins' setup hooks, for this test function only."""
+    pytest_socket.enable_socket()
+    try:
+        # Apply to the real socket class, not a plugin's GuardedSocket subclass.
+        pytest_socket.socket_allow_hosts(["127.0.0.1"], allow_unix_socket=True)
+        yield
+    finally:
+        pytest_socket.disable_socket(allow_unix_socket=True)
 
 
 @pytest.fixture
