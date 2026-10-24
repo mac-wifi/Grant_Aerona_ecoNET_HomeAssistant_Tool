@@ -5,24 +5,36 @@
 #   1. Copy this file to /homeassistant/dashboards/econet_grant_dashboard.yaml
 #      (If installed via HACS, the file is already on your system at:
 #       /homeassistant/custom_components/econet_grant/extras/econet_grant_dashboard.yaml)
-#   2. Add the following to /homeassistant/configuration.yaml:
+#      /dashboards/ is relative to the HA config directory, not the OS root.
+#      Use lowercase d. /homeassistant means the directory containing
+#      configuration.yaml; use /config instead if that is your app's mount.
+#      Create dashboards/ first and back up any existing destination.
+#   2. Merge into /homeassistant/configuration.yaml; do not replace existing
+#      keys or duplicate lovelace: / dashboards:. Preserve mode, resources and
+#      other dashboards; add missing mappings or update the existing entry.
+#      If using !include, merge into the corresponding included file instead.
 #
 #        lovelace:
-#          mode: storage
 #          dashboards:
 #            econet-grant:
 #              mode: yaml
 #              title: Grant Aerona Heat Pump
 #              icon: mdi:heat-pump-outline
+#              show_in_sidebar: true
 #              filename: dashboards/econet_grant_dashboard.yaml
 #
-#   3. Restart Home Assistant
+#   3. Check Configuration under Developer Tools > YAML; fix errors first.
+#      Restart Home Assistant, then open the dashboard from the sidebar.
+#   Updates: HACS does not automatically update your custom dashboard copy.
+#      Back it up and compare/merge new bundled YAML to preserve customisations.
+#      Edit the copy, not the bundled source that HACS can overwrite.
+#      Reload the dashboard/browser after dashboard-only edits; configuration
+#      registration changes and integration updates still require a restart.
 #
 # Prerequisites:
 #   - econet_grant integration installed and configured
 #   - HACS frontend cards installed: Mushroom, Mini Graph Card
-#   - input_datetime.guest_checkout_date helper created
-#   - input_boolean.guest_checkout_active helper created
+
 #   - Optional: Grafana via its authenticated Open Web UI (see README Step 11)
 # ============================================================
 
@@ -71,7 +83,7 @@ views:
             icon_color: teal
 
           - type: custom:mushroom-entity-card
-            entity: sensor.grant_aerona_heat_pump_heat_source_preset_temp
+            entity: sensor.grant_aerona_heat_pump_heat_source_preset_temperature
             name: HP Target Temp
             icon: mdi:thermometer-high
             icon_color: deep-orange
@@ -105,20 +117,20 @@ views:
         square: false
         cards:
           - type: custom:mushroom-template-card
-            entity: sensor.grant_aerona_heat_pump_ch_thermostat
+            entity: sensor.grant_aerona_heat_pump_heating_thermostat
             primary: >-
-              CH: {{ states('sensor.grant_aerona_heat_pump_ch_thermostat') }}°C
+              CH: {{ states('sensor.grant_aerona_heat_pump_heating_thermostat') }}°C
             secondary: >-
-              Day set: {{ states('number.grant_aerona_heat_pump_ch_day_temp') }}°C
+              Day set: {{ states('number.grant_aerona_heat_pump_heating_day_temperature') }}°C
             icon: mdi:home-thermometer
             icon_color: orange
 
           - type: custom:mushroom-template-card
-            entity: sensor.grant_aerona_heat_pump_hw_temperature
+            entity: sensor.grant_aerona_heat_pump_dhw_temperature
             primary: >-
-              HW: {{ states('sensor.grant_aerona_heat_pump_hw_temperature') }}°C
+              HW: {{ states('sensor.grant_aerona_heat_pump_dhw_temperature') }}°C
             secondary: >-
-              Set: {{ states('number.grant_aerona_heat_pump_hw_set_point') }}°C
+              Set: {{ states('number.grant_aerona_heat_pump_dhw_set_point') }}°C
             icon: mdi:water-boiler
             icon_color: red
 
@@ -128,7 +140,7 @@ views:
         square: false
         cards:
           - type: custom:mushroom-entity-card
-            entity: select.grant_aerona_heat_pump_hw_recirc_support
+            entity: select.grant_aerona_heat_pump_dhw_recirculation_support
             name: HW Recirculation
             icon: mdi:water-sync
             icon_color: blue
@@ -150,19 +162,21 @@ views:
         name: Temperature History (24h)
         entities:
           - entity: sensor.grant_aerona_heat_pump_outdoor_temperature
-            name: Outdoor
+            name: Outdoor (left)
             color: "#4FC3F7"
-          - entity: sensor.grant_aerona_heat_pump_ch_thermostat
-            name: CH Actual
+          - entity: sensor.grant_aerona_heat_pump_heating_thermostat
+            name: CH Actual (left)
             color: "#FF7043"
-          - entity: sensor.grant_aerona_heat_pump_hw_temperature
-            name: HW Tank
+          - entity: sensor.grant_aerona_heat_pump_dhw_temperature
+            name: HW Tank (right)
             color: "#66BB6A"
+            y_axis: secondary
         hours_to_show: 24
         points_per_hour: 2
         line_width: 2
         show:
           labels: true
+          labels_secondary: true
           legend: true
 
   # -------------------------------------------------------
@@ -176,72 +190,75 @@ views:
       - type: custom:mini-graph-card
         name: CH Temperature History (24h)
         entities:
-          - entity: sensor.grant_aerona_heat_pump_ch_thermostat
-            name: CH Actual
+          - entity: sensor.grant_aerona_heat_pump_heating_thermostat
+            name: CH Actual (left)
             color: "#FF7043"
           - entity: sensor.grant_aerona_heat_pump_flow_temperature
-            name: Flow
+            name: Flow (right)
             color: "#EF5350"
+            y_axis: secondary
           - entity: sensor.grant_aerona_heat_pump_return_temperature
-            name: Return
+            name: Return (right)
             color: "#42A5F5"
+            y_axis: secondary
           - entity: sensor.grant_aerona_heat_pump_outdoor_temperature
-            name: Outdoor
+            name: Outdoor (left)
             color: "#4FC3F7"
         hours_to_show: 24
         points_per_hour: 2
         line_width: 2
         show:
           labels: true
+          labels_secondary: true
           legend: true
 
       # --- Main controls ---
       - type: entities
         title: CH Controls
         entities:
-          - entity: select.grant_aerona_heat_pump_ch_operation_mode
+          - entity: select.grant_aerona_heat_pump_heating_operation_mode
             name: CH Operation Mode
-          - entity: number.grant_aerona_heat_pump_ch_day_temp
+          - entity: number.grant_aerona_heat_pump_heating_day_temperature
             name: CH Day Temp
-          - entity: number.grant_aerona_heat_pump_ch_night_temp
+          - entity: number.grant_aerona_heat_pump_heating_night_temperature
             name: CH Night Temp
-          - entity: number.grant_aerona_heat_pump_ch_base_temp
+          - entity: number.grant_aerona_heat_pump_heating_base_temperature
             name: CH Base Temp
-          - entity: number.grant_aerona_heat_pump_ch_hysteresis
+          - entity: number.grant_aerona_heat_pump_heating_hysteresis
             name: CH Hysteresis
-          - entity: number.grant_aerona_heat_pump_ch_boost_time
+          - entity: number.grant_aerona_heat_pump_circuit_1_boost_time
             name: CH Boost Time
 
       # --- Weather curve ---
       - type: entities
         title: Weather Curve
         entities:
-          - entity: select.grant_aerona_heat_pump_ch_regulation_method
+          - entity: select.grant_aerona_heat_pump_heating_regulation_method
             name: CH Regulation Method
-          - entity: number.grant_aerona_heat_pump_ch_curve
+          - entity: number.grant_aerona_heat_pump_heating_curve
             name: CH Curve
-          - entity: number.grant_aerona_heat_pump_ch_curve_shift
+          - entity: number.grant_aerona_heat_pump_heating_curve_shift
             name: CH Curve Shift
-          - entity: number.grant_aerona_heat_pump_summer_threshold
+          - entity: number.grant_aerona_heat_pump_summer_mode_activation_temperature
             name: Summer Threshold
-          - entity: number.grant_aerona_heat_pump_winter_threshold
+          - entity: number.grant_aerona_heat_pump_winter_mode_activation_temperature
             name: Winter Threshold
 
       # --- Advanced CH settings ---
       - type: entities
         title: CH Advanced
         entities:
-          - entity: select.grant_aerona_heat_pump_ch_circuit_type
+          - entity: select.grant_aerona_heat_pump_heating_circuit_type
             name: CH Circuit Type
-          - entity: select.grant_aerona_heat_pump_ch_pump_blockade
+          - entity: select.grant_aerona_heat_pump_heating_thermostat_pump_blockade
             name: CH Pump Blockade
-          - entity: number.grant_aerona_heat_pump_heating_temp_correction
+          - entity: number.grant_aerona_heat_pump_heating_temperature_correction
             name: Heating Temp Correction
-          - entity: number.grant_aerona_heat_pump_cooling_setpoint_adj
+          - entity: number.grant_aerona_heat_pump_setpoint_temperature_correction_cooling
             name: Cooling Setpoint Adj
-          - entity: number.grant_aerona_heat_pump_crit_temp_ignore
+          - entity: number.grant_aerona_heat_pump_heating_crit_temp_ignore_after_dhw
             name: Crit Temp Ignore After HW
-          - entity: number.grant_aerona_heat_pump_panel_temp_correction
+          - entity: number.grant_aerona_heat_pump_panel_temperature_correction
             name: Panel Temp Correction
 
   # -------------------------------------------------------
@@ -255,7 +272,7 @@ views:
       - type: custom:mini-graph-card
         name: HW Temperature History (24h)
         entities:
-          - entity: sensor.grant_aerona_heat_pump_hw_temperature
+          - entity: sensor.grant_aerona_heat_pump_dhw_temperature
             name: HW Actual
             color: "#EF5350"
         hours_to_show: 24
@@ -269,52 +286,52 @@ views:
       - type: entities
         title: HW Controls
         entities:
-          - entity: select.grant_aerona_heat_pump_hw_work_mode
+          - entity: select.grant_aerona_heat_pump_dhw_work_mode
             name: HW Work Mode
-          - entity: select.grant_aerona_heat_pump_hw_boost
+          - entity: select.grant_aerona_heat_pump_dhw_boost
             name: HW Boost
-          - entity: number.grant_aerona_heat_pump_hw_set_point
+          - entity: number.grant_aerona_heat_pump_dhw_set_point
             name: HW Set Point
-          - entity: number.grant_aerona_heat_pump_hw_hysteresis
+          - entity: number.grant_aerona_heat_pump_dhw_hysteresis
             name: HW Hysteresis
-          - entity: number.grant_aerona_heat_pump_hw_extend_work
+          - entity: number.grant_aerona_heat_pump_dhw_extension_of_work
             name: HW Extend Work
-          - entity: number.grant_aerona_heat_pump_hw_correction_temp
+          - entity: number.grant_aerona_heat_pump_dhw_correction_temperature
             name: HW Correction Temp
 
       # --- HW priority & support ---
       - type: entities
         title: HW Settings
         entities:
-          - entity: select.grant_aerona_heat_pump_hw_support
+          - entity: select.grant_aerona_heat_pump_dhw_support
             name: HW Support
-          - entity: select.grant_aerona_heat_pump_hw_specify_priority
+          - entity: select.grant_aerona_heat_pump_dhw_specify_priority
             name: HW Specify Priority
-          - entity: select.grant_aerona_heat_pump_off_circuits_on_hw
+          - entity: select.grant_aerona_heat_pump_off_circuits_during_charging
             name: Off Circuits During HW
-          - entity: select.grant_aerona_heat_pump_hw_start_from_temp
+          - entity: select.grant_aerona_heat_pump_dhw_start_from_temp
             name: HW Start From Temp
 
       # --- Recirculation ---
       - type: entities
         title: HW Recirculation
         entities:
-          - entity: select.grant_aerona_heat_pump_hw_recirc_support
+          - entity: select.grant_aerona_heat_pump_dhw_recirculation_support
             name: HW Recirc Support
-          - entity: number.grant_aerona_heat_pump_hw_pump_start_temp
+          - entity: number.grant_aerona_heat_pump_dhw_pump_start_temp
             name: HW Pump Start Temp
-          - entity: number.grant_aerona_heat_pump_hw_recirc_run_time
+          - entity: number.grant_aerona_heat_pump_dhw_recirculation_operation_time
             name: HW Recirc Run Time
-          - entity: number.grant_aerona_heat_pump_hw_recirc_pause
+          - entity: number.grant_aerona_heat_pump_dhw_recirculation_pause_time
             name: HW Recirc Pause
 
       # --- HW heater ---
       - type: entities
         title: HW Heater
         entities:
-          - entity: select.grant_aerona_heat_pump_hw_heater
+          - entity: select.grant_aerona_heat_pump_dhw_heater
             name: HW Heater
-          - entity: number.grant_aerona_heat_pump_hw_heater_delay
+          - entity: number.grant_aerona_heat_pump_dhw_heater_delay
             name: HW Heater Delay
 
   # -------------------------------------------------------
@@ -347,7 +364,7 @@ views:
             name: Fan Speed
           - entity: sensor.grant_aerona_heat_pump_system_demand
             name: System Demand
-          - entity: sensor.grant_aerona_heat_pump_heat_source_preset_temp
+          - entity: sensor.grant_aerona_heat_pump_heat_source_preset_temperature
             name: Heat Source Preset Temp
           - entity: sensor.grant_aerona_heat_pump_flow_temperature
             name: Flow Temperature
@@ -355,18 +372,18 @@ views:
             name: Return Temperature
           - entity: sensor.grant_aerona_heat_pump_weather_temperature
             name: Weather Temperature
-          - entity: sensor.grant_aerona_heat_pump_buffer_temp_lower
+          - entity: sensor.grant_aerona_heat_pump_buffer_temperature_lower
             name: Buffer Temp (Lower)
-          - entity: sensor.grant_aerona_heat_pump_heat_exchanger_temp
+          - entity: sensor.grant_aerona_heat_pump_heat_exchanger_temperature
             name: Heat Exchanger Temp
 
       # --- Sensor configuration ---
       - type: entities
         title: Sensor Configuration
         entities:
-          - entity: select.grant_aerona_heat_pump_ext_temp_sensor
+          - entity: select.grant_aerona_heat_pump_external_temperature_sensor_support
             name: Ext Temp Sensor
-          - entity: select.grant_aerona_heat_pump_temp_sensor_source
+          - entity: select.grant_aerona_heat_pump_temperature_sensor_source
             name: Temp Sensor Source
           - entity: select.grant_aerona_heat_pump_cooling_support
             name: Cooling Support
@@ -379,7 +396,7 @@ views:
         entities:
           - entity: select.grant_aerona_heat_pump_backup_heater
             name: Backup Heater
-          - entity: select.grant_aerona_heat_pump_backup_htr_in_defrost
+          - entity: select.grant_aerona_heat_pump_backup_heater_operation_in_defrost
             name: Backup Htr in Defrost
           - entity: number.grant_aerona_heat_pump_outside_temp_start_heater
             name: Outside Temp Start Heater
@@ -430,50 +447,11 @@ views:
     path: guest
     icon: mdi:account-clock
     cards:
-      - type: entities
-        title: Guest Checkout
-        entities:
-          - entity: input_datetime.guest_checkout_date
-            name: Checkout Date
-          - entity: input_boolean.guest_checkout_active
-            name: Checkout Active
-
       - type: markdown
-        title: Guest Checkout Info
+        title: Guest Checkout Unavailable
         content: >
-          **How it works:**
-
-          1. Set the guest checkout date above (or via Alexa)
-
-          2. At 10:00 AM on that date, all heat pump settings will be
-             automatically restored to the "Default" snapshot
-
-          3. You'll receive a notification when the restore happens
-
-          **Alexa:** Create a routine that sets the checkout date.
-          Say "Alexa, guest checkout is [date]".
-
-      - type: horizontal-stack
-        cards:
-          - type: button
-            name: Save Guest Mode
-            icon: mdi:content-save-settings
-            tap_action:
-              action: call-service
-              service: econet_grant.backup_settings
-              service_data:
-                snapshot_name: "Guest Mode"
-
-          - type: button
-            name: Restore Guest Mode
-            icon: mdi:account-cog
-            tap_action:
-              action: call-service
-              service: econet_grant.restore_settings
-              service_data:
-                snapshot_name: "Guest Mode"
-            confirmation:
-              text: "Restore settings to the Guest Mode snapshot?"
+          Guest checkout helpers are not present in the supplied live entity export.
+          No guest controls or automated checkout/restore actions are configured here.
 
   # -------------------------------------------------------
   # TAB 6: Admin
@@ -565,7 +543,7 @@ views:
       - type: markdown
         title: About
         content: >
-          **EcoNet Grant Aerona** v0.4.2
+          **EcoNet Grant Aerona** v0.4.0
 
           Monitors and controls a Grant Aerona heat pump via the ecoNET local API.
 
