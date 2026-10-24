@@ -183,3 +183,28 @@ async def test_safe_mode_blocks_number_and_select_services(loaded):
     assert pump.reg["settingsVer"] == 1
     notifications = hass.data["persistent_notification"]
     assert len([key for key in notifications if key.startswith("econet_grant_write_")]) == 2
+
+
+async def test_own_bitmask_write_is_not_reported_as_guest_change(loaded):
+    """The self-write marker must use the API name the detector sees (HDWSETTINGS)."""
+    import sqlite3
+    from pathlib import Path
+
+    hass, entry, pump = loaded
+    hass.config_entries.async_update_entry(entry, options={**entry.options, "safe_mode": False})
+    await hass.async_block_till_done()
+    select = "select.grant_aerona_heat_pump_hw_specify_priority"
+    assert hass.states.get(select).state == "No"
+    await hass.services.async_call("select", "select_option", {
+        "entity_id": select, "option": "Yes",
+    }, blocking=True)
+    assert pump.writes == [("HDWSETTINGS", 21.0)]
+    await hass.data[DOMAIN][entry.entry_id][SERVICE_COORDINATOR].async_refresh()
+    await hass.async_block_till_done()
+    assert "econet_grant_external_changes" not in hass.data.get("persistent_notification", {})
+
+    def sources():
+        with sqlite3.connect(Path(hass.config.config_dir) / "econet_grant.db") as conn:
+            return conn.execute("SELECT param_name, source FROM change_log").fetchall()
+
+    assert ("HDWSETTINGS", "external") not in await hass.async_add_executor_job(sources)

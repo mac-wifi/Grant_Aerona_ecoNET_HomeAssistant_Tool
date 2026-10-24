@@ -287,7 +287,8 @@ class EconetBitmaskSelect(CoordinatorEntity[EconetFastCoordinator], SelectEntity
         old_option = self._attr_current_option
         change_detector = self._get_change_detector()
         if change_detector:
-            change_detector.mark_self_write(self._key)
+            # Mark the API name the change detector will see, not the entity key.
+            change_detector.mark_self_write(self._settings_param_name)
 
         success = await self._api.set_param(self._settings_param_name, new_value)
         if success:
@@ -309,7 +310,7 @@ class EconetBitmaskSelect(CoordinatorEntity[EconetFastCoordinator], SelectEntity
         else:
             _LOGGER.error("Failed to set %s to %s", self._key, option)
             if change_detector:
-                change_detector.clear_self_write(self._key)
+                change_detector.clear_self_write(self._settings_param_name)
 
 
 async def _safe_mode_notify(
