@@ -1,117 +1,64 @@
-# Offline development tests
+# Tests
 
-This is the initial, proportionate test foundation for issues #6 and #12, not
-exhaustive integration certification. The removed guardian is deliberately not
-recreated. Release preparation (#10 / release portion of #12) is separate.
+## Run
 
-## Setup and one test command
-
-Use Python 3.14.2 or later in the 3.14 series in an isolated environment from the
-repository root (locally verified with Python 3.14.8):
+Use Python 3.14 (3.14.2 or later) in an isolated environment on a normal local
+disk. A cloud-synced folder that can't hold executables won't work.
 
 ```sh
-python3.14 -m venv .venv
-. .venv/bin/activate
+python3.14 -m venv .venv && . .venv/bin/activate
 python -m pip install -r requirements-test.txt
 python -m pytest
 ```
 
-The single suite command is `python -m pytest`. `pytest.ini` discovers all
-`tests/test_*.py` files without a manually maintained list. Dependencies pin the
-test baseline to Home Assistant 2026.9.4 through
-`pytest-homeassistant-custom-component==0.13.367`. Its distribution metadata
-requires exactly HA 2026.9.4, matching the owner-reported production Core version.
-This runs Core in a test process, not HAOS 18.3 or the production installation.
-The owner-approved HACS minimum is now Core 2026.9.4, matching this test baseline;
-see [support evidence and decision](RELEASE.md#home-assistant-support-evidence).
-Other Core versions have not been verified; this is not a guarantee of future
-version compatibility.
-No test dependency is added to the shipped integration manifest.
+`requirements-test.txt` pins Home Assistant Core 2026.9.4 through
+`pytest-homeassistant-custom-component`. GitHub Actions
+(`.github/workflows/tests.yml`) runs the same command on every push and pull
+request.
 
-On filesystems that cannot run a virtual environment (for example a cloud drive
-without executable files/symlinks), create the isolated environment on an
-executable local filesystem instead, activate it, and run the same suite command
-from the repository root. Do not use `PYTHONPATH` workarounds or install into HA,
-system Python or an agent's runtime. Dependency installation needs package-index
-access; test execution does not.
+Expected result: everything passes except one **strict expected failure** for
+deferred issue #11, where a no-op Restore can suppress the next guest alert.
+If that test unexpectedly passes, the suite fails, so #11 gets reviewed
+rather than silently "fixed".
 
-## Boundaries and coverage
+## What the suite covers
 
-- The emulator fixtures are reduced from local reference samples
-  `regParams_Output.json`, `editParams_Output.json`, `sysParams_Output.json` and
-  `newParam_success_sample.json`. Parameter names, numeric indices and response
-  shapes are retained; values/version counters and identities are synthetic.
-  Network, serial and credential fields are omitted. No original exports ship.
-- Existing focused tests import real integration and HA modules with small
-  boundary mocks. The official HA fixture also provides their helper lifecycle.
-  `test_ha_integration.py` instead starts a real HA test instance, loads the
-  config entry and all four platforms, unloads them, submits an options flow
-  with reload, and exercises guest settingsVer detection and persistent
-  notifications plus Safe Mode through real number/select services. These paths
-  do not mock setup, coordinators, notifications or the HTTP client.
-- `tests/emulator.py` serves loopback HTTP GET endpoints for regParams,
-  editParams, sysParams and by-name newParam. Successful writes mutate editParams
-  and increment settingsVer. Tests exercise name/value mismatch, non-OK result,
-  malformed JSON, HTTP error and timeout modes. Malformed JSON currently raises
-  JSONDecodeError from the client; this documents its behavior, not a claim of
-  graceful handling. Timeout duration is shortened for tests; this is not a
-  firmware simulator or a complete controller parameter map.
-- Tests cover external/self-write classification and volatile filtering, Safe
-  Mode for number/select/bitmask and restore paths, backup filtering, restore
-  no-op/fetch/write failure, basic flow/options/schema decisions and setup/unload
-  orchestration, by-name API routing, bitmask read-modify-write (including
-  inverted bits), and SQLite persistence in a temporary database.
-- `pytest-socket` blocks network sockets by default. Unix-domain sockets are
-  allowed for asyncio. Emulator tests opt in using the function-scoped
-  `loopback_sockets` fixture, which enables socket creation and explicitly
-  restricts connections to numeric `127.0.0.1` after both plugins' setup hooks.
-  Its finalizer blocks TCP again. Do not replace this with `enable_socket` /
-  `allow_hosts` markers: their interaction with the HA hook depends on plugin
-  order. Socket-policy regressions check default blocking, real loopback I/O,
-  rejection of remote/other loopback addresses, and cleanup before the next
-  test's setup can mask a leak. Subprocess tests exercise both plugin orders.
-  No device/VM/production endpoint or production HA configuration is used.
-- One narrowly scoped strict xfail documents deferred issue #11 through the
-  actual restore service handler: a no-op restore can suppress the next guest
-  alert. Only the specific classification/event symptom raises its dedicated
-  expected exception. Setup/no-write failures remain failures. An unexpected
-  pass fails the suite and requires review; do not remove the marker without
-  reviewing #11. This task does not fix restore-marker ownership or expiry.
-- Physical firmware behavior, all option/auth paths, audit retention/migrations,
-  actual mobile push delivery, every parameter mapping, frontend behavior and
-  concurrent writes remain outside this suite. It does not prove hardware
-  behavior or complete every aspect of issue #6. Deferred #11 is unchanged.
+- **Real Home Assistant + emulator** (`test_ha_integration.py`,
+  `test_revert.py`, `test_entity_contract.py`): a real HA test instance loads
+  the config entry and all platforms. It talks over loopback HTTP to
+  `tests/emulator.py`, a small stateful ecoNET emulator (regParams,
+  editParams, sysParams and by-name `newParam`). These tests cover setup and
+  unload, options reload, guest-change detection and notifications, Safe Mode,
+  own-write classification, manual Revert, the Restore button and entity
+  freshness.
+- **Entity contract** (`fixtures/entity_contract.json`): every entity ID,
+  unique ID, name, icon, unit, category and device attribute. Entity IDs feed
+  dashboards, Grafana and history, so an accidental rename fails the suite.
+  Regenerate it only for an intended change, then review the diff:
+  `ECONET_UPDATE_CONTRACT=1 python -m pytest tests/test_entity_contract.py`.
+- **Focused unit tests**: API retries and write-response validation, change
+  classification and volatile filtering, bitmask read-modify-write, backup and
+  restore, config and options flows, coordinators, SQLite storage, export
+  tools, Grafana examples, dashboards and the release preflight.
 
-## Development convention and CI
+The emulator fixtures are reduced, sanitised samples. They keep real
+parameter names, indices and response shapes; values and identities are
+synthetic. The suite does not prove firmware behaviour, phone push delivery,
+frontend rendering or HAOS specifics.
 
-Save relevant regression tests in `tests/test_*.py` when changing behavior and
-run `python -m pytest` during development and before submission. Tests do not
-run automatically after every local edit. Temporary manual checks are not
-permanent tests, and discovery cannot guarantee adequate coverage. Prefer a
-small behavioral test to a coverage-percentage target.
+## Network policy
 
-`.github/workflows/tests.yml` runs the same command on pushes and pull requests,
-with read-only repository permissions and no deployment steps. The suite parses
-and checks its triggers, dependency setup and test command locally; this is not
-a GitHub Actions execution or full Actions schema validation. Hosted execution
-failed for published v0.6.2 because of plugin-order-dependent emulator socket
-setup. The scoped fixture corrects that test setup; local passes are not a new
-hosted PASS. A successful hosted run remains a release prerequisite.
+`pytest-socket` blocks network access by default. Emulator tests opt in with
+the function-scoped `loopback_sockets` fixture, which allows TCP to numeric
+`127.0.0.1` only and blocks it again afterwards. Don't replace it with
+`enable_socket` or `allow_hosts` markers: their interaction with the HA plugin
+depends on plugin load order, and that broke hosted CI for 0.6.2.
+`test_socket_policy.py` checks both plugin orders.
 
-When changing socket setup, also run the full suite in both explicit plugin
-orders (neither order is a workaround or a required default). Remove inherited
-Python path overrides for decisive runs, using the same isolated interpreter:
+## Conventions
 
-```sh
-env -u PYTHONPATH -u PYTHONHOME python -m pytest -q
-env -u PYTHONPATH -u PYTHONHOME python -m pytest -q -p homeassistant -p socket
-env -u PYTHONPATH -u PYTHONHOME python -m pytest -q -p socket -p homeassistant
-```
-
-The socket guard, test discovery and strict xfail are executable controls.
-Running tests before submission/release is an instruction, not an enforced
-publication gate: no repository protection settings or release automation are
-changed here. Reuse this command against the exact intended release commit in
-the separate release procedure. HACS distribution and owner-controlled updates
-remain unchanged; no release, production update or heating change is performed
-by this workflow.
+- Fix a bug by first adding a test that fails, then making it pass.
+- Behaviour that touches controller writes, change detection,
+  `VOLATILE_PARAMETERS`, notifications, Safe Mode, Restore or Revert needs a
+  real-HA/emulator test, not just a mock.
+- Never point tests at a real controller, VM or production HA.

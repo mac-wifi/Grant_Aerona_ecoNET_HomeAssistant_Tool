@@ -9,9 +9,7 @@ This project was created to remotely manage a holiday home heat pump, allowing t
 
 ## Current Status
 
-**Proposed version:** 0.6.0 (local release preparation; not yet published)
-
-Version 0.4.1 is owner-reported in production. The proposed 0.6.0 release consolidates by-name write-response validation, configurable settings polling, opt-in individual manual Revert, read-only export tools, Grafana examples and offline tests. Parameter mappings were originally checked manually against one controller; the new work is tested offline with real HA Core 2026.9.4 and a synthetic loopback controller, not on production. See [TESTING.md](TESTING.md) for coverage and [RELEASE.md](RELEASE.md) for tested-commit preparation, version history, updates and rollback. No hosted CI, published release or HACS visibility is claimed by this local preparation.
+Released through GitHub Releases and HACS; see [CHANGELOG.md](CHANGELOG.md) for what changed in each version. Parameter mappings were checked manually against one controller. Each release is tested offline against real Home Assistant Core 2026.9.4 with a synthetic loopback controller, not against a real heat pump. See [TESTING.md](TESTING.md) for coverage and [RELEASE.md](RELEASE.md) for the release, update and rollback procedure.
 
 ## What Works
 
