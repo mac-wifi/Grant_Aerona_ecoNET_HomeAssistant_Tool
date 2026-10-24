@@ -22,6 +22,7 @@ class EconetEmulator:
         self.write_modes = []  # optional per-attempt responses for timeout recovery
         self.writes = []
         self.requests = []
+        self.auth_headers = set()
         self.timeout_releases = []
         self.client_attempts = []
         self.client_completions = []
@@ -73,6 +74,7 @@ class EconetEmulator:
     async def handle(self, request):
         endpoint = request.match_info["endpoint"]
         self.requests.append(endpoint)
+        self.auth_headers.add(request.headers.get("Authorization"))
         if endpoint in ("regParams", "editParams", "sysParams"):
             return web.json_response({"regParams": self.reg, "editParams": self.edit,
                                       "sysParams": self.sys}[endpoint])

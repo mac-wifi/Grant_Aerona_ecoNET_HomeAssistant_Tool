@@ -7,11 +7,13 @@ The database file lives in the HA config directory as econet_grant.db.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 import json
 import logging
-import sqlite3
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import sqlite3
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -81,9 +83,31 @@ class EconetDatabase:
         conn.execute("PRAGMA synchronous=NORMAL")
         return conn
 
-    def _setup_schema(self) -> None:
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        """A short-lived connection, committed on success and always closed."""
         conn = self._get_connection()
         try:
+            yield conn
+            conn.commit()
+        finally:
+            conn.close()
+
+    def _insert(self, what: str, sql: str, rows: list[tuple]) -> None:
+        """Insert rows; database/file errors are logged, never raised to HA."""
+        if not rows:
+            return
+        try:
+            with self._connection() as conn:
+                conn.executemany(sql, rows)
+            _LOGGER.debug("Recorded %d %s", len(rows), what)
+        except sqlite3.Error:
+            _LOGGER.error("Failed to record %s", what, exc_info=True)
+        except OSError:
+            _LOGGER.error("Filesystem error recording %s", what, exc_info=True)
+
+    def _setup_schema(self) -> None:
+        with self._connection() as conn:
             conn.executescript(_CREATE_TABLES)
             cursor = conn.execute("SELECT version FROM schema_version LIMIT 1")
             if cursor.fetchone() is None:
@@ -91,9 +115,6 @@ class EconetDatabase:
                     "INSERT INTO schema_version (version) VALUES (?)",
                     (SCHEMA_VERSION,),
                 )
-            conn.commit()
-        finally:
-            conn.close()
 
     async def async_setup(self, hass: HomeAssistant) -> None:
         """Create tables and indexes if they don't already exist."""
@@ -105,55 +126,35 @@ class EconetDatabase:
     # ------------------------------------------------------------------
 
     def _record_readings(self, data: dict[str, Any]) -> None:
-        try:
-            now = datetime.now(timezone.utc).isoformat()
-            rows: list[tuple[str, str, float, str | None]] = []
+        now = datetime.now(timezone.utc).isoformat()
+        rows: list[tuple] = []
 
-            curr = data.get("curr", {})
-            curr_units = data.get("currUnits", {})
-            for param, value in curr.items():
-                if value is None:
-                    continue
-                try:
-                    numeric = float(value)
-                except (TypeError, ValueError):
-                    continue
-                rows.append((now, param, numeric, curr_units.get(param)))
-
-            tiles = data.get("tilesParams", [])
-            for idx, tile in enumerate(tiles):
-                try:
-                    numeric = float(tile[0][0][0])
-                    rows.append((now, f"tile_{idx}", numeric, None))
-                except (IndexError, TypeError, ValueError):
-                    continue
-
-            schema = data.get("schemaParams", {})
-            for key, val in schema.items():
-                try:
-                    numeric = float(val[0][0][0])
-                    rows.append((now, f"schema_{key}", numeric, None))
-                except (IndexError, TypeError, ValueError):
-                    continue
-
-            if not rows:
-                return
-
-            conn = self._get_connection()
+        curr_units = data.get("currUnits", {})
+        for param, value in data.get("curr", {}).items():
+            if value is None:
+                continue
             try:
-                conn.executemany(
-                    "INSERT INTO readings (timestamp, parameter, value, unit) "
-                    "VALUES (?, ?, ?, ?)",
-                    rows,
-                )
-                conn.commit()
-                _LOGGER.debug("Recorded %d readings", len(rows))
-            finally:
-                conn.close()
-        except sqlite3.Error:
-            _LOGGER.error("Failed to record readings", exc_info=True)
-        except OSError:
-            _LOGGER.error("Filesystem error recording readings", exc_info=True)
+                rows.append((now, param, float(value), curr_units.get(param)))
+            except (TypeError, ValueError):
+                continue
+
+        for idx, tile in enumerate(data.get("tilesParams", [])):
+            try:
+                rows.append((now, f"tile_{idx}", float(tile[0][0][0]), None))
+            except (IndexError, TypeError, ValueError):
+                continue
+
+        for key, val in data.get("schemaParams", {}).items():
+            try:
+                rows.append((now, f"schema_{key}", float(val[0][0][0]), None))
+            except (IndexError, TypeError, ValueError, KeyError):
+                continue
+
+        self._insert(
+            "readings",
+            "INSERT INTO readings (timestamp, parameter, value, unit) VALUES (?, ?, ?, ?)",
+            rows,
+        )
 
     async def async_record_readings(
         self, hass: HomeAssistant, data: dict[str, Any]
@@ -162,45 +163,22 @@ class EconetDatabase:
         await hass.async_add_executor_job(self._record_readings, data)
 
     # ------------------------------------------------------------------
-    # Slow coordinator data (editParams) – daily
+    # Slow coordinator data (editParams)
     # ------------------------------------------------------------------
 
     def _record_settings(self, edit_params: dict[str, Any]) -> None:
-        try:
-            data = edit_params.get("data", {})
-            if not data:
-                return
-
-            now = datetime.now(timezone.utc).isoformat()
-            rows: list[tuple[str, str, str, str]] = []
-            for index, param in data.items():
-                if not isinstance(param, dict) or "name" not in param:
-                    continue
-                rows.append((
-                    now,
-                    str(index),
-                    param["name"],
-                    str(param.get("value", "")),
-                ))
-
-            if not rows:
-                return
-
-            conn = self._get_connection()
-            try:
-                conn.executemany(
-                    "INSERT INTO settings_history "
-                    "(timestamp, param_index, param_name, value) VALUES (?, ?, ?, ?)",
-                    rows,
-                )
-                conn.commit()
-                _LOGGER.debug("Recorded %d settings", len(rows))
-            finally:
-                conn.close()
-        except sqlite3.Error:
-            _LOGGER.error("Failed to record settings", exc_info=True)
-        except OSError:
-            _LOGGER.error("Filesystem error recording settings", exc_info=True)
+        now = datetime.now(timezone.utc).isoformat()
+        rows = [
+            (now, str(index), param["name"], str(param.get("value", "")))
+            for index, param in edit_params.get("data", {}).items()
+            if isinstance(param, dict) and "name" in param
+        ]
+        self._insert(
+            "settings",
+            "INSERT INTO settings_history "
+            "(timestamp, param_index, param_name, value) VALUES (?, ?, ?, ?)",
+            rows,
+        )
 
     async def async_record_settings(
         self, hass: HomeAssistant, edit_params: dict[str, Any]
@@ -209,26 +187,16 @@ class EconetDatabase:
         await hass.async_add_executor_job(self._record_settings, edit_params)
 
     # ------------------------------------------------------------------
-    # Slow coordinator data (sysParams) – daily
+    # Slow coordinator data (sysParams)
     # ------------------------------------------------------------------
 
     def _record_sys_params(self, sys_params: dict[str, Any]) -> None:
-        try:
-            now = datetime.now(timezone.utc).isoformat()
-            conn = self._get_connection()
-            try:
-                conn.execute(
-                    "INSERT INTO sys_params_history (timestamp, data) VALUES (?, ?)",
-                    (now, json.dumps(sys_params)),
-                )
-                conn.commit()
-                _LOGGER.debug("Recorded sysParams snapshot")
-            finally:
-                conn.close()
-        except sqlite3.Error:
-            _LOGGER.error("Failed to record sysParams", exc_info=True)
-        except OSError:
-            _LOGGER.error("Filesystem error recording sysParams", exc_info=True)
+        now = datetime.now(timezone.utc).isoformat()
+        self._insert(
+            "sysParams",
+            "INSERT INTO sys_params_history (timestamp, data) VALUES (?, ?)",
+            [(now, json.dumps(sys_params))],
+        )
 
     async def async_record_sys_params(
         self, hass: HomeAssistant, sys_params: dict[str, Any]
@@ -241,30 +209,21 @@ class EconetDatabase:
     # ------------------------------------------------------------------
 
     def _log_change(self, change: dict[str, Any], source: str) -> None:
-        try:
-            now = datetime.now(timezone.utc).isoformat()
-            conn = self._get_connection()
-            try:
-                conn.execute(
-                    "INSERT INTO change_log "
-                    "(timestamp, param_name, param_index, old_value, new_value, source) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
-                    (
-                        now,
-                        change.get("name", ""),
-                        change.get("index"),
-                        str(change.get("old_value", "")),
-                        str(change.get("new_value", "")),
-                        source,
-                    ),
-                )
-                conn.commit()
-            finally:
-                conn.close()
-        except sqlite3.Error:
-            _LOGGER.error("Failed to log change for %s", change.get("name"), exc_info=True)
-        except OSError:
-            _LOGGER.error("Filesystem error logging change", exc_info=True)
+        now = datetime.now(timezone.utc).isoformat()
+        self._insert(
+            f"change for {change.get('name')}",
+            "INSERT INTO change_log "
+            "(timestamp, param_name, param_index, old_value, new_value, source) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            [(
+                now,
+                change.get("name", ""),
+                change.get("index"),
+                str(change.get("old_value", "")),
+                str(change.get("new_value", "")),
+                source,
+            )],
+        )
 
     async def async_log_change(
         self,
@@ -280,28 +239,25 @@ class EconetDatabase:
     # ------------------------------------------------------------------
 
     def _purge_old_data(self, days: int) -> None:
-        """Delete readings and history older than the given number of days."""
+        """Delete readings and history older than the given number of days.
+
+        The change_log audit trail is kept indefinitely.
+        """
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-        conn = self._get_connection()
-        try:
-            deleted_readings = conn.execute(
-                "DELETE FROM readings WHERE timestamp < ?", (cutoff,)
-            ).rowcount
-            deleted_settings = conn.execute(
-                "DELETE FROM settings_history WHERE timestamp < ?", (cutoff,)
-            ).rowcount
-            deleted_sys = conn.execute(
-                "DELETE FROM sys_params_history WHERE timestamp < ?", (cutoff,)
-            ).rowcount
-            conn.commit()
-            total = deleted_readings + deleted_settings + deleted_sys
-            if total > 0:
-                _LOGGER.info(
-                    "Purged %d old records (readings=%d, settings=%d, sysParams=%d, cutoff=%s)",
-                    total, deleted_readings, deleted_settings, deleted_sys, cutoff,
-                )
-        finally:
-            conn.close()
+        with self._connection() as conn:
+            deleted = {
+                table: conn.execute(
+                    f"DELETE FROM {table} WHERE timestamp < ?", (cutoff,)
+                ).rowcount
+                for table in ("readings", "settings_history", "sys_params_history")
+            }
+        total = sum(deleted.values())
+        if total > 0:
+            _LOGGER.info(
+                "Purged %d old records (readings=%d, settings=%d, sysParams=%d, cutoff=%s)",
+                total, deleted["readings"], deleted["settings_history"],
+                deleted["sys_params_history"], cutoff,
+            )
 
     async def async_purge_old_data(self, hass: HomeAssistant, days: int = 3650) -> None:
         """Purge records older than the configured retention period."""
@@ -325,16 +281,12 @@ class EconetDatabase:
 
     def get_recent_change_count(self) -> int:
         """Return the number of change_log entries in the last 24 hours."""
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
         try:
-            cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-            conn = self._get_connection()
-            try:
-                cursor = conn.execute(
+            with self._connection() as conn:
+                row = conn.execute(
                     "SELECT COUNT(*) FROM change_log WHERE timestamp > ?", (cutoff,)
-                )
-                row = cursor.fetchone()
-                return row[0] if row else 0
-            finally:
-                conn.close()
+                ).fetchone()
         except (sqlite3.Error, OSError):
             return 0
+        return row[0] if row else 0

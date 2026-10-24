@@ -9,7 +9,7 @@ from pytest_homeassistant_custom_component.plugins import hass as real_hass
 
 pytest_plugins = ["pytest_homeassistant_custom_component"]
 
-from custom_components.econet_grant import backup, change_detector, number, select
+from custom_components.econet_grant import backup, change_detector, entity
 from custom_components.econet_grant.api import EconetApi
 
 
@@ -74,6 +74,6 @@ def api(edit_params):
 @pytest.fixture(autouse=True)
 def notifications(monkeypatch):
     notification = Mock()
-    for module in (backup, change_detector, number, select):
+    for module in (backup, change_detector, entity):
         monkeypatch.setattr(module, "pn_async_create", notification)
     return notification

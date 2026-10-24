@@ -3,136 +3,82 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import logging
 from typing import Any
 
-from homeassistant.components.sensor import (
-    SensorEntity,
-    SensorEntityDescription,
-)
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import EconetApi
 from .backup import get_snapshot_info
-from .const import (
-    CONF_SAFE_MODE,
-    DEFAULT_SAFE_MODE,
-    DEVICE_MANUFACTURER,
-    DEVICE_MODEL,
-    DOMAIN,
-    SENSOR_DEFINITIONS,
-    SERVICE_API,
-    SERVICE_COORDINATOR,
-    SERVICE_DATABASE,
-    SERVICE_SLOW_COORDINATOR,
-    TILES_SENSOR_DEFINITIONS,
-)
-from .coordinator import EconetFastCoordinator, EconetSlowCoordinator
+from .const import SENSOR_DEFINITIONS, TILES_SENSOR_DEFINITIONS
 from .database import EconetDatabase
-
-_LOGGER = logging.getLogger(__name__)
+from .entity import EconetConfigEntry, EconetEntity, is_safe_mode
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: EconetConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up sensor entities from a config entry."""
-    data = hass.data[DOMAIN][entry.entry_id]
-    coordinator: EconetFastCoordinator = data[SERVICE_COORDINATOR]
-    slow_coordinator: EconetSlowCoordinator = data[SERVICE_SLOW_COORDINATOR]
-    api: EconetApi = data[SERVICE_API]
-    db: EconetDatabase = data[SERVICE_DATABASE]
+    data = entry.runtime_data
+    fast, slow, api, db = data.fast_coordinator, data.slow_coordinator, data.api, data.database
 
-    entities: list[SensorEntity] = []
-
-    for key, defn in SENSOR_DEFINITIONS.items():
-        desc_kwargs: dict[str, Any] = {
-            "key": key,
-            "name": defn["name"],
-            "device_class": defn["device_class"],
-            "native_unit_of_measurement": defn["unit"],
-            "state_class": defn["state_class"],
-        }
-        if defn["state_class"] is not None:
-            desc_kwargs["suggested_display_precision"] = 1
-        description = SensorEntityDescription(**desc_kwargs)
-        value_map = defn.get("value_map")
-        entities.append(EconetSensor(coordinator, api, description, value_map))
-
-    for key, defn in TILES_SENSOR_DEFINITIONS.items():
-        desc_kwargs = {
-            "key": key,
-            "name": defn["name"],
-            "device_class": defn["device_class"],
-            "native_unit_of_measurement": defn["unit"],
-            "state_class": defn["state_class"],
-        }
-        if defn["state_class"] is not None:
-            desc_kwargs["suggested_display_precision"] = 1
-        description = SensorEntityDescription(**desc_kwargs)
-        entities.append(
-            EconetTilesSensor(coordinator, api, description, defn)
-        )
-
-    entities.extend([
-        EconetDiagnosticSensor(
-            coordinator, api, "last_reading",
-            "Last Sensor Poll", "mdi:clock-check",
+    entities: list[SensorEntity] = [
+        EconetSensor(fast, api, _description(key, defn), defn.get("value_map"))
+        for key, defn in SENSOR_DEFINITIONS.items()
+    ]
+    entities += [
+        EconetTilesSensor(fast, api, _description(key, defn), defn)
+        for key, defn in TILES_SENSOR_DEFINITIONS.items()
+    ]
+    entities += [
+        EconetPollTimeSensor(fast, api, "last_reading", "Last Sensor Poll", "mdi:clock-check"),
+        EconetPollTimeSensor(
+            slow, api, "last_settings_check", "Last Settings Check", "mdi:clock-alert",
         ),
-        EconetDiagnosticSensor(
-            slow_coordinator, api, "last_settings_check",
-            "Last Settings Check", "mdi:clock-alert",
-        ),
-        EconetSettingsVersionSensor(coordinator, api),
-        EconetDatabaseSizeSensor(coordinator, api, db),
-        EconetSafeModeSensor(coordinator, api, entry),
-        EconetRemoteMenuSensor(slow_coordinator, api),
-        EconetRecentChangesSensor(slow_coordinator, api, db),
-        EconetLastSnapshotSensor(coordinator, api, hass),
-    ])
-
+        EconetSettingsVersionSensor(fast, api),
+        EconetDatabaseSizeSensor(fast, api, db),
+        EconetSafeModeSensor(fast, api, entry),
+        EconetRemoteMenuSensor(slow, api),
+        EconetRecentChangesSensor(slow, api, db),
+        EconetLastSnapshotSensor(fast, api, hass),
+    ]
     async_add_entities(entities)
-    _LOGGER.info("Created %d sensor entities", len(entities))
 
 
-class EconetSensor(CoordinatorEntity[EconetFastCoordinator], SensorEntity):
-    """A sensor entity backed by the fast coordinator (regParams.curr)."""
+def _description(key: str, defn: dict[str, Any]) -> SensorEntityDescription:
+    kwargs: dict[str, Any] = {
+        "key": key,
+        "name": defn["name"],
+        "device_class": defn["device_class"],
+        "native_unit_of_measurement": defn["unit"],
+        "state_class": defn["state_class"],
+    }
+    if defn["state_class"] is not None:
+        kwargs["suggested_display_precision"] = 1
+    return SensorEntityDescription(**kwargs)
 
-    _attr_has_entity_name = True
+
+class EconetSensor(EconetEntity, SensorEntity):
+    """A live reading from regParams.curr."""
 
     def __init__(
         self,
-        coordinator: EconetFastCoordinator,
+        coordinator: Any,
         api: EconetApi,
         description: SensorEntityDescription,
         value_map: dict[int, str] | None = None,
     ) -> None:
-        super().__init__(coordinator)
+        super().__init__(coordinator, api, description.key)
         self.entity_description = description
-        self._api = api
         self._value_map = value_map
-        self._attr_unique_id = f"{DOMAIN}_{api.uid}_{description.key}"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._api.uid or self._api.host)},
-            name="Grant Aerona Heat Pump",
-            manufacturer=DEVICE_MANUFACTURER,
-            model=DEVICE_MODEL,
-            sw_version=self._api.sw_version,
-        )
 
     @property
     def native_value(self) -> Any:
-        curr = self.coordinator.data.get("curr", {}) if self.coordinator.data else {}
+        curr = (self.coordinator.data or {}).get("curr", {})
         value = curr.get(self.entity_description.key)
         if value is None:
             return None
@@ -141,68 +87,41 @@ class EconetSensor(CoordinatorEntity[EconetFastCoordinator], SensorEntity):
         return value
 
 
-class EconetTilesSensor(CoordinatorEntity[EconetFastCoordinator], SensorEntity):
-    """A sensor backed by regParams.tilesParams or regParams.schemaParams."""
-
-    _attr_has_entity_name = True
+class EconetTilesSensor(EconetEntity, SensorEntity):
+    """A reading from regParams.tilesParams[i][0][0][0] or schemaParams[key][0][0][0]."""
 
     def __init__(
         self,
-        coordinator: EconetFastCoordinator,
+        coordinator: Any,
         api: EconetApi,
         description: SensorEntityDescription,
         defn: dict[str, Any],
     ) -> None:
-        super().__init__(coordinator)
+        super().__init__(coordinator, api, description.key)
         self.entity_description = description
-        self._api = api
         self._source = defn["source"]
         self._tile_index = defn.get("tile_index")
         self._schema_key = defn.get("schema_key")
         self._value_map = defn.get("value_map")
-        self._attr_unique_id = f"{DOMAIN}_{api.uid}_{description.key}"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._api.uid or self._api.host)},
-            name="Grant Aerona Heat Pump",
-            manufacturer=DEVICE_MANUFACTURER,
-            model=DEVICE_MODEL,
-            sw_version=self._api.sw_version,
-        )
 
     @property
     def native_value(self) -> Any:
-        if not self.coordinator.data:
+        data = self.coordinator.data
+        if not data:
             return None
-
         if self._source == "tilesParams" and self._tile_index is not None:
-            return self._read_tile()
-        if self._source == "schemaParams" and self._schema_key:
-            return self._read_schema()
-        return None
-
-    def _read_tile(self) -> Any:
-        """Extract value from tilesParams[index][0][0][0]."""
-        tiles = self.coordinator.data.get("tilesParams", [])
+            container, key = data.get("tilesParams", []), self._tile_index
+        elif self._source == "schemaParams" and self._schema_key:
+            container, key = data.get("schemaParams", {}), self._schema_key
+        else:
+            return None
         try:
-            value = tiles[self._tile_index][0][0][0]
+            value = container[key][0][0][0]
         except (IndexError, TypeError, KeyError):
             return None
         if self._value_map:
-            return self._value_map.get(str(value), str(value))
-        return value
-
-    def _read_schema(self) -> Any:
-        """Extract value from schemaParams[key][0][0][0]."""
-        schema = self.coordinator.data.get("schemaParams", {})
-        try:
-            value = schema[self._schema_key][0][0][0]
-        except (IndexError, TypeError, KeyError):
-            return None
-        if self._value_map:
-            return self._value_map.get(value, str(value))
+            lookup = str(value) if self._source == "tilesParams" else value
+            return self._value_map.get(lookup, str(value))
         return value
 
 
@@ -211,35 +130,22 @@ class EconetTilesSensor(CoordinatorEntity[EconetFastCoordinator], SensorEntity):
 # ------------------------------------------------------------------
 
 
-class EconetDiagnosticSensor(CoordinatorEntity, SensorEntity):
-    """Diagnostic sensor showing the timestamp of the last successful poll."""
+class EconetDiagnosticEntity(EconetEntity, SensorEntity):
+    """Base for diagnostic sensors with fixed name/icon."""
 
-    _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
+
+class EconetPollTimeSensor(EconetDiagnosticEntity):
+    """Timestamp of the coordinator's last successful poll."""
+
     def __init__(
-        self,
-        coordinator,
-        api: EconetApi,
-        key: str,
-        name: str,
-        icon: str,
+        self, coordinator: Any, api: EconetApi, key: str, name: str, icon: str,
     ) -> None:
-        super().__init__(coordinator)
-        self._api = api
-        self._attr_unique_id = f"{DOMAIN}_{api.uid}_{key}"
+        super().__init__(coordinator, api, key)
         self._attr_name = name
         self._attr_icon = icon
         self._last_update: str | None = None
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._api.uid or self._api.host)},
-            name="Grant Aerona Heat Pump",
-            manufacturer=DEVICE_MANUFACTURER,
-            model=DEVICE_MODEL,
-        )
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -252,27 +158,14 @@ class EconetDiagnosticSensor(CoordinatorEntity, SensorEntity):
         return self._last_update
 
 
-class EconetSettingsVersionSensor(CoordinatorEntity[EconetFastCoordinator], SensorEntity):
-    """Shows the current settingsVer from regParams."""
+class EconetSettingsVersionSensor(EconetDiagnosticEntity):
+    """The controller's settingsVer counter from regParams."""
 
-    _attr_has_entity_name = True
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_name = "Settings Version"
     _attr_icon = "mdi:counter"
 
-    def __init__(self, coordinator: EconetFastCoordinator, api: EconetApi) -> None:
-        super().__init__(coordinator)
-        self._api = api
-        self._attr_unique_id = f"{DOMAIN}_{api.uid}_settings_version"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._api.uid or self._api.host)},
-            name="Grant Aerona Heat Pump",
-            manufacturer=DEVICE_MANUFACTURER,
-            model=DEVICE_MODEL,
-        )
+    def __init__(self, coordinator: Any, api: EconetApi) -> None:
+        super().__init__(coordinator, api, "settings_version")
 
     @property
     def native_value(self) -> Any:
@@ -281,89 +174,45 @@ class EconetSettingsVersionSensor(CoordinatorEntity[EconetFastCoordinator], Sens
         return self.coordinator.data.get("settingsVer")
 
 
-class EconetDatabaseSizeSensor(CoordinatorEntity[EconetFastCoordinator], SensorEntity):
-    """Shows the SQLite database file size in MB."""
+class EconetDatabaseSizeSensor(EconetDiagnosticEntity):
+    """SQLite database file size in MB."""
 
-    _attr_has_entity_name = True
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_name = "Database Size"
     _attr_icon = "mdi:database"
     _attr_native_unit_of_measurement = "MB"
 
-    def __init__(
-        self, coordinator: EconetFastCoordinator, api: EconetApi, db: EconetDatabase
-    ) -> None:
-        super().__init__(coordinator)
-        self._api = api
+    def __init__(self, coordinator: Any, api: EconetApi, db: EconetDatabase) -> None:
+        super().__init__(coordinator, api, "database_size")
         self._db = db
-        self._attr_unique_id = f"{DOMAIN}_{api.uid}_database_size"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._api.uid or self._api.host)},
-            name="Grant Aerona Heat Pump",
-            manufacturer=DEVICE_MANUFACTURER,
-            model=DEVICE_MODEL,
-        )
 
     @property
     def native_value(self) -> float:
         return round(self._db.get_db_size_mb(), 2)
 
 
-class EconetSafeModeSensor(CoordinatorEntity[EconetFastCoordinator], SensorEntity):
-    """Shows whether safe mode is enabled."""
+class EconetSafeModeSensor(EconetDiagnosticEntity):
+    """Whether Safe Mode (writes previewed, never sent) is on."""
 
-    _attr_has_entity_name = True
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_name = "Safe Mode"
     _attr_icon = "mdi:shield-lock"
 
-    def __init__(
-        self, coordinator: EconetFastCoordinator, api: EconetApi, entry: ConfigEntry
-    ) -> None:
-        super().__init__(coordinator)
-        self._api = api
+    def __init__(self, coordinator: Any, api: EconetApi, entry: EconetConfigEntry) -> None:
+        super().__init__(coordinator, api, "safe_mode")
         self._entry = entry
-        self._attr_unique_id = f"{DOMAIN}_{api.uid}_safe_mode"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._api.uid or self._api.host)},
-            name="Grant Aerona Heat Pump",
-            manufacturer=DEVICE_MANUFACTURER,
-            model=DEVICE_MODEL,
-        )
 
     @property
     def native_value(self) -> str:
-        safe = self._entry.options.get(CONF_SAFE_MODE, DEFAULT_SAFE_MODE)
-        return "On" if safe else "Off"
+        return "On" if is_safe_mode(self._entry) else "Off"
 
 
-class EconetRemoteMenuSensor(CoordinatorEntity[EconetSlowCoordinator], SensorEntity):
-    """Shows the remoteMenu sysParam value."""
+class EconetRemoteMenuSensor(EconetDiagnosticEntity):
+    """The sysParams remoteMenu flag (false on this controller)."""
 
-    _attr_has_entity_name = True
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_name = "Remote Menu"
     _attr_icon = "mdi:remote"
 
-    def __init__(self, coordinator: EconetSlowCoordinator, api: EconetApi) -> None:
-        super().__init__(coordinator)
-        self._api = api
-        self._attr_unique_id = f"{DOMAIN}_{api.uid}_remote_menu"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._api.uid or self._api.host)},
-            name="Grant Aerona Heat Pump",
-            manufacturer=DEVICE_MANUFACTURER,
-            model=DEVICE_MODEL,
-        )
+    def __init__(self, coordinator: Any, api: EconetApi) -> None:
+        super().__init__(coordinator, api, "remote_menu")
 
     @property
     def native_value(self) -> str:
@@ -373,31 +222,16 @@ class EconetRemoteMenuSensor(CoordinatorEntity[EconetSlowCoordinator], SensorEnt
         return str(sys_params.get("remoteMenu", "unknown")).lower()
 
 
-class EconetRecentChangesSensor(CoordinatorEntity[EconetSlowCoordinator], SensorEntity):
-    """Shows count of parameter changes detected in the last 24 hours."""
+class EconetRecentChangesSensor(EconetDiagnosticEntity):
+    """Number of audited parameter changes in the last 24 hours."""
 
-    _attr_has_entity_name = True
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_name = "Recent Changes (24h)"
     _attr_icon = "mdi:delta"
 
-    def __init__(
-        self, coordinator: EconetSlowCoordinator, api: EconetApi, db: EconetDatabase
-    ) -> None:
-        super().__init__(coordinator)
-        self._api = api
+    def __init__(self, coordinator: Any, api: EconetApi, db: EconetDatabase) -> None:
+        super().__init__(coordinator, api, "recent_changes")
         self._db = db
-        self._attr_unique_id = f"{DOMAIN}_{api.uid}_recent_changes"
-        self._count: int = 0
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._api.uid or self._api.host)},
-            name="Grant Aerona Heat Pump",
-            manufacturer=DEVICE_MANUFACTURER,
-            model=DEVICE_MODEL,
-        )
+        self._count = 0
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -409,34 +243,16 @@ class EconetRecentChangesSensor(CoordinatorEntity[EconetSlowCoordinator], Sensor
         return self._count
 
 
-class EconetLastSnapshotSensor(CoordinatorEntity[EconetFastCoordinator], SensorEntity):
-    """Shows the date/time the 'Default' snapshot was last taken."""
+class EconetLastSnapshotSensor(EconetDiagnosticEntity):
+    """When the 'Default' settings snapshot was last taken."""
 
-    _attr_has_entity_name = True
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_name = "Last Default Snapshot"
     _attr_icon = "mdi:content-save-check"
 
-    def __init__(
-        self,
-        coordinator: EconetFastCoordinator,
-        api: EconetApi,
-        hass: HomeAssistant,
-    ) -> None:
-        super().__init__(coordinator)
-        self._api = api
+    def __init__(self, coordinator: Any, api: EconetApi, hass: HomeAssistant) -> None:
+        super().__init__(coordinator, api, "last_default_snapshot")
         self._hass_ref = hass
-        self._attr_unique_id = f"{DOMAIN}_{api.uid}_last_default_snapshot"
         self._info: dict[str, Any] | None = get_snapshot_info(hass, "Default")
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._api.uid or self._api.host)},
-            name="Grant Aerona Heat Pump",
-            manufacturer=DEVICE_MANUFACTURER,
-            model=DEVICE_MODEL,
-        )
 
     @callback
     def _handle_coordinator_update(self) -> None:

@@ -310,16 +310,15 @@ class TestRealHAManualRevert:
         entry.add_to_hass(real_hass)
         assert await real_hass.config_entries.async_setup(entry.entry_id)
         await real_hass.async_block_till_done()
-        from custom_components.econet_grant.const import SERVICE_API
-        client = real_hass.data[DOMAIN][entry.entry_id][SERVICE_API]._client
+        client = entry.runtime_data.api._client
         monkeypatch.setattr(client, "_session", pump.session(client._session))
         return real_hass, entry, pump, messages
 
     async def guest_offer(self, loaded):
-        from custom_components.econet_grant.const import DOMAIN, SERVICE_SLOW_COORDINATOR
+        from custom_components.econet_grant.const import DOMAIN
         hass, entry, pump, messages = loaded
         pump.guest_change("Circuit1ComfortTemp", 24)
-        await hass.data[DOMAIN][entry.entry_id][SERVICE_SLOW_COORDINATOR].async_refresh()
+        await entry.runtime_data.slow_coordinator.async_refresh()
         await hass.async_block_till_done()
         assert pump.writes == []
         assert "econet_grant_external_changes" in hass.data["persistent_notification"]
@@ -344,7 +343,7 @@ class TestRealHAManualRevert:
         return await hass.async_add_executor_job(read)
 
     async def test_manual_write_audit_replay_and_later_guest_notification(self, loaded):
-        from custom_components.econet_grant.const import DOMAIN, SERVICE_SLOW_COORDINATOR
+        from custom_components.econet_grant.const import DOMAIN
         hass, entry, pump, messages = loaded
         token = await self.guest_offer(loaded)
         assert "Circuit1ComfortTemp" not in token
@@ -354,7 +353,7 @@ class TestRealHAManualRevert:
         assert ("Circuit1ComfortTemp", "24", "20", "revert") in await self.audit(hass)
         await self.tap(hass, token)
         assert len(pump.writes) == 1
-        slow = hass.data[DOMAIN][entry.entry_id][SERVICE_SLOW_COORDINATOR]
+        slow = entry.runtime_data.slow_coordinator
         await slow.async_refresh()
         await hass.async_block_till_done()
         messages.clear()
@@ -391,10 +390,10 @@ class TestRealHAManualRevert:
         """
         from contextlib import asynccontextmanager
         from custom_components.econet_grant import api as api_module
-        from custom_components.econet_grant.const import DOMAIN, SERVICE_API, MIN_REQUEST_GAP
+        from custom_components.econet_grant.const import DOMAIN, MIN_REQUEST_GAP
 
         hass, entry, _, _ = loaded
-        client = hass.data[DOMAIN][entry.entry_id][SERVICE_API]._client
+        client = entry.runtime_data.api._client
         session = client._session
         clock = SimpleNamespace(now=100.0, active=0, starts=[], ends=[], sleeps=[])
         assert MIN_REQUEST_GAP == 1.0
@@ -429,7 +428,7 @@ class TestRealHAManualRevert:
 
     @pytest.mark.parametrize("recovers", [False, True])
     async def test_one_tap_bounded_timeout_retries(self, loaded, timed_transport, recovers):
-        from custom_components.econet_grant.const import DOMAIN, SERVICE_API, API_MAX_RETRIES
+        from custom_components.econet_grant.const import DOMAIN, API_MAX_RETRIES
         hass, entry, pump, _ = loaded
         token = await self.guest_offer(loaded)
         assert API_MAX_RETRIES == 5  # total attempts, not five additional retries
@@ -461,14 +460,14 @@ class TestRealHAManualRevert:
         assert len(timed_transport.starts) == len(timed_transport.ends)
         assert timed_transport.sleeps == [1.0] * len(timed_transport.starts)
         # Contending reads still share the same production lock and gap.
-        client = hass.data[DOMAIN][entry.entry_id][SERVICE_API]._client
+        client = entry.runtime_data.api._client
         await asyncio.gather(client.get("sysParams"), client.get("sysParams"))
         assert len(pump.writes) == expected
 
     @pytest.mark.parametrize("recovers", [False, True])
     async def test_applied_write_lost_response_classification(self, loaded, timed_transport, recovers):
         from homeassistant.components.persistent_notification import async_dismiss
-        from custom_components.econet_grant.const import DOMAIN, SERVICE_SLOW_COORDINATOR, EVENT_SETTING_CHANGED
+        from custom_components.econet_grant.const import DOMAIN, EVENT_SETTING_CHANGED
 
         hass, entry, pump, messages = loaded
         token = await self.guest_offer(loaded)
@@ -497,7 +496,7 @@ class TestRealHAManualRevert:
         # Remove the original guest alert so a false replacement cannot hide.
         async_dismiss(hass, "econet_grant_external_changes")
         messages.clear()
-        slow = hass.data[DOMAIN][entry.entry_id][SERVICE_SLOW_COORDINATOR]
+        slow = entry.runtime_data.slow_coordinator
         await slow.async_refresh()
         await hass.async_block_till_done()
         assert events == []
@@ -518,14 +517,14 @@ class TestRealHAManualRevert:
 
     @pytest.mark.parametrize("applied", [False, True])
     async def test_unconfirmed_revert_does_not_hide_unmatched_guest_change(self, loaded, applied):
-        from custom_components.econet_grant.const import DOMAIN, SERVICE_SLOW_COORDINATOR, EVENT_SETTING_CHANGED
+        from custom_components.econet_grant.const import DOMAIN, EVENT_SETTING_CHANGED
 
         hass, entry, pump, messages = loaded
         token = await self.guest_offer(loaded)
         pump.mode = "applied_timeout" if applied else "timeout"
         await self.tap(hass, token)
         assert pump.edit["data"]["238"]["value"] == (20 if applied else 24)
-        slow = hass.data[DOMAIN][entry.entry_id][SERVICE_SLOW_COORDINATOR]
+        slow = entry.runtime_data.slow_coordinator
         if not applied:
             # An unchanged first poll retires a failed write expectation.
             await slow.async_refresh()
@@ -560,7 +559,7 @@ class TestRealHAManualRevert:
 
     @pytest.mark.parametrize("case", ["blank", "missing", "delivery_failure"])
     async def test_persistent_fallback(self, loaded, case):
-        from custom_components.econet_grant.const import DOMAIN, SERVICE_SLOW_COORDINATOR
+        from custom_components.econet_grant.const import DOMAIN
         hass, entry, pump, messages = loaded
         if case == "blank":
             hass.config_entries.async_update_entry(entry, options={**entry.options, "revert_notify_service": ""})
@@ -572,7 +571,7 @@ class TestRealHAManualRevert:
                 raise RuntimeError("synthetic delivery failure")
             hass.services.async_register("notify", "mobile_app_test", fail)
         pump.guest_change("Circuit1ComfortTemp", 24)
-        await hass.data[DOMAIN][entry.entry_id][SERVICE_SLOW_COORDINATOR].async_refresh()
+        await entry.runtime_data.slow_coordinator.async_refresh()
         await hass.async_block_till_done()
         assert "24" in hass.data["persistent_notification"]["econet_grant_external_changes"]["message"]
         assert not any("data" in m for m in messages)

@@ -152,12 +152,31 @@ class ChangeDetector:
         except Exception:
             _LOGGER.exception("Failed to send push notification")
 
+    def _alert(
+        self,
+        notification_id: str,
+        title: str,
+        message: str,
+        push_title: str,
+        push_message: str,
+    ) -> None:
+        """Persistent notification, plus a push when push notifications are on."""
+        try:
+            pn_async_create(
+                self._hass, message=message, title=title,
+                notification_id=f"{DOMAIN}_{notification_id}",
+            )
+        except Exception:
+            _LOGGER.exception("Failed to create persistent notification")
+        if self._push_enabled:
+            self._hass.async_create_task(self._async_send_push(push_title, push_message))
+
     def mark_self_write(self, param_name: str) -> None:
-        """Mark a parameter as being written by this integration."""
+        """Mark a parameter (by API name) as being written by this integration."""
         self._self_writes.add(param_name)
 
     def clear_self_write(self, param_name: str) -> None:
-        """Clear a self-write marker after the next poll confirms it."""
+        """Clear a self-write marker after a write fails."""
         self._self_writes.discard(param_name)
 
     def begin_revert(
@@ -192,10 +211,16 @@ class ChangeDetector:
                 self._revert_writes.pop(name, None)
         return matched
 
-    def process_edit_params(self, edit_params: dict[str, Any]) -> list[dict[str, Any]]:
-        """Compare current editParams.data to previous snapshot, fire events for changes.
+    # ------------------------------------------------------------------
+    # editParams
+    # ------------------------------------------------------------------
 
-        Returns a list of detected changes for logging/audit.
+    def process_edit_params(self, edit_params: dict[str, Any]) -> list[dict[str, Any]]:
+        """Diff editParams.data against the previous poll and report external changes.
+
+        Each returned change carries ``source``: "user" for this integration's
+        own writes (including an observed manual Revert), otherwise "external".
+        Only external changes fire events and notifications.
         """
         data = edit_params.get("data", {})
         if not data:
@@ -213,96 +238,75 @@ class ChangeDetector:
             )
             return []
 
-        _LOGGER.debug(
-            "Change detector: comparing %d params (previous) vs %d params (current)",
-            len(self._previous_snapshot), len(current_snapshot),
-        )
         raw_changes = _diff_values(self._previous_snapshot, current_snapshot)
         self._previous_snapshot = current_snapshot
-
+        changes = [c for c in raw_changes if c["name"] not in VOLATILE_PARAMETERS]
         _LOGGER.debug(
             "Change detector: %d raw change(s) found, %d after volatile filter",
-            len(raw_changes),
-            len([c for c in raw_changes if c["name"] not in VOLATILE_PARAMETERS]),
+            len(raw_changes), len(changes),
         )
 
-        changes = [c for c in raw_changes if c["name"] not in VOLATILE_PARAMETERS]
-        if not changes:
-            return []
-
-        all_changes: list[dict[str, Any]] = []
         for change in changes:
-            param_name = change["name"]
+            change["source"] = self._classify(change, observed_reverts)
+            if change["source"] == "external":
+                self._fire_setting_events(change)
 
-            if (change["index"], param_name) in observed_reverts:
-                change["source"] = "user"
-                all_changes.append(change)
-                continue
+        external = [c for c in changes if c["source"] == "external"]
+        if external:
+            self._notify_external_changes(external)
+        return changes
 
-            if param_name in self._self_writes:
-                _LOGGER.debug("Self-write confirmed for %s", param_name)
-                self._self_writes.discard(param_name)
-                change["source"] = "user"
-                all_changes.append(change)
-                continue
+    def _classify(
+        self, change: dict[str, Any], observed_reverts: set[tuple[str, str]],
+    ) -> str:
+        name = change["name"]
+        if (change["index"], name) in observed_reverts:
+            return "user"
+        if name in self._self_writes:
+            _LOGGER.debug("Self-write confirmed for %s", name)
+            self._self_writes.discard(name)
+            return "user"
+        _LOGGER.warning(
+            "External change detected: %s changed from %s to %s",
+            name, change["old_value"], change["new_value"],
+        )
+        return "external"
 
-            change["source"] = "external"
-            all_changes.append(change)
-            _LOGGER.warning(
-                "External change detected: %s changed from %s to %s",
-                param_name, change["old_value"], change["new_value"],
-            )
+    def _fire_setting_events(self, change: dict[str, Any]) -> None:
+        event_data = {
+            "param_name": change["name"],
+            "param_index": change["index"],
+            "old_value": change["old_value"],
+            "new_value": change["new_value"],
+        }
+        self._hass.bus.async_fire(EVENT_SETTING_CHANGED, event_data)
+        if change["name"] in URGENT_PARAMETERS:
+            self._hass.bus.async_fire(EVENT_URGENT_CHANGE, event_data)
+            _LOGGER.warning("URGENT change: %s", change["name"])
 
-            event_data = {
-                "param_name": param_name,
-                "param_index": change["index"],
-                "old_value": change["old_value"],
-                "new_value": change["new_value"],
-            }
+    def _notify_external_changes(self, changes: list[dict[str, Any]]) -> None:
+        bold = [
+            "- " + format_setting_change(c["name"], c["old_value"], c["new_value"], bold=True)
+            for c in changes
+        ]
+        plain = [
+            format_setting_change(c["name"], c["old_value"], c["new_value"])
+            for c in changes
+        ]
+        self._alert(
+            "external_changes",
+            "EcoNet Grant - Settings Changed",
+            "Settings changed externally:\n\n" + "\n".join(bold),
+            "EcoNet: Settings Changed",
+            "Settings changed:\n" + "\n".join(plain),
+        )
 
-            self._hass.bus.async_fire(EVENT_SETTING_CHANGED, event_data)
-
-            if param_name in URGENT_PARAMETERS:
-                self._hass.bus.async_fire(EVENT_URGENT_CHANGE, event_data)
-                _LOGGER.warning("URGENT change: %s", param_name)
-
-        external_changes = [c for c in all_changes if c.get("source") == "external"]
-        if external_changes:
-            lines = []
-            for change in external_changes:
-                lines.append(
-                    "- " + format_setting_change(
-                        change["name"], change["old_value"], change["new_value"], bold=True,
-                    )
-                )
-            message = "Settings changed externally:\n\n" + "\n".join(lines)
-            try:
-                pn_async_create(
-                    self._hass,
-                    message=message,
-                    title="EcoNet Grant - Settings Changed",
-                    notification_id=f"{DOMAIN}_external_changes",
-                )
-            except Exception:
-                _LOGGER.exception("Failed to create persistent notification")
-
-            if self._push_enabled:
-                plain_lines = [
-                    format_setting_change(c["name"], c["old_value"], c["new_value"])
-                    for c in external_changes
-                ]
-                push_message = "Settings changed:\n" + "\n".join(plain_lines)
-                self._hass.async_create_task(
-                    self._async_send_push(
-                        "EcoNet: Settings Changed", push_message
-                    )
-                )
-
-        return all_changes
-
+    # ------------------------------------------------------------------
+    # sysParams
+    # ------------------------------------------------------------------
 
     def process_sys_params(self, sys_params: dict[str, Any]) -> list[dict[str, Any]]:
-        """Compare current sysParams to previous snapshot, fire events for changes.
+        """Diff sysParams against the previous poll; alert on significant fields.
 
         Returns a list of detected changes for logging/audit.
         """
@@ -321,77 +325,51 @@ class ChangeDetector:
             old_value = self._previous_sys_params.get(key)
             if old_value == new_value:
                 continue
-
-            change = {
+            changes.append({
                 "name": key,
                 "index": None,
                 "old_value": old_value,
                 "new_value": new_value,
                 "source": "external",
-            }
-            changes.append(change)
-
-            severity = "critical" if key in CRITICAL_SYS_PARAMS else "info"
-            _LOGGER.log(
-                logging.CRITICAL if severity == "critical" else logging.INFO,
-                "sysParams change: %s: %s -> %s",
-                key, old_value, new_value,
-            )
-
-            self._hass.bus.async_fire(EVENT_SYS_PARAM_CHANGED, {
-                "param_name": key,
-                "old_value": old_value,
-                "new_value": new_value,
-                "severity": severity,
             })
-
-            if key == "remoteMenu" and str(new_value).lower() == "true":
-                msg = (
-                    "CRITICAL: remoteMenu has changed to true. "
-                    "RM API endpoints may now be available. Investigate immediately."
-                )
-                pn_async_create(
-                    self._hass,
-                    message=f"**{msg}**",
-                    title="EcoNet Grant - Remote Menu ENABLED",
-                    notification_id=f"{DOMAIN}_remote_menu_alert",
-                )
-                if self._push_enabled:
-                    self._hass.async_create_task(
-                        self._async_send_push("URGENT: EcoNet Remote Menu", msg)
-                    )
-
-            if key == "alarms":
-                msg = f"Alarm state changed: {new_value}"
-                pn_async_create(
-                    self._hass,
-                    message=msg,
-                    title="EcoNet Grant - Alarm Change",
-                    notification_id=f"{DOMAIN}_alarm_change",
-                )
-                if self._push_enabled:
-                    self._hass.async_create_task(
-                        self._async_send_push("EcoNet: Alarm Change", msg)
-                    )
-
-            if key in CRITICAL_SYS_PARAMS:
-                msg = (
-                    f"CRITICAL: {key} changed from {old_value} to {new_value}. "
-                    "This should never happen -- investigate immediately."
-                )
-                pn_async_create(
-                    self._hass,
-                    message=f"**{msg}**",
-                    title="EcoNet Grant - Critical System Change",
-                    notification_id=f"{DOMAIN}_critical_{key}",
-                )
-                if self._push_enabled:
-                    self._hass.async_create_task(
-                        self._async_send_push("URGENT: EcoNet Critical Change", msg)
-                    )
+            self._report_sys_param_change(key, old_value, new_value)
 
         self._previous_sys_params = deepcopy(sys_params)
         return changes
+
+    def _report_sys_param_change(self, key: str, old_value: Any, new_value: Any) -> None:
+        critical = key in CRITICAL_SYS_PARAMS
+        _LOGGER.log(
+            logging.CRITICAL if critical else logging.INFO,
+            "sysParams change: %s: %s -> %s", key, old_value, new_value,
+        )
+        self._hass.bus.async_fire(EVENT_SYS_PARAM_CHANGED, {
+            "param_name": key,
+            "old_value": old_value,
+            "new_value": new_value,
+            "severity": "critical" if critical else "info",
+        })
+
+        if key == "remoteMenu" and str(new_value).lower() == "true":
+            msg = (
+                "CRITICAL: remoteMenu has changed to true. "
+                "RM API endpoints may now be available. Investigate immediately."
+            )
+            self._alert("remote_menu_alert", "EcoNet Grant - Remote Menu ENABLED",
+                        f"**{msg}**", "URGENT: EcoNet Remote Menu", msg)
+
+        if key == "alarms":
+            msg = f"Alarm state changed: {new_value}"
+            self._alert("alarm_change", "EcoNet Grant - Alarm Change",
+                        msg, "EcoNet: Alarm Change", msg)
+
+        if critical:
+            msg = (
+                f"CRITICAL: {key} changed from {old_value} to {new_value}. "
+                "This should never happen -- investigate immediately."
+            )
+            self._alert(f"critical_{key}", "EcoNet Grant - Critical System Change",
+                        f"**{msg}**", "URGENT: EcoNet Critical Change", msg)
 
 
 def _extract_values(data: dict[str, Any]) -> dict[str, dict[str, Any]]:

@@ -7,7 +7,6 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 
 import custom_components.econet_grant as integration
 from custom_components.econet_grant.api import AuthError
-from custom_components.econet_grant.const import DOMAIN, SERVICE_API
 
 
 @pytest.fixture
@@ -38,7 +37,7 @@ async def test_setup_and_unload(hass, entry, api, setup_boundaries):
     slow.async_config_entry_first_refresh.assert_awaited_once()
     db.async_setup.assert_awaited_once_with(hass)
     db.async_record_settings.assert_awaited_once()
-    assert hass.data[DOMAIN][entry.entry_id][SERVICE_API] is api
+    assert entry.runtime_data.api is api
     assert {call.args[1] for call in hass.services.async_register.call_args_list} == {
         "backup_settings", "restore_settings",
     }
@@ -46,15 +45,14 @@ async def test_setup_and_unload(hass, entry, api, setup_boundaries):
         entry, integration.PLATFORMS,
     )
     assert await integration.async_unload_entry(hass, entry) is True
-    assert entry.entry_id not in hass.data[DOMAIN]
     hass.config_entries.async_unload_platforms.assert_awaited_once_with(entry, integration.PLATFORMS)
 
 
 async def test_failed_unload_preserves_entry(hass, entry):
-    hass.data[DOMAIN] = {entry.entry_id: {"sentinel": True}}
+    entry.runtime_data = sentinel = object()
     hass.config_entries.async_unload_platforms.return_value = False
     assert await integration.async_unload_entry(hass, entry) is False
-    assert hass.data[DOMAIN][entry.entry_id] == {"sentinel": True}
+    assert entry.runtime_data is sentinel
 
 
 @pytest.mark.parametrize("error, expected", [
@@ -68,7 +66,7 @@ async def test_setup_maps_connection_errors(hass, entry, setup_boundaries, error
         await integration.async_setup_entry(hass, entry)
     hass.config_entries.async_forward_entry_setups.assert_not_awaited()
     db.async_setup.assert_not_awaited()
-    assert entry.entry_id not in hass.data[DOMAIN]
+    assert not hasattr(entry, "runtime_data")
 
 
 async def test_options_update_requests_reload_and_registers_cleanup(hass, entry, setup_boundaries):

@@ -2,60 +2,41 @@
 
 from __future__ import annotations
 
-import logging
-
 from homeassistant.components.button import ButtonEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import EconetApi
-from .const import (
-    DEVICE_MANUFACTURER,
-    DEVICE_MODEL,
-    DOMAIN,
-    SERVICE_API,
-)
-
-_LOGGER = logging.getLogger(__name__)
+from .const import DOMAIN, SERVICE_RESTORE_SETTINGS
+from .entity import EconetConfigEntry, device_info
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: EconetConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up button entities from a config entry."""
-    data = hass.data[DOMAIN][entry.entry_id]
-    api: EconetApi = data[SERVICE_API]
-    async_add_entities([RestoreSettingsButton(api, entry)])
+    async_add_entities([RestoreSettingsButton(entry.runtime_data.api)])
 
 
 class RestoreSettingsButton(ButtonEntity):
-    """Button that triggers the restore_settings service."""
+    """Restore the 'Default' snapshot (a preview only while Safe Mode is on)."""
 
     _attr_has_entity_name = True
     _attr_name = "Restore Default Settings"
     _attr_icon = "mdi:backup-restore"
 
-    def __init__(self, api: EconetApi, entry: ConfigEntry) -> None:
+    def __init__(self, api: EconetApi) -> None:
         self._api = api
-        self._entry = entry
         self._attr_unique_id = f"{DOMAIN}_{api.uid}_restore_settings"
 
     @property
     def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._api.uid or self._api.host)},
-            name="Grant Aerona Heat Pump",
-            manufacturer=DEVICE_MANUFACTURER,
-            model=DEVICE_MODEL,
-            sw_version=self._api.sw_version,
-        )
+        return device_info(self._api)
 
     async def async_press(self) -> None:
-        """Trigger the settings restore service."""
         await self.hass.services.async_call(
-            DOMAIN, "restore_settings", {"snapshot_name": "Default"}, blocking=True,
+            DOMAIN, SERVICE_RESTORE_SETTINGS, {"snapshot_name": "Default"}, blocking=True,
         )

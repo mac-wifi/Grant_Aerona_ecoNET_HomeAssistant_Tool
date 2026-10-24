@@ -13,13 +13,12 @@ from homeassistant.components.persistent_notification import async_create as pn_
 
 from .change_detector import format_setting_change
 from .const import (
-    CONF_PUSH_NOTIFICATIONS, CONF_SAFE_MODE, DEFAULT_PUSH_NOTIFICATIONS,
-    DEFAULT_SAFE_MODE, DOMAIN, NUMBER_DEFINITIONS, SELECT_DEFINITIONS,
-    VOLATILE_PARAMETERS,
+    CONF_PUSH_NOTIFICATIONS, CONF_REVERT_NOTIFY_SERVICE, CONF_SAFE_MODE,
+    DEFAULT_PUSH_NOTIFICATIONS, DEFAULT_SAFE_MODE, DOMAIN, NUMBER_DEFINITIONS,
+    SELECT_DEFINITIONS, VOLATILE_PARAMETERS,
 )
 
 _LOGGER = logging.getLogger(__name__)
-CONF_REVERT_NOTIFY_SERVICE = "revert_notify_service"
 MAX_PENDING = 32
 ACTION_TTL = 900  # seconds; no persisted actions survive reload/restart
 

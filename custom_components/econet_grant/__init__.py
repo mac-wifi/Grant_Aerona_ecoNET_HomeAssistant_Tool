@@ -1,42 +1,35 @@
-"""EcoNet Grant Aerona integration for Home Assistant."""
+"""EcoNet Grant Aerona integration for Home Assistant.
+
+Notify-only by design: the integration reports setting changes and never
+reverts them automatically. Manual Revert needs an explicit owner tap.
+"""
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Any
 
-import voluptuous as vol
-
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import AuthError, make_api
-from .backup import async_backup_settings, async_restore_settings, _snapshot_path
+from .api import AuthError, EconetApi, make_api
 from .change_detector import ChangeDetector
 from .const import (
     CONF_HOST,
     CONF_PASSWORD,
     CONF_RETENTION_DAYS,
-    CONF_SAFE_MODE,
     CONF_USERNAME,
     DATA_RETENTION_DAYS,
     DATABASE_FILENAME,
-    DEFAULT_SAFE_MODE,
-    DOMAIN,
-    SERVICE_API,
-    SERVICE_COORDINATOR,
-    SERVICE_DATABASE,
-    SERVICE_SLOW_COORDINATOR,
 )
 from .coordinator import EconetFastCoordinator, EconetSlowCoordinator
 from .database import EconetDatabase
+from .entity import EconetConfigEntry, EconetRuntimeData
 from .revert import RevertActions
+from .services import async_register_services
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,126 +40,124 @@ PLATFORMS: list[Platform] = [
     Platform.BUTTON,
 ]
 
-SERVICE_CHANGE_DETECTOR = "change_detector"
+# regParams counters that change when the controller's settings change.
+VERSION_KEYS = ("settingsVer", "editableParamsVer", "schedulesVer")
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: EconetConfigEntry) -> bool:
     """Set up EcoNet Grant Aerona from a config entry."""
-    hass.data.setdefault(DOMAIN, {})
+    api = await _async_connect(hass, entry)
 
-    session = async_get_clientsession(hass)
+    fast = EconetFastCoordinator(hass, api, entry)
+    slow = EconetSlowCoordinator(hass, api, entry)
+    await fast.async_config_entry_first_refresh()
+    await slow.async_config_entry_first_refresh()
+
+    db = EconetDatabase(Path(hass.config.config_dir) / DATABASE_FILENAME)
+    await db.async_setup(hass)
+    await db.async_purge_old_data(
+        hass, entry.options.get(CONF_RETENTION_DAYS, DATA_RETENTION_DAYS)
+    )
+
+    change_detector = ChangeDetector(hass, entry)
+    revert_actions = RevertActions(hass, entry, api, db, change_detector)
+    data = EconetRuntimeData(api, fast, slow, db, change_detector, revert_actions)
+
+    await _async_record_baseline(hass, data)
+    entry.async_on_unload(fast.async_add_listener(_fast_update_listener(hass, data)))
+    entry.async_on_unload(slow.async_add_listener(_slow_update_listener(hass, data)))
+    entry.runtime_data = data
+
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    revert_actions.start()
+    entry.async_on_unload(revert_actions.close)
+    async_register_services(hass)
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: EconetConfigEntry) -> bool:
+    """Unload a config entry."""
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def _async_options_updated(hass: HomeAssistant, entry: EconetConfigEntry) -> None:
+    """Reload so changed polling/notification options take effect immediately."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def _async_connect(hass: HomeAssistant, entry: EconetConfigEntry) -> EconetApi:
     host = entry.data[CONF_HOST]
-    username = entry.data[CONF_USERNAME]
-    password = entry.data[CONF_PASSWORD]
-
     try:
-        api = await make_api(session, host, username, password)
+        return await make_api(
+            async_get_clientsession(hass), host,
+            entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD],
+        )
     except AuthError as err:
         raise ConfigEntryAuthFailed("Invalid credentials") from err
     except Exception as err:
         raise ConfigEntryNotReady(f"Cannot connect to {host}") from err
 
-    fast_coordinator = EconetFastCoordinator(hass, api, entry)
-    slow_coordinator = EconetSlowCoordinator(hass, api, entry)
 
-    await fast_coordinator.async_config_entry_first_refresh()
-    await slow_coordinator.async_config_entry_first_refresh()
+async def _async_record_baseline(hass: HomeAssistant, data: EconetRuntimeData) -> None:
+    """Seed change detection and record the first poll of each endpoint."""
+    fast_data, slow_data = data.fast_coordinator.data, data.slow_coordinator.data
+    if slow_data:
+        edit_params = slow_data.get("editParams", {})
+        data.change_detector.process_edit_params(edit_params)
+        data.change_detector.process_sys_params(slow_data.get("sysParams", {}))
+        data.revert_actions.observe(edit_params, [])
+    if fast_data:
+        await data.database.async_record_readings(hass, fast_data)
+    if slow_data:
+        if edit_params := slow_data.get("editParams", {}):
+            await data.database.async_record_settings(hass, edit_params)
+        if sys_params := slow_data.get("sysParams", {}):
+            await data.database.async_record_sys_params(hass, sys_params)
 
-    db = EconetDatabase(Path(hass.config.config_dir) / DATABASE_FILENAME)
-    await db.async_setup(hass)
 
-    retention_days = entry.options.get(CONF_RETENTION_DAYS, DATA_RETENTION_DAYS)
-    await db.async_purge_old_data(hass, retention_days)
+def _fast_update_listener(hass: HomeAssistant, data: EconetRuntimeData):
+    """Record readings; refresh settings early when a version counter moves.
 
-    change_detector = ChangeDetector(hass, entry)
-    revert_actions = RevertActions(hass, entry, api, db, change_detector)
-
-    # Process the initial slow data for change detection baseline
-    if slow_coordinator.data:
-        edit_params = slow_coordinator.data.get("editParams", {})
-        sys_params = slow_coordinator.data.get("sysParams", {})
-        change_detector.process_edit_params(edit_params)
-        change_detector.process_sys_params(sys_params)
-        revert_actions.observe(edit_params, [])
-
-    # Record the initial data from both coordinators
-    if fast_coordinator.data:
-        await db.async_record_readings(hass, fast_coordinator.data)
-    if slow_coordinator.data:
-        edit_params = slow_coordinator.data.get("editParams", {})
-        sys_params = slow_coordinator.data.get("sysParams", {})
-        if edit_params:
-            await db.async_record_settings(hass, edit_params)
-        if sys_params:
-            await db.async_record_sys_params(hass, sys_params)
-
-    _state: dict[str, Any] = {
-        "last_settings_ver": None,
-        "last_editable_params_ver": None,
-        "last_schedules_ver": None,
-    }
-
-    if fast_coordinator.data:
-        _state["last_settings_ver"] = fast_coordinator.data.get("settingsVer")
-        _state["last_editable_params_ver"] = fast_coordinator.data.get("editableParamsVer")
-        _state["last_schedules_ver"] = fast_coordinator.data.get("schedulesVer")
+    This is what makes guest changes visible within one fast poll (~5 min)
+    rather than waiting for the slow settings poll.
+    """
+    fast, slow = data.fast_coordinator, data.slow_coordinator
+    last: dict[str, Any] = {key: (fast.data or {}).get(key) for key in VERSION_KEYS}
 
     @callback
     def _on_fast_update() -> None:
-        """Record regParams readings and watch version counters for changes."""
-        if fast_coordinator.data is None:
+        if fast.data is None:
             return
-        hass.async_create_task(
-            db.async_record_readings(hass, fast_coordinator.data)
-        )
+        hass.async_create_task(data.database.async_record_readings(hass, fast.data))
+        changed = False
+        for key in VERSION_KEYS:
+            new = fast.data.get(key)
+            if new is not None and new != last[key]:
+                _LOGGER.info("%s changed: %s -> %s, refreshing settings", key, last[key], new)
+                last[key] = new
+                changed = True
+        if changed:
+            hass.async_create_task(slow.async_request_refresh())
 
-        new_settings_ver = fast_coordinator.data.get("settingsVer")
-        new_edit_ver = fast_coordinator.data.get("editableParamsVer")
-        new_sched_ver = fast_coordinator.data.get("schedulesVer")
+    return _on_fast_update
 
-        trigger_refresh = False
-        if new_settings_ver is not None and new_settings_ver != _state["last_settings_ver"]:
-            _LOGGER.info(
-                "settingsVer changed: %s -> %s, triggering settings refresh",
-                _state["last_settings_ver"], new_settings_ver,
-            )
-            _state["last_settings_ver"] = new_settings_ver
-            trigger_refresh = True
 
-        if new_edit_ver is not None and new_edit_ver != _state["last_editable_params_ver"]:
-            _LOGGER.info(
-                "editableParamsVer changed: %s -> %s",
-                _state["last_editable_params_ver"], new_edit_ver,
-            )
-            _state["last_editable_params_ver"] = new_edit_ver
-            trigger_refresh = True
-
-        if new_sched_ver is not None and new_sched_ver != _state["last_schedules_ver"]:
-            _LOGGER.info(
-                "schedulesVer changed: %s -> %s",
-                _state["last_schedules_ver"], new_sched_ver,
-            )
-            _state["last_schedules_ver"] = new_sched_ver
-            trigger_refresh = True
-
-        if trigger_refresh:
-            hass.async_create_task(slow_coordinator.async_request_refresh())
-
-    entry.async_on_unload(fast_coordinator.async_add_listener(_on_fast_update))
+def _slow_update_listener(hass: HomeAssistant, data: EconetRuntimeData):
+    """Run change detection, offer manual Revert actions and record settings."""
+    slow, db, detector = data.slow_coordinator, data.database, data.change_detector
 
     @callback
     def _on_slow_update() -> None:
-        """Run change detection and database recording on slow polls."""
-        if slow_coordinator.data is None:
+        if slow.data is None:
             _LOGGER.debug("Slow coordinator update: data is None, skipping")
             return
-
-        edit_params = slow_coordinator.data.get("editParams", {})
-        sys_params = slow_coordinator.data.get("sysParams", {})
+        edit_params = slow.data.get("editParams", {})
+        sys_params = slow.data.get("sysParams", {})
 
         try:
-            changes = change_detector.process_edit_params(edit_params)
-            revert_actions.observe(edit_params, changes)
+            changes = detector.process_edit_params(edit_params)
+            data.revert_actions.observe(edit_params, changes)
             for change in changes:
                 source = change.get("source", "external")
                 hass.async_create_task(db.async_log_change(hass, change, source))
@@ -174,8 +165,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.exception("Error in editParams change detection")
 
         try:
-            sys_changes = change_detector.process_sys_params(sys_params)
-            for change in sys_changes:
+            for change in detector.process_sys_params(sys_params):
                 source = change.pop("source", "external")
                 hass.async_create_task(db.async_log_change(hass, change, source))
         except Exception:
@@ -185,89 +175,4 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if sys_params:
             hass.async_create_task(db.async_record_sys_params(hass, sys_params))
 
-    entry.async_on_unload(slow_coordinator.async_add_listener(_on_slow_update))
-
-    hass.data[DOMAIN][entry.entry_id] = {
-        SERVICE_API: api,
-        SERVICE_COORDINATOR: fast_coordinator,
-        SERVICE_SLOW_COORDINATOR: slow_coordinator,
-        SERVICE_DATABASE: db,
-        SERVICE_CHANGE_DETECTOR: change_detector,
-    }
-
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    revert_actions.start()
-    entry.async_on_unload(revert_actions.close)
-    _register_services(hass, entry)
-    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
-
-    return True
-
-
-async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload coordinators so changed polling options take effect immediately."""
-    await hass.config_entries.async_reload(entry.entry_id)
-
-
-def _register_services(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Register backup_settings and restore_settings services."""
-
-    async def handle_backup(call: ServiceCall) -> None:
-        name = call.data.get("snapshot_name", "Default")
-        api = hass.data[DOMAIN][entry.entry_id][SERVICE_API]
-        await async_backup_settings(hass, api, snapshot_name=name)
-
-    async def handle_restore(call: ServiceCall) -> None:
-        name = call.data.get("snapshot_name", "Default")
-        api = hass.data[DOMAIN][entry.entry_id][SERVICE_API]
-        safe_mode = entry.options.get(CONF_SAFE_MODE, DEFAULT_SAFE_MODE)
-        change_detector_inst = hass.data[DOMAIN][entry.entry_id][SERVICE_CHANGE_DETECTOR]
-        db_inst = hass.data[DOMAIN][entry.entry_id][SERVICE_DATABASE]
-
-        if not safe_mode:
-            path = _snapshot_path(hass, name)
-            if path.exists():
-                snapshot = json.loads(path.read_text())
-                for idx, param in snapshot.get("parameters", {}).items():
-                    if isinstance(param, dict) and "name" in param:
-                        change_detector_inst.mark_self_write(param["name"])
-                        await db_inst.async_log_change(
-                            hass,
-                            {
-                                "name": param["name"],
-                                "index": idx,
-                                "old_value": "",
-                                "new_value": param.get("value", ""),
-                            },
-                            source="restore",
-                        )
-
-        result = await async_restore_settings(hass, api, snapshot_name=name, safe_mode=safe_mode)
-        _LOGGER.info("Restore result: %s", result)
-
-    if not hass.services.has_service(DOMAIN, "backup_settings"):
-        hass.services.async_register(
-            DOMAIN,
-            "backup_settings",
-            handle_backup,
-            schema=vol.Schema({
-                vol.Required("snapshot_name", default="Default"): cv.string,
-            }),
-        )
-
-    if not hass.services.has_service(DOMAIN, "restore_settings"):
-        hass.services.async_register(
-            DOMAIN,
-            "restore_settings",
-            handle_restore,
-            schema=vol.Schema({
-                vol.Optional("snapshot_name", default="Default"): cv.string,
-            }),
-        )
-
-
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
-    if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        hass.data[DOMAIN].pop(entry.entry_id, None)
-    return unload_ok
+    return _on_slow_update

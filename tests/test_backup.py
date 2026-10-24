@@ -5,24 +5,32 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-import custom_components.econet_grant as integration
-from custom_components.econet_grant import backup
+from unittest.mock import Mock
+
+from custom_components.econet_grant import backup, services
 from custom_components.econet_grant.change_detector import ChangeDetector
-from custom_components.econet_grant.const import (
-    DOMAIN, EVENT_SETTING_CHANGED, SERVICE_API, SERVICE_DATABASE,
-)
+from custom_components.econet_grant.const import EVENT_SETTING_CHANGED
+
+
+def restore_handler(hass, entry, api, db, detector):
+    """Register the real services against one loaded synthetic entry."""
+    entry.runtime_data = SimpleNamespace(api=api, database=db, change_detector=detector)
+    hass.config_entries.async_loaded_entries = Mock(return_value=[entry])
+    services.async_register_services(hass)
+    return next(call.args[2] for call in hass.services.async_register.call_args_list
+                if call.args[1] == "restore_settings")
 
 
 @pytest.fixture
 def snapshot(hass, edit_params):
-    path = backup._snapshot_path(hass, "Default")
+    path = backup.snapshot_path(hass, "Default")
     path.write_text(json.dumps({"parameters": {"100": edit_params["data"]["100"]}}))
     return path
 
 
 async def test_backup_keeps_only_editable_parameters(hass, api):
     assert await backup.async_backup_settings(hass, api)
-    saved = json.loads(backup._snapshot_path(hass, "Default").read_text())
+    saved = json.loads(backup.snapshot_path(hass, "Default").read_text())
     assert set(saved["parameters"]) == {"100", "101"}
     assert saved["parameters"]["100"]["value"] == 20
     api.set_param.assert_not_awaited()
@@ -74,12 +82,7 @@ async def test_service_safe_mode_leaves_no_marker(hass, entry, api, snapshot, ed
     detector = ChangeDetector(hass, entry)
     detector.process_edit_params(edit_params)
     db = SimpleNamespace(async_log_change=AsyncMock())
-    hass.data[DOMAIN] = {entry.entry_id: {
-        SERVICE_API: api, SERVICE_DATABASE: db, "change_detector": detector,
-    }}
-    integration._register_services(hass, entry)
-    handler = next(call.args[2] for call in hass.services.async_register.call_args_list
-                   if call.args[1] == "restore_settings")
+    handler = restore_handler(hass, entry, api, db, detector)
     await handler(SimpleNamespace(data={}))
     api.set_param.assert_not_awaited()
     db.async_log_change.assert_not_awaited()
@@ -99,14 +102,9 @@ async def test_deferred_noop_restore_does_not_suppress_guest_alert(
     entry.options["safe_mode"] = False
     detector = ChangeDetector(hass, entry)
     detector.process_edit_params(edit_params)
-    hass.data[DOMAIN] = {entry.entry_id: {
-        SERVICE_API: api,
-        SERVICE_DATABASE: SimpleNamespace(async_log_change=AsyncMock()),
-        "change_detector": detector,
-    }}
-    integration._register_services(hass, entry)
-    handler = next(call.args[2] for call in hass.services.async_register.call_args_list
-                   if call.args[1] == "restore_settings")
+    handler = restore_handler(
+        hass, entry, api, SimpleNamespace(async_log_change=AsyncMock()), detector,
+    )
     await handler(SimpleNamespace(data={}))
     api.set_param.assert_not_awaited()
     edit_params["data"]["100"]["value"] = 24

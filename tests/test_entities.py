@@ -1,6 +1,6 @@
 """Entity writes stay mocked; exercise production Safe Mode and bit operations."""
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -11,10 +11,15 @@ from custom_components.econet_grant.number import EconetNumber
 from custom_components.econet_grant.select import EconetBitmaskSelect, EconetSelect
 
 
-def make_entity(cls, key, definition, hass, entry, api, data):
-    fast = SimpleNamespace(data={}, last_update_success=True)
-    slow = SimpleNamespace(data={"editParams": {"data": data}})
-    entity = cls(fast, slow, api, entry, key, definition)
+def make_entity(cls, key, definition, hass, entry, api, data, detector=None):
+    runtime = SimpleNamespace(
+        api=api,
+        fast_coordinator=SimpleNamespace(data={}, last_update_success=True),
+        slow_coordinator=SimpleNamespace(data={"editParams": {"data": data}}),
+        change_detector=detector or Mock(),
+        database=SimpleNamespace(async_log_change=AsyncMock()),
+    )
+    entity = cls(runtime, entry, key, definition)
     entity.hass = hass
     entity.async_write_ha_state = Mock()
     return entity
@@ -23,20 +28,19 @@ def make_entity(cls, key, definition, hass, entry, api, data):
 @pytest.mark.parametrize("kind", ["number", "select", "bitmask"])
 async def test_safe_mode_blocks_all_entity_write_types(kind, hass, entry, api, notifications):
     detector = Mock()
-    hass.data = {"econet_grant": {entry.entry_id: {"change_detector": detector}}}
     if kind == "number":
         key, definition = next(iter(NUMBER_DEFINITIONS.items()))
-        entity = make_entity(EconetNumber, key, definition, hass, entry, api, {})
+        entity = make_entity(EconetNumber, key, definition, hass, entry, api, {}, detector)
         await entity.async_set_native_value(21)
     elif kind == "select":
         key, definition = next(iter(SELECT_DEFINITIONS.items()))
-        entity = make_entity(EconetSelect, key, definition, hass, entry, api, {})
+        entity = make_entity(EconetSelect, key, definition, hass, entry, api, {}, detector)
         await entity.async_select_option(next(iter(definition["options"].values())))
     else:
         key = "HDWSpecifyPriority"
         definition = BITMASK_SELECT_DEFINITIONS[key]
         entity = make_entity(EconetBitmaskSelect, key, definition, hass, entry, api,
-                             {definition["settings_param"]: {"value": 5}})
+                             {definition["settings_param"]: {"value": 5}}, detector)
         await entity.async_select_option(definition["on_label"])
     api.set_param.assert_not_awaited()
     detector.mark_self_write.assert_not_called()

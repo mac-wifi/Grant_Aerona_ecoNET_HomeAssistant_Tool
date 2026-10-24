@@ -18,24 +18,27 @@ DEFAULT_SAFE_MODE = True
 DEFAULT_PUSH_NOTIFICATIONS = True
 DATA_RETENTION_DAYS = 3650  # 10 years default
 
-SERVICE_COORDINATOR = "coordinator"
-SERVICE_SLOW_COORDINATOR = "slow_coordinator"
-SERVICE_API = "api"
-SERVICE_DATABASE = "database"
+# Companion App service that receives single-use manual Revert actions.
+CONF_REVERT_NOTIFY_SERVICE = "revert_notify_service"
+
+SERVICE_BACKUP_SETTINGS = "backup_settings"
+SERVICE_RESTORE_SETTINGS = "restore_settings"
 
 DATABASE_FILENAME = "econet_grant.db"
+SNAPSHOT_DIR_NAME = "econet_grant_snapshots"
 
+DEVICE_NAME = "Grant Aerona Heat Pump"
 DEVICE_MANUFACTURER = "Grant"
 DEVICE_MODEL = "Aerona (ecoMAX360i)"
 
-# API endpoint paths (appended to http://<host>/econet/)
+# API endpoint paths (appended to http://<host>/econet/).
+# Writes always use newParam by name: this controller reports remoteMenu=false,
+# so the index-based rm* endpoints do not work and must not be used.
 API_BASE_PATH = "/econet"
 API_REG_PARAMS = "regParams"
 API_EDIT_PARAMS = "editParams"
 API_SYS_PARAMS = "sysParams"
 API_NEW_PARAM = "newParam"
-API_RM_NEW_PARAM = "rmNewParam"
-API_RM_CURR_NEW_PARAM = "rmCurrNewParam"
 
 # Polling intervals (seconds)
 FAST_POLL_INTERVAL = 300  # 5 minutes for temperatures and performance
@@ -44,81 +47,47 @@ DEFAULT_SLOW_POLL_MINUTES = SLOW_POLL_INTERVAL // 60
 MIN_SLOW_POLL_MINUTES = 5
 MAX_SLOW_POLL_MINUTES = 1440
 
-# API retry configuration
+# API retry configuration. Deliberate transport redundancy (also used by manual
+# Revert): five total attempts on timeout, requests serialised, and at least
+# MIN_REQUEST_GAP seconds after the previous request completes.
 API_MAX_RETRIES = 5
-API_TIMEOUT = 15  # seconds
+API_TIMEOUT = 15  # seconds per attempt
 MIN_REQUEST_GAP = 1.0  # minimum seconds between consecutive requests to the controller
+COORDINATOR_TIMEOUT = 30  # seconds for one complete poll
 
 # --- Sensor definitions from regParams.curr ---
-# Each entry: (key_in_api, friendly_name, device_class, unit, state_class)
+
+
+def _temperature(name: str) -> dict:
+    return {
+        "name": name,
+        "device_class": SensorDeviceClass.TEMPERATURE,
+        "unit": UnitOfTemperature.CELSIUS,
+        "state_class": SensorStateClass.MEASUREMENT,
+    }
+
+
+def _measurement(name: str, unit: str) -> dict:
+    return {
+        "name": name,
+        "device_class": None,
+        "unit": unit,
+        "state_class": SensorStateClass.MEASUREMENT,
+    }
+
 
 SENSOR_DEFINITIONS: dict[str, dict] = {
-    "GrantOutdoorTemp": {
-        "name": "Outdoor Temperature",
-        "device_class": SensorDeviceClass.TEMPERATURE,
-        "unit": UnitOfTemperature.CELSIUS,
-        "state_class": SensorStateClass.MEASUREMENT,
-    },
-    "GrantOutgoingTemp": {
-        "name": "Flow Temperature",
-        "device_class": SensorDeviceClass.TEMPERATURE,
-        "unit": UnitOfTemperature.CELSIUS,
-        "state_class": SensorStateClass.MEASUREMENT,
-    },
-    "GrantReturnTemp": {
-        "name": "Return Temperature",
-        "device_class": SensorDeviceClass.TEMPERATURE,
-        "unit": UnitOfTemperature.CELSIUS,
-        "state_class": SensorStateClass.MEASUREMENT,
-    },
-    "TempCWU": {
-        "name": "HW Temperature",
-        "device_class": SensorDeviceClass.TEMPERATURE,
-        "unit": UnitOfTemperature.CELSIUS,
-        "state_class": SensorStateClass.MEASUREMENT,
-    },
-    "Circuit1thermostat": {
-        "name": "CH Thermostat",
-        "device_class": SensorDeviceClass.TEMPERATURE,
-        "unit": UnitOfTemperature.CELSIUS,
-        "state_class": SensorStateClass.MEASUREMENT,
-    },
-    "TempWthr": {
-        "name": "Weather Temperature",
-        "device_class": SensorDeviceClass.TEMPERATURE,
-        "unit": UnitOfTemperature.CELSIUS,
-        "state_class": SensorStateClass.MEASUREMENT,
-    },
-    "TempBuforDown": {
-        "name": "Buffer Temp (Lower)",
-        "device_class": SensorDeviceClass.TEMPERATURE,
-        "unit": UnitOfTemperature.CELSIUS,
-        "state_class": SensorStateClass.MEASUREMENT,
-    },
-    "TempClutch": {
-        "name": "Heat Exchanger Temp",
-        "device_class": SensorDeviceClass.TEMPERATURE,
-        "unit": UnitOfTemperature.CELSIUS,
-        "state_class": SensorStateClass.MEASUREMENT,
-    },
-    "HeatSourceCalcPresetTemp": {
-        "name": "Heat Source Preset Temp",
-        "device_class": SensorDeviceClass.TEMPERATURE,
-        "unit": UnitOfTemperature.CELSIUS,
-        "state_class": SensorStateClass.MEASUREMENT,
-    },
-    "GrantCompressorFreq": {
-        "name": "Compressor Frequency",
-        "device_class": None,
-        "unit": "Hz",
-        "state_class": SensorStateClass.MEASUREMENT,
-    },
-    "GrantPumpSpeed": {
-        "name": "Pump Speed",
-        "device_class": None,
-        "unit": "rpm",
-        "state_class": SensorStateClass.MEASUREMENT,
-    },
+    "GrantOutdoorTemp": _temperature("Outdoor Temperature"),
+    "GrantOutgoingTemp": _temperature("Flow Temperature"),
+    "GrantReturnTemp": _temperature("Return Temperature"),
+    "TempCWU": _temperature("HW Temperature"),
+    "Circuit1thermostat": _temperature("CH Thermostat"),
+    "TempWthr": _temperature("Weather Temperature"),
+    "TempBuforDown": _temperature("Buffer Temp (Lower)"),
+    "TempClutch": _temperature("Heat Exchanger Temp"),
+    "HeatSourceCalcPresetTemp": _temperature("Heat Source Preset Temp"),
+    "GrantCompressorFreq": _measurement("Compressor Frequency", "Hz"),
+    "GrantPumpSpeed": _measurement("Pump Speed", "rpm"),
 }
 
 # --- Sensors from regParams.tilesParams / schemaParams ---
@@ -151,202 +120,49 @@ TILES_SENSOR_DEFINITIONS: dict[str, dict] = {
 }
 
 # --- Writable number entities (from editParams.data) ---
-# key: param index in editParams, name in editParams, friendly name, min, max, unit
-# These are the parameters the user explicitly wants to control.
+# key: API parameter name; param_index: key in editParams.data.
+
+_C = UnitOfTemperature.CELSIUS
+_MIN = "min"
+_SEC = "s"
+
+
+def _number(index: str, name: str, min_value, max_value, step, unit) -> dict:
+    return {
+        "param_index": index,
+        "name": name,
+        "min_value": min_value,
+        "max_value": max_value,
+        "step": step,
+        "unit": unit,
+    }
+
 
 NUMBER_DEFINITIONS: dict[str, dict] = {
-    "Circuit1ComfortTemp": {
-        "param_index": "238",
-        "name": "CH Day Temp",
-        "min_value": 10,
-        "max_value": 35,
-        "step": 0.1,
-        "unit": UnitOfTemperature.CELSIUS,
-    },
-    "Circuit1EcoTemp": {
-        "param_index": "239",
-        "name": "CH Night Temp",
-        "min_value": 10,
-        "max_value": 35,
-        "step": 0.1,
-        "unit": UnitOfTemperature.CELSIUS,
-    },
-    "Circuit1BaseTemp": {
-        "param_index": "261",
-        "name": "CH Base Temp",
-        "min_value": 25,
-        "max_value": 60,
-        "step": 1,
-        "unit": UnitOfTemperature.CELSIUS,
-    },
-    "HDWTSetPoint": {
-        "param_index": "103",
-        "name": "HW Set Point",
-        "min_value": 20,
-        "max_value": 55,
-        "step": 1,
-        "unit": UnitOfTemperature.CELSIUS,
-    },
-    "Circuit1DownHist": {
-        "param_index": "240",
-        "name": "CH Hysteresis",
-        "min_value": 0,
-        "max_value": 5,
-        "step": 0.1,
-        "unit": UnitOfTemperature.CELSIUS,
-    },
-    "DHWHysteresis": {
-        "param_index": "104",
-        "name": "HW Hysteresis",
-        "min_value": 0,
-        "max_value": 10,
-        "step": 1,
-        "unit": UnitOfTemperature.CELSIUS,
-    },
-    "DHWExtensionOfWork": {
-        "param_index": "113",
-        "name": "HW Extend Work",
-        "min_value": 0,
-        "max_value": 30,
-        "step": 1,
-        "unit": "min",
-    },
-    "Circuit1CurveRadiator": {
-        "param_index": "273",
-        "name": "CH Curve",
-        "min_value": 0,
-        "max_value": 4,
-        "step": 0.1,
-        "unit": None,
-    },
-    "Circuit1Curveshift": {
-        "param_index": "275",
-        "name": "CH Curve Shift",
-        "min_value": -20,
-        "max_value": 20,
-        "step": 1,
-        "unit": UnitOfTemperature.CELSIUS,
-    },
-    "Circuit1boosttimeleft": {
-        "param_index": "1521",
-        "name": "CH Boost Time",
-        "min_value": 0,
-        "max_value": 180,
-        "step": 1,
-        "unit": "min",
-    },
-    "Korekta_temperatury": {
-        "param_index": "10413",
-        "name": "Panel Temp Correction",
-        "min_value": -5,
-        "max_value": 5,
-        "step": 0.1,
-        "unit": UnitOfTemperature.CELSIUS,
-    },
-    "SummerOn": {
-        "param_index": "702",
-        "name": "Summer Threshold",
-        "min_value": 17,
-        "max_value": 30,
-        "step": 1,
-        "unit": UnitOfTemperature.CELSIUS,
-    },
-    "SummerOff": {
-        "param_index": "703",
-        "name": "Winter Threshold",
-        "min_value": 0,
-        "max_value": 19,
-        "step": 1,
-        "unit": UnitOfTemperature.CELSIUS,
-    },
-    "HeatSourceTempInc": {
-        "param_index": "481",
-        "name": "HW Correction Temp",
-        "min_value": 0,
-        "max_value": 20,
-        "step": 1,
-        "unit": UnitOfTemperature.CELSIUS,
-    },
-    "hSMPTSIncreaseCirc": {
-        "param_index": "1402",
-        "name": "Heating Temp Correction",
-        "min_value": 0,
-        "max_value": 20,
-        "step": 1,
-        "unit": UnitOfTemperature.CELSIUS,
-    },
-    "decreaseSetTemp": {
-        "param_index": "1054",
-        "name": "Cooling Setpoint Adj",
-        "min_value": 1,
-        "max_value": 10,
-        "step": 1,
-        "unit": UnitOfTemperature.CELSIUS,
-    },
-    "CirculationTempStart": {
-        "param_index": "433",
-        "name": "HW Pump Start Temp",
-        "min_value": 20,
-        "max_value": 60,
-        "step": 1,
-        "unit": UnitOfTemperature.CELSIUS,
-    },
-    "circuitCritHeatTempIgnoreTime": {
-        "param_index": "1533",
-        "name": "Crit Temp Ignore",
-        "min_value": 0,
-        "max_value": 10,
-        "step": 1,
-        "unit": "min",
-    },
-    "CirculationTimework": {
-        "param_index": "434",
-        "name": "HW Recirc Run Time",
-        "min_value": 1,
-        "max_value": 120,
-        "step": 1,
-        "unit": "s",
-    },
-    "CirculationTimestop": {
-        "param_index": "435",
-        "name": "HW Recirc Pause",
-        "min_value": 1,
-        "max_value": 100,
-        "step": 1,
-        "unit": "min",
-    },
-    "heatersPermTemp": {
-        "param_index": "144",
-        "name": "Outside Temp Start Heater",
-        "min_value": -20,
-        "max_value": 20,
-        "step": 1,
-        "unit": UnitOfTemperature.CELSIUS,
-    },
-    "heatersForceTemp": {
-        "param_index": "145",
-        "name": "Outside Temp Force Heater",
-        "min_value": -20,
-        "max_value": 20,
-        "step": 1,
-        "unit": UnitOfTemperature.CELSIUS,
-    },
-    "heaterDhwDel": {
-        "param_index": "146",
-        "name": "HW Heater Delay",
-        "min_value": 0,
-        "max_value": 240,
-        "step": 1,
-        "unit": "min",
-    },
-    "heaterBuffDel": {
-        "param_index": "147",
-        "name": "Backup Heater Delay",
-        "min_value": 0,
-        "max_value": 240,
-        "step": 1,
-        "unit": "min",
-    },
+    "Circuit1ComfortTemp": _number("238", "CH Day Temp", 10, 35, 0.1, _C),
+    "Circuit1EcoTemp": _number("239", "CH Night Temp", 10, 35, 0.1, _C),
+    "Circuit1BaseTemp": _number("261", "CH Base Temp", 25, 60, 1, _C),
+    "HDWTSetPoint": _number("103", "HW Set Point", 20, 55, 1, _C),
+    "Circuit1DownHist": _number("240", "CH Hysteresis", 0, 5, 0.1, _C),
+    "DHWHysteresis": _number("104", "HW Hysteresis", 0, 10, 1, _C),
+    "DHWExtensionOfWork": _number("113", "HW Extend Work", 0, 30, 1, _MIN),
+    "Circuit1CurveRadiator": _number("273", "CH Curve", 0, 4, 0.1, None),
+    "Circuit1Curveshift": _number("275", "CH Curve Shift", -20, 20, 1, _C),
+    "Circuit1boosttimeleft": _number("1521", "CH Boost Time", 0, 180, 1, _MIN),
+    "Korekta_temperatury": _number("10413", "Panel Temp Correction", -5, 5, 0.1, _C),
+    "SummerOn": _number("702", "Summer Threshold", 17, 30, 1, _C),
+    "SummerOff": _number("703", "Winter Threshold", 0, 19, 1, _C),
+    "HeatSourceTempInc": _number("481", "HW Correction Temp", 0, 20, 1, _C),
+    "hSMPTSIncreaseCirc": _number("1402", "Heating Temp Correction", 0, 20, 1, _C),
+    "decreaseSetTemp": _number("1054", "Cooling Setpoint Adj", 1, 10, 1, _C),
+    "CirculationTempStart": _number("433", "HW Pump Start Temp", 20, 60, 1, _C),
+    "circuitCritHeatTempIgnoreTime": _number("1533", "Crit Temp Ignore", 0, 10, 1, _MIN),
+    "CirculationTimework": _number("434", "HW Recirc Run Time", 1, 120, 1, _SEC),
+    "CirculationTimestop": _number("435", "HW Recirc Pause", 1, 100, 1, _MIN),
+    "heatersPermTemp": _number("144", "Outside Temp Start Heater", -20, 20, 1, _C),
+    "heatersForceTemp": _number("145", "Outside Temp Force Heater", -20, 20, 1, _C),
+    "heaterDhwDel": _number("146", "HW Heater Delay", 0, 240, 1, _MIN),
+    "heaterBuffDel": _number("147", "Backup Heater Delay", 0, 240, 1, _MIN),
 }
 
 # --- Writable select entities (mode selectors from editParams.data) ---
@@ -425,136 +241,43 @@ SELECT_DEFINITIONS: dict[str, dict] = {
 # bit_mask: the bit to toggle, on_label/off_label: display labels,
 # on_clears_bit: True if "On/Yes" means the bit should be CLEAR (inverted logic).
 
+def _bit(
+    settings_param: str,
+    settings_param_name: str,
+    bit_mask: int,
+    name: str,
+    on_label: str = "Yes",
+    off_label: str = "No",
+) -> dict:
+    return {
+        "settings_param": settings_param,
+        "settings_param_name": settings_param_name,
+        "bit_mask": bit_mask,
+        "name": name,
+        "on_label": on_label,
+        "off_label": off_label,
+        "on_clears_bit": False,
+    }
+
+
 BITMASK_SELECT_DEFINITIONS: dict[str, dict] = {
-    "HDWSpecifyPriority": {
-        "settings_param": "101",
-        "settings_param_name": "HDWSETTINGS",
-        "bit_mask": 16,
-        "name": "HW Specify Priority",
-        "on_label": "Yes",
-        "off_label": "No",
-        "on_clears_bit": False,
-    },
-    "ExternalTempSensorSupport": {
-        "settings_param": "69",
-        "settings_param_name": "TempSettings",
-        "bit_mask": 1,
-        "name": "Ext Temp Sensor",
-        "on_label": "Yes",
-        "off_label": "No",
-        "on_clears_bit": False,
-    },
-    "TempSensorSource": {
-        "settings_param": "69",
-        "settings_param_name": "TempSettings",
-        "bit_mask": 2,
-        "name": "Temp Sensor Source",
-        "on_label": "Heat Pump",
-        "off_label": "ecoMulti",
-        "on_clears_bit": False,
-    },
-    "CoolingSupport": {
-        "settings_param": "485",
-        "settings_param_name": "HeatingCooling",
-        "bit_mask": 1,
-        "name": "Cooling Support",
-        "on_label": "Yes",
-        "off_label": "No",
-        "on_clears_bit": False,
-    },
-    "HeatPumpLock": {
-        "settings_param": "462",
-        "settings_param_name": "HeatSourceAllowWorkSett",
-        "bit_mask": 1,
-        "name": "Heat Pump Lock",
-        "on_label": "Yes",
-        "off_label": "No",
-        "on_clears_bit": False,
-    },
-    "DHWSupport": {
-        "settings_param": "101",
-        "settings_param_name": "HDWSETTINGS",
-        "bit_mask": 1,
-        "name": "HW Support",
-        "on_label": "Yes",
-        "off_label": "No",
-        "on_clears_bit": False,
-    },
-    "OffCircuitsDuringCharging": {
-        "settings_param": "101",
-        "settings_param_name": "HDWSETTINGS",
-        "bit_mask": 4096,
-        "name": "Off Circuits on HW",
-        "on_label": "Yes",
-        "off_label": "No",
-        "on_clears_bit": False,
-    },
-    "DHWRecirculationSupport": {
-        "settings_param": "431",
-        "settings_param_name": "CirculationSettings",
-        "bit_mask": 1,
-        "name": "HW Recirc Support",
-        "on_label": "Yes",
-        "off_label": "No",
-        "on_clears_bit": False,
-    },
-    "DHWStartFromTemp": {
-        "settings_param": "431",
-        "settings_param_name": "CirculationSettings",
-        "bit_mask": 2,
-        "name": "HW Start From Temp",
-        "on_label": "Yes",
-        "off_label": "No",
-        "on_clears_bit": False,
-    },
-    "Circuit1ThermostatPumpBlockade": {
-        "settings_param": "231",
-        "settings_param_name": "Circuit1Settings",
-        "bit_mask": 1024,
-        "name": "CH Pump Blockade",
-        "on_label": "Yes",
-        "off_label": "No",
-        "on_clears_bit": False,
-    },
-    "BackupHeaterInDefrost": {
-        "settings_param": "143",
-        "settings_param_name": "heatersSett",
-        "bit_mask": 16,
-        "name": "Backup Htr in Defrost",
-        "on_label": "Yes",
-        "off_label": "No",
-        "on_clears_bit": False,
-    },
-    "Circuit1RegulationMethod": {
-        "settings_param": "231",
-        "settings_param_name": "Circuit1Settings",
-        "bit_mask": 2048,
-        "name": "CH Regulation Method",
-        "on_label": "Weather",
-        "off_label": "Fixed",
-        "on_clears_bit": False,
-    },
-    "BackupHeater": {
-        "settings_param": "143",
-        "settings_param_name": "heatersSett",
-        "bit_mask": 1,
-        "name": "Backup Heater",
-        "on_label": "Yes",
-        "off_label": "No",
-        "on_clears_bit": False,
-    },
-    "DHWHeater": {
-        "settings_param": "143",
-        "settings_param_name": "heatersSett",
-        "bit_mask": 2,
-        "name": "HW Heater",
-        "on_label": "Yes",
-        "off_label": "No",
-        "on_clears_bit": False,
-    },
+    "HDWSpecifyPriority": _bit("101", "HDWSETTINGS", 16, "HW Specify Priority"),
+    "ExternalTempSensorSupport": _bit("69", "TempSettings", 1, "Ext Temp Sensor"),
+    "TempSensorSource": _bit("69", "TempSettings", 2, "Temp Sensor Source", on_label="Heat Pump", off_label="ecoMulti"),
+    "CoolingSupport": _bit("485", "HeatingCooling", 1, "Cooling Support"),
+    "HeatPumpLock": _bit("462", "HeatSourceAllowWorkSett", 1, "Heat Pump Lock"),
+    "DHWSupport": _bit("101", "HDWSETTINGS", 1, "HW Support"),
+    "OffCircuitsDuringCharging": _bit("101", "HDWSETTINGS", 4096, "Off Circuits on HW"),
+    "DHWRecirculationSupport": _bit("431", "CirculationSettings", 1, "HW Recirc Support"),
+    "DHWStartFromTemp": _bit("431", "CirculationSettings", 2, "HW Start From Temp"),
+    "Circuit1ThermostatPumpBlockade": _bit("231", "Circuit1Settings", 1024, "CH Pump Blockade"),
+    "BackupHeaterInDefrost": _bit("143", "heatersSett", 16, "Backup Htr in Defrost"),
+    "Circuit1RegulationMethod": _bit("231", "Circuit1Settings", 2048, "CH Regulation Method", on_label="Weather", off_label="Fixed"),
+    "BackupHeater": _bit("143", "heatersSett", 1, "Backup Heater"),
+    "DHWHeater": _bit("143", "heatersSett", 2, "HW Heater"),
 }
 
-# Parameters considered "urgent" -- external changes trigger SMS/WhatsApp alerts
+# Parameters considered "urgent" -- external changes also fire EVENT_URGENT_CHANGE
 URGENT_PARAMETERS: set[str] = {
     "Circuit1ComfortTemp",
     "Circuit1EcoTemp",

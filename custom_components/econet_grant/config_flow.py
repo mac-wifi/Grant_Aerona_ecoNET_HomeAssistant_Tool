@@ -7,17 +7,21 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, OptionsFlow
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.core import callback
-from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import AuthError, EconetClient, EconetApi
-from .revert import CONF_REVERT_NOTIFY_SERVICE
+from .api import AuthError, EconetApi, EconetClient
 from .const import (
     CONF_HOST,
     CONF_PASSWORD,
     CONF_PUSH_NOTIFICATIONS,
+    CONF_REVERT_NOTIFY_SERVICE,
     CONF_RETENTION_DAYS,
     CONF_SAFE_MODE,
     CONF_SLOW_POLL_INTERVAL,
@@ -50,7 +54,7 @@ class EconetGrantConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle the initial user configuration step."""
         errors: dict[str, str] = {}
 
@@ -102,39 +106,36 @@ class EconetGrantOptionsFlow(OptionsFlow):
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        current_safe_mode = self._config_entry.options.get(
-            CONF_SAFE_MODE, DEFAULT_SAFE_MODE
-        )
-        current_push = self._config_entry.options.get(
-            CONF_PUSH_NOTIFICATIONS, DEFAULT_PUSH_NOTIFICATIONS
-        )
-        current_retention = self._config_entry.options.get(
-            CONF_RETENTION_DAYS, DATA_RETENTION_DAYS
-        )
-        current_slow_poll = self._config_entry.options.get(
-            CONF_SLOW_POLL_INTERVAL, DEFAULT_SLOW_POLL_MINUTES
-        )
+        options = self._config_entry.options
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_SAFE_MODE, default=current_safe_mode): bool,
-                    vol.Required(CONF_PUSH_NOTIFICATIONS, default=current_push): bool,
+                    vol.Required(
+                        CONF_SAFE_MODE,
+                        default=options.get(CONF_SAFE_MODE, DEFAULT_SAFE_MODE),
+                    ): bool,
+                    vol.Required(
+                        CONF_PUSH_NOTIFICATIONS,
+                        default=options.get(CONF_PUSH_NOTIFICATIONS, DEFAULT_PUSH_NOTIFICATIONS),
+                    ): bool,
                     vol.Optional(
                         CONF_REVERT_NOTIFY_SERVICE,
-                        default=self._config_entry.options.get(CONF_REVERT_NOTIFY_SERVICE, ""),
+                        default=options.get(CONF_REVERT_NOTIFY_SERVICE, ""),
                     ): vol.All(str, vol.Match(r"^(?:mobile_app_[a-z0-9_]+)?$")),
                     vol.Optional(
-                        CONF_SLOW_POLL_INTERVAL, default=current_slow_poll
+                        CONF_SLOW_POLL_INTERVAL,
+                        default=options.get(CONF_SLOW_POLL_INTERVAL, DEFAULT_SLOW_POLL_MINUTES),
                     ): vol.All(int, vol.Range(
                         min=MIN_SLOW_POLL_MINUTES, max=MAX_SLOW_POLL_MINUTES
                     )),
                     vol.Optional(
-                        CONF_RETENTION_DAYS, default=current_retention
+                        CONF_RETENTION_DAYS,
+                        default=options.get(CONF_RETENTION_DAYS, DATA_RETENTION_DAYS),
                     ): vol.All(vol.Coerce(int), vol.Range(min=30, max=7300)),
                 }
             ),

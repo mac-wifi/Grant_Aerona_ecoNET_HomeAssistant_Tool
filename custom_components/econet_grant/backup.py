@@ -16,11 +16,11 @@ from homeassistant.components.persistent_notification import async_create as pn_
 from homeassistant.core import HomeAssistant
 
 from .api import EconetApi
-from .const import CONF_SAFE_MODE, DEFAULT_SAFE_MODE, DOMAIN
+from .const import DOMAIN, SNAPSHOT_DIR_NAME
 
 _LOGGER = logging.getLogger(__name__)
 
-SNAPSHOT_DIR_NAME = "econet_grant_snapshots"
+BACKUP_NOTIFICATION_ID = f"{DOMAIN}_backup_result"
 
 
 def _snapshot_dir(hass: HomeAssistant) -> Path:
@@ -30,9 +30,17 @@ def _snapshot_dir(hass: HomeAssistant) -> Path:
     return path
 
 
-def _snapshot_path(hass: HomeAssistant, name: str) -> Path:
+def snapshot_path(hass: HomeAssistant, name: str) -> Path:
+    """Path of a named snapshot; the name is sanitised to a safe file name."""
     safe_name = "".join(c if c.isalnum() or c in "._-" else "_" for c in name)
     return _snapshot_dir(hass) / f"{safe_name}.json"
+
+
+def _notify_backup(hass: HomeAssistant, title: str, message: str) -> None:
+    pn_async_create(
+        hass, message=message, title=f"EcoNet Grant - {title}",
+        notification_id=BACKUP_NOTIFICATION_ID,
+    )
 
 
 async def async_backup_settings(
@@ -41,32 +49,19 @@ async def async_backup_settings(
     snapshot_name: str = "Default",
 ) -> bool:
     """Save all current editParams values to a named snapshot file."""
-    pn_async_create(
-        hass,
-        message=f"Backing up **'{snapshot_name}'** settings...",
-        title="EcoNet Grant - Backup In Progress",
-        notification_id=f"{DOMAIN}_backup_result",
-    )
+    _notify_backup(hass, "Backup In Progress", f"Backing up **'{snapshot_name}'** settings...")
     edit_params = await api.fetch_edit_params()
     if edit_params is None:
         _LOGGER.error("Cannot backup: editParams fetch failed")
-        pn_async_create(
-            hass,
-            message="Backup failed: could not fetch editParams from the device.",
-            title="EcoNet Grant - Backup Failed",
-            notification_id=f"{DOMAIN}_backup_result",
+        _notify_backup(
+            hass, "Backup Failed", "Backup failed: could not fetch editParams from the device.",
         )
         return False
 
     data = edit_params.get("data", {})
     if not data:
         _LOGGER.error("Cannot backup: editParams.data is empty")
-        pn_async_create(
-            hass,
-            message="Backup failed: editParams data was empty.",
-            title="EcoNet Grant - Backup Failed",
-            notification_id=f"{DOMAIN}_backup_result",
-        )
+        _notify_backup(hass, "Backup Failed", "Backup failed: editParams data was empty.")
         return False
 
     snapshot = {
@@ -86,20 +81,16 @@ async def async_backup_settings(
             }
 
     param_count = len(snapshot["parameters"])
-    path = _snapshot_path(hass, snapshot_name)
+    path = snapshot_path(hass, snapshot_name)
     path.write_text(json.dumps(snapshot, indent=2))
     _LOGGER.info(
         "Saved snapshot '%s' with %d parameters to %s",
         snapshot_name, param_count, path,
     )
-    pn_async_create(
-        hass,
-        message=(
-            f"Backup **'{snapshot_name}'** completed successfully.\n\n"
-            f"**{param_count}** editable parameters saved to `{path.name}`."
-        ),
-        title="EcoNet Grant - Backup Complete",
-        notification_id=f"{DOMAIN}_backup_result",
+    _notify_backup(
+        hass, "Backup Complete",
+        f"Backup **'{snapshot_name}'** completed successfully.\n\n"
+        f"**{param_count}** editable parameters saved to `{path.name}`.",
     )
     return True
 
@@ -114,7 +105,7 @@ async def async_restore_settings(
 
     In safe mode, generates a report but does NOT write to the device.
     """
-    path = _snapshot_path(hass, snapshot_name)
+    path = snapshot_path(hass, snapshot_name)
     if not path.exists():
         msg = f"Snapshot '{snapshot_name}' not found at {path}"
         _LOGGER.error(msg)
@@ -186,18 +177,13 @@ async def async_restore_settings(
     }
 
 
-def list_snapshots(hass: HomeAssistant) -> list[str]:
-    """Return names of all saved snapshots."""
-    return [f.stem for f in _snapshot_dir(hass).glob("*.json")]
-
-
 def get_snapshot_info(hass: HomeAssistant, name: str = "Default") -> dict[str, Any] | None:
     """Return metadata about a named snapshot, or None if it doesn't exist.
 
     Falls back to the file modification time if the snapshot was created
     before the ``created_at`` field was added.
     """
-    path = _snapshot_path(hass, name)
+    path = snapshot_path(hass, name)
     if not path.exists():
         return None
     try:

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from decimal import Decimal, InvalidOperation
 import logging
 import time
 from typing import Any
 
-from aiohttp import BasicAuth, ClientSession, ClientTimeout
+from aiohttp import ClientSession, ClientTimeout
 
 from .const import (
     API_BASE_PATH,
@@ -16,8 +17,6 @@ from .const import (
     API_MAX_RETRIES,
     API_NEW_PARAM,
     API_REG_PARAMS,
-    API_RM_CURR_NEW_PARAM,
-    API_RM_NEW_PARAM,
     API_SYS_PARAMS,
     API_TIMEOUT,
     MIN_REQUEST_GAP,
@@ -28,10 +27,6 @@ _LOGGER = logging.getLogger(__name__)
 
 class AuthError(Exception):
     """Raised when authentication fails (HTTP 401)."""
-
-
-class ApiError(Exception):
-    """Raised on non-recoverable API errors."""
 
 
 class EconetClient:
@@ -48,7 +43,9 @@ class EconetClient:
             host = f"http://{host}"
         self._host = host.rstrip("/")
         self._session = session
-        self._auth = BasicAuth(username, password)
+        # Equivalent to aiohttp.BasicAuth (latin-1), which aiohttp 4 removes.
+        token = base64.b64encode(f"{username}:{password}".encode("latin1")).decode()
+        self._headers = {"Authorization": f"Basic {token}"}
         self._timeout = ClientTimeout(total=API_TIMEOUT)
         self._request_lock = asyncio.Lock()
         self._last_request_at: float = 0.0
@@ -76,7 +73,7 @@ class EconetClient:
                 await asyncio.sleep(gap)
             try:
                 kwargs: dict[str, Any] = {
-                    "auth": self._auth,
+                    "headers": self._headers,
                     "timeout": self._timeout,
                 }
                 if params:
@@ -90,47 +87,29 @@ class EconetClient:
             finally:
                 self._last_request_at = time.monotonic()
 
-    async def get(self, endpoint: str) -> dict[str, Any] | None:
-        """GET an endpoint with retries. Returns parsed JSON or None."""
-        url = self._url(endpoint)
-        for attempt in range(1, API_MAX_RETRIES + 1):
-            try:
-                status, data = await self._throttled_get(url)
-                if data is None:
-                    _LOGGER.warning(
-                        "HTTP %s from %s (attempt %d/%d)",
-                        status, url, attempt, API_MAX_RETRIES,
-                    )
-                    return None
-                return data
-            except asyncio.TimeoutError:
-                _LOGGER.warning(
-                    "Timeout fetching %s (attempt %d/%d)",
-                    url, attempt, API_MAX_RETRIES,
-                )
-        _LOGGER.error("Failed to fetch %s after %d attempts", url, API_MAX_RETRIES)
-        return None
-
-    async def get_with_params(
-        self, endpoint: str, params: dict[str, str],
+    async def get(
+        self, endpoint: str, params: dict[str, str] | None = None,
     ) -> dict[str, Any] | None:
-        """GET an endpoint with query parameters and retries."""
+        """GET an endpoint, retrying only on timeout. Returns parsed JSON or None.
+
+        A non-200 response returns None at once; AuthError propagates.
+        """
         url = self._url(endpoint)
         for attempt in range(1, API_MAX_RETRIES + 1):
             try:
                 status, data = await self._throttled_get(url, params)
-                if data is None:
-                    _LOGGER.warning(
-                        "HTTP %s from %s (attempt %d/%d)",
-                        status, url, attempt, API_MAX_RETRIES,
-                    )
-                    return None
-                return data
             except asyncio.TimeoutError:
                 _LOGGER.warning(
                     "Timeout fetching %s (attempt %d/%d)",
                     url, attempt, API_MAX_RETRIES,
                 )
+                continue
+            if data is None:
+                _LOGGER.warning(
+                    "HTTP %s from %s (attempt %d/%d)",
+                    status, url, attempt, API_MAX_RETRIES,
+                )
+            return data
         _LOGGER.error("Failed to fetch %s after %d attempts", url, API_MAX_RETRIES)
         return None
 
@@ -185,30 +164,16 @@ class EconetApi:
     # --- Write endpoints ---
 
     async def set_param(self, param_name: str, value: float | int) -> bool:
-        """Set a parameter by name via /econet/newParam."""
-        data = await self._client.get_with_params(
+        """Set a parameter by name via /econet/newParam (the only write path).
+
+        True means the controller acknowledged the exact name/value, not that a
+        later poll has confirmed the change.
+        """
+        data = await self._client.get(
             API_NEW_PARAM,
             {"newParamName": param_name, "newParamValue": str(value)},
         )
         return _check_write_result(data, param_name, value, expected_name=param_name)
-
-    async def set_param_by_index(self, index: str | int, value: float | int) -> bool:
-        """Set a parameter by numeric index via /econet/rmNewParam."""
-        formatted = int(value) if value == int(value) else value
-        data = await self._client.get_with_params(
-            API_RM_NEW_PARAM,
-            {"newParamIndex": str(index), "newParamValue": str(formatted)},
-        )
-        return _check_write_result(data, f"index:{index}", value)
-
-    async def set_param_by_key(self, key: str | int, value: float | int) -> bool:
-        """Set a parameter by key via /econet/rmCurrNewParam."""
-        formatted = int(value) if value == int(value) else value
-        data = await self._client.get_with_params(
-            API_RM_CURR_NEW_PARAM,
-            {"newParamKey": str(key), "newParamValue": str(formatted)},
-        )
-        return _check_write_result(data, f"key:{key}", value)
 
     async def test_connection(self) -> bool:
         """Quick connectivity and auth check."""

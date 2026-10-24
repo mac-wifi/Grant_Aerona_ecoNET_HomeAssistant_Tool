@@ -8,7 +8,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.econet_grant.const import DOMAIN, SERVICE_COORDINATOR, SERVICE_SLOW_COORDINATOR
+from custom_components.econet_grant.const import DOMAIN
 from emulator import EconetEmulator
 
 pytestmark = pytest.mark.usefixtures("loopback_sockets")
@@ -57,11 +57,12 @@ async def test_setup_platform_entities_and_unload(loaded):
         assert any(hass.states.get(entity.entity_id) is not None
                    for entity in entities if entity.domain == domain)
     assert {"regParams", "editParams", "sysParams"} <= set(pump.requests)
+    assert pump.auth_headers == {"Basic dGVzdDp0ZXN0LW9ubHk="}  # test:test-only
     assert pump.writes == []
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
     assert entry.state is ConfigEntryState.NOT_LOADED
-    assert entry.entry_id not in hass.data[DOMAIN]
+    assert not hasattr(entry, "runtime_data")
     # HA retains registry entries as restored/unavailable after platform unload.
     for entity in entities:
         state = hass.states.get(entity.entity_id)
@@ -71,7 +72,7 @@ async def test_setup_platform_entities_and_unload(loaded):
 
 async def test_options_flow_reloads_poll_interval(loaded):
     hass, entry, pump = loaded
-    old = hass.data[DOMAIN][entry.entry_id][SERVICE_SLOW_COORDINATOR]
+    old = entry.runtime_data.slow_coordinator
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["type"] == "form"
     result = await hass.config_entries.options.async_configure(result["flow_id"], {
@@ -80,7 +81,7 @@ async def test_options_flow_reloads_poll_interval(loaded):
     assert result["type"] == "create_entry"
     await hass.async_block_till_done()
     assert entry.options["slow_poll_interval"] == 30
-    current = hass.data[DOMAIN][entry.entry_id][SERVICE_SLOW_COORDINATOR]
+    current = entry.runtime_data.slow_coordinator
     assert current is not old
     assert current.update_interval == timedelta(minutes=30)
     assert entry.state is ConfigEntryState.LOADED
@@ -92,7 +93,7 @@ async def test_guest_version_change_creates_notification(loaded):
     assert "econet_grant_external_changes" not in hass.data.get("persistent_notification", {})
     before = pump.requests.count("editParams")
     pump.guest_change("Circuit1ComfortTemp", 22)
-    await hass.data[DOMAIN][entry.entry_id][SERVICE_COORDINATOR].async_refresh()
+    await entry.runtime_data.fast_coordinator.async_refresh()
     await hass.async_block_till_done()
     assert pump.requests.count("editParams") == before + 1
     notification = hass.data["persistent_notification"]["econet_grant_external_changes"]
@@ -129,10 +130,10 @@ async def test_guest_mode_notification_matches_dashboard(loaded, old, new):
     events = []
     hass.bus.async_listen(EVENT_SETTING_CHANGED, lambda event: events.append(event.data))
     pump.guest_change("Circuit1WorkState", new)
-    await hass.data[DOMAIN][entry.entry_id][SERVICE_COORDINATOR].async_refresh()
+    await entry.runtime_data.fast_coordinator.async_refresh()
     await hass.async_block_till_done()
     # Selects subscribe to the fast coordinator and read the slow snapshot.
-    await hass.data[DOMAIN][entry.entry_id][SERVICE_COORDINATOR].async_refresh()
+    await entry.runtime_data.fast_coordinator.async_refresh()
     await hass.async_block_till_done()
     new_label = hass.states.get(entity_id).state
     assert new_label == SELECT_DEFINITIONS["Circuit1WorkState"]["options"][new]
@@ -199,7 +200,7 @@ async def test_own_bitmask_write_is_not_reported_as_guest_change(loaded):
         "entity_id": select, "option": "Yes",
     }, blocking=True)
     assert pump.writes == [("HDWSETTINGS", 21.0)]
-    await hass.data[DOMAIN][entry.entry_id][SERVICE_COORDINATOR].async_refresh()
+    await entry.runtime_data.fast_coordinator.async_refresh()
     await hass.async_block_till_done()
     assert "econet_grant_external_changes" not in hass.data.get("persistent_notification", {})
 
