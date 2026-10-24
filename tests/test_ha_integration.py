@@ -132,9 +132,6 @@ async def test_guest_mode_notification_matches_dashboard(loaded, old, new):
     pump.guest_change("Circuit1WorkState", new)
     await entry.runtime_data.fast_coordinator.async_refresh()
     await hass.async_block_till_done()
-    # Selects subscribe to the fast coordinator and read the slow snapshot.
-    await entry.runtime_data.fast_coordinator.async_refresh()
-    await hass.async_block_till_done()
     new_label = hass.states.get(entity_id).state
     assert new_label == SELECT_DEFINITIONS["Circuit1WorkState"]["options"][new]
     transition = f"{old_label} → {new_label}"
@@ -224,4 +221,21 @@ async def test_restore_button_previews_default_snapshot_in_safe_mode(loaded):
     preview = hass.data["persistent_notification"]["econet_grant_restore_preview"]
     assert "Circuit1ComfortTemp" in preview["message"]
     assert "23 -> 20" in preview["message"]
+    assert pump.writes == []
+
+
+async def test_setting_entities_update_on_the_settings_poll(loaded):
+    """A detected guest change must show on the dashboard in the same poll cycle."""
+    hass, entry, pump = loaded
+    number = "number.grant_aerona_heat_pump_ch_day_temp"
+    bitmask = "select.grant_aerona_heat_pump_hw_specify_priority"
+    assert hass.states.get(number).state == "20"
+    assert hass.states.get(bitmask).state == "No"
+    pump.guest_change("Circuit1ComfortTemp", 23)
+    pump.guest_change("HDWSETTINGS", 21)
+    await entry.runtime_data.fast_coordinator.async_refresh()  # sees settingsVer, refreshes settings
+    await hass.async_block_till_done()
+    assert "econet_grant_external_changes" in hass.data["persistent_notification"]
+    assert hass.states.get(number).state == "23"
+    assert hass.states.get(bitmask).state == "Yes"
     assert pump.writes == []

@@ -128,7 +128,8 @@ class EconetSettingEntity(EconetEntity):
     """Base for writable entities backed by an editParams setting.
 
     Availability follows the fast coordinator; values come from the slow
-    coordinator's latest editParams snapshot.
+    coordinator's latest editParams snapshot, and both coordinators trigger
+    a state update.
     """
 
     def __init__(
@@ -140,6 +141,13 @@ class EconetSettingEntity(EconetEntity):
         self._database = data.database
         self._entry = entry
         self._key = key
+
+    async def async_added_to_hass(self) -> None:
+        """Also redraw when the settings poll lands, not only on the next fast poll."""
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            self._slow_coordinator.async_add_listener(self._handle_coordinator_update)
+        )
 
     @property
     def _safe_mode(self) -> bool:
