@@ -57,7 +57,5 @@ class RestoreSettingsButton(ButtonEntity):
     async def async_press(self) -> None:
         """Trigger the settings restore service."""
         await self.hass.services.async_call(
-            DOMAIN,
-            "restore_settings",
-            {"entry_id": self._entry.entry_id},
+            DOMAIN, "restore_settings", {"snapshot_name": "Default"}, blocking=True,
         )

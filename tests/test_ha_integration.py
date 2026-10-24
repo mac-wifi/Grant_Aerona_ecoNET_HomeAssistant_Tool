@@ -208,3 +208,19 @@ async def test_own_bitmask_write_is_not_reported_as_guest_change(loaded):
             return conn.execute("SELECT param_name, source FROM change_log").fetchall()
 
     assert ("HDWSETTINGS", "external") not in await hass.async_add_executor_job(sources)
+
+
+async def test_restore_button_previews_default_snapshot_in_safe_mode(loaded):
+    """The dashboard button must call the service with a schema-valid payload."""
+    hass, entry, pump = loaded
+    await hass.services.async_call("econet_grant", "backup_settings",
+                                   {"snapshot_name": "Default"}, blocking=True)
+    pump.guest_change("Circuit1ComfortTemp", 23)
+    await hass.services.async_call("button", "press", {
+        "entity_id": "button.grant_aerona_heat_pump_restore_default_settings",
+    }, blocking=True)
+    await hass.async_block_till_done()
+    preview = hass.data["persistent_notification"]["econet_grant_restore_preview"]
+    assert "Circuit1ComfortTemp" in preview["message"]
+    assert "23 -> 20" in preview["message"]
+    assert pump.writes == []
