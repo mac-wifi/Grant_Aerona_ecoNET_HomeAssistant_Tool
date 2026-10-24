@@ -1,0 +1,1073 @@
+{
+  "devices": [
+    {
+      "identifiers": [
+        [
+          "econet_grant",
+          "synthetic-test-device"
+        ]
+      ],
+      "manufacturer": "Grant",
+      "model": "Aerona (ecoMAX360i)",
+      "name": "Grant Aerona Heat Pump",
+      "sw_version": "test-firmware"
+    }
+  ],
+  "entities": {
+    "button.grant_aerona_heat_pump_restore_default_settings": {
+      "attributes": {
+        "icon": "mdi:backup-restore"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Restore Default Settings",
+      "original_device_class": null,
+      "original_icon": "mdi:backup-restore",
+      "original_name": "Restore Default Settings",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_restore_settings",
+      "unit": null
+    },
+    "number.grant_aerona_heat_pump_backup_heater_delay": {
+      "attributes": {
+        "max": 240,
+        "min": 0,
+        "mode": "box",
+        "step": 1,
+        "unit_of_measurement": "min"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Backup Heater Delay",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Backup Heater Delay",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_heaterBuffDel",
+      "unit": "min"
+    },
+    "number.grant_aerona_heat_pump_ch_base_temp": {
+      "attributes": {
+        "max": 60,
+        "min": 25,
+        "mode": "box",
+        "step": 1,
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump CH Base Temp",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "CH Base Temp",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_Circuit1BaseTemp",
+      "unit": "\u00b0C"
+    },
+    "number.grant_aerona_heat_pump_ch_boost_time": {
+      "attributes": {
+        "max": 180,
+        "min": 0,
+        "mode": "box",
+        "step": 1,
+        "unit_of_measurement": "min"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump CH Boost Time",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "CH Boost Time",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_Circuit1boosttimeleft",
+      "unit": "min"
+    },
+    "number.grant_aerona_heat_pump_ch_curve": {
+      "attributes": {
+        "max": 4,
+        "min": 0,
+        "mode": "box",
+        "step": 0.1
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump CH Curve",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "CH Curve",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_Circuit1CurveRadiator",
+      "unit": null
+    },
+    "number.grant_aerona_heat_pump_ch_curve_shift": {
+      "attributes": {
+        "max": 20,
+        "min": -20,
+        "mode": "box",
+        "step": 1,
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump CH Curve Shift",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "CH Curve Shift",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_Circuit1Curveshift",
+      "unit": "\u00b0C"
+    },
+    "number.grant_aerona_heat_pump_ch_day_temp": {
+      "attributes": {
+        "max": 35,
+        "min": 10,
+        "mode": "box",
+        "step": 0.1,
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump CH Day Temp",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "CH Day Temp",
+      "state": "20",
+      "unique_id": "econet_grant_synthetic-test-device_Circuit1ComfortTemp",
+      "unit": "\u00b0C"
+    },
+    "number.grant_aerona_heat_pump_ch_hysteresis": {
+      "attributes": {
+        "max": 5,
+        "min": 0,
+        "mode": "box",
+        "step": 0.1,
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump CH Hysteresis",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "CH Hysteresis",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_Circuit1DownHist",
+      "unit": "\u00b0C"
+    },
+    "number.grant_aerona_heat_pump_ch_night_temp": {
+      "attributes": {
+        "max": 35,
+        "min": 10,
+        "mode": "box",
+        "step": 0.1,
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump CH Night Temp",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "CH Night Temp",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_Circuit1EcoTemp",
+      "unit": "\u00b0C"
+    },
+    "number.grant_aerona_heat_pump_cooling_setpoint_adj": {
+      "attributes": {
+        "max": 10,
+        "min": 1,
+        "mode": "box",
+        "step": 1,
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Cooling Setpoint Adj",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Cooling Setpoint Adj",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_decreaseSetTemp",
+      "unit": "\u00b0C"
+    },
+    "number.grant_aerona_heat_pump_crit_temp_ignore": {
+      "attributes": {
+        "max": 10,
+        "min": 0,
+        "mode": "box",
+        "step": 1,
+        "unit_of_measurement": "min"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Crit Temp Ignore",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Crit Temp Ignore",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_circuitCritHeatTempIgnoreTime",
+      "unit": "min"
+    },
+    "number.grant_aerona_heat_pump_heating_temp_correction": {
+      "attributes": {
+        "max": 20,
+        "min": 0,
+        "mode": "box",
+        "step": 1,
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Heating Temp Correction",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Heating Temp Correction",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_hSMPTSIncreaseCirc",
+      "unit": "\u00b0C"
+    },
+    "number.grant_aerona_heat_pump_hw_correction_temp": {
+      "attributes": {
+        "max": 20,
+        "min": 0,
+        "mode": "box",
+        "step": 1,
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump HW Correction Temp",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "HW Correction Temp",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_HeatSourceTempInc",
+      "unit": "\u00b0C"
+    },
+    "number.grant_aerona_heat_pump_hw_extend_work": {
+      "attributes": {
+        "max": 30,
+        "min": 0,
+        "mode": "box",
+        "step": 1,
+        "unit_of_measurement": "min"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump HW Extend Work",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "HW Extend Work",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_DHWExtensionOfWork",
+      "unit": "min"
+    },
+    "number.grant_aerona_heat_pump_hw_heater_delay": {
+      "attributes": {
+        "max": 240,
+        "min": 0,
+        "mode": "box",
+        "step": 1,
+        "unit_of_measurement": "min"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump HW Heater Delay",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "HW Heater Delay",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_heaterDhwDel",
+      "unit": "min"
+    },
+    "number.grant_aerona_heat_pump_hw_hysteresis": {
+      "attributes": {
+        "max": 10,
+        "min": 0,
+        "mode": "box",
+        "step": 1,
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump HW Hysteresis",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "HW Hysteresis",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_DHWHysteresis",
+      "unit": "\u00b0C"
+    },
+    "number.grant_aerona_heat_pump_hw_pump_start_temp": {
+      "attributes": {
+        "max": 60,
+        "min": 20,
+        "mode": "box",
+        "step": 1,
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump HW Pump Start Temp",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "HW Pump Start Temp",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_CirculationTempStart",
+      "unit": "\u00b0C"
+    },
+    "number.grant_aerona_heat_pump_hw_recirc_pause": {
+      "attributes": {
+        "max": 100,
+        "min": 1,
+        "mode": "box",
+        "step": 1,
+        "unit_of_measurement": "min"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump HW Recirc Pause",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "HW Recirc Pause",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_CirculationTimestop",
+      "unit": "min"
+    },
+    "number.grant_aerona_heat_pump_hw_recirc_run_time": {
+      "attributes": {
+        "max": 120,
+        "min": 1,
+        "mode": "box",
+        "step": 1,
+        "unit_of_measurement": "s"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump HW Recirc Run Time",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "HW Recirc Run Time",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_CirculationTimework",
+      "unit": "s"
+    },
+    "number.grant_aerona_heat_pump_hw_set_point": {
+      "attributes": {
+        "max": 55,
+        "min": 20,
+        "mode": "box",
+        "step": 1,
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump HW Set Point",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "HW Set Point",
+      "state": "50",
+      "unique_id": "econet_grant_synthetic-test-device_HDWTSetPoint",
+      "unit": "\u00b0C"
+    },
+    "number.grant_aerona_heat_pump_outside_temp_force_heater": {
+      "attributes": {
+        "max": 20,
+        "min": -20,
+        "mode": "box",
+        "step": 1,
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Outside Temp Force Heater",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Outside Temp Force Heater",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_heatersForceTemp",
+      "unit": "\u00b0C"
+    },
+    "number.grant_aerona_heat_pump_outside_temp_start_heater": {
+      "attributes": {
+        "max": 20,
+        "min": -20,
+        "mode": "box",
+        "step": 1,
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Outside Temp Start Heater",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Outside Temp Start Heater",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_heatersPermTemp",
+      "unit": "\u00b0C"
+    },
+    "number.grant_aerona_heat_pump_panel_temp_correction": {
+      "attributes": {
+        "max": 5,
+        "min": -5,
+        "mode": "box",
+        "step": 0.1,
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Panel Temp Correction",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Panel Temp Correction",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_Korekta_temperatury",
+      "unit": "\u00b0C"
+    },
+    "number.grant_aerona_heat_pump_summer_threshold": {
+      "attributes": {
+        "max": 30,
+        "min": 17,
+        "mode": "box",
+        "step": 1,
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Summer Threshold",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Summer Threshold",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_SummerOn",
+      "unit": "\u00b0C"
+    },
+    "number.grant_aerona_heat_pump_winter_threshold": {
+      "attributes": {
+        "max": 19,
+        "min": 0,
+        "mode": "box",
+        "step": 1,
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Winter Threshold",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Winter Threshold",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_SummerOff",
+      "unit": "\u00b0C"
+    },
+    "select.grant_aerona_heat_pump_backup_heater": {
+      "attributes": {
+        "options": [
+          "Yes",
+          "No"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Backup Heater",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Backup Heater",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_BackupHeater",
+      "unit": null
+    },
+    "select.grant_aerona_heat_pump_backup_htr_in_defrost": {
+      "attributes": {
+        "options": [
+          "Yes",
+          "No"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Backup Htr in Defrost",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Backup Htr in Defrost",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_BackupHeaterInDefrost",
+      "unit": null
+    },
+    "select.grant_aerona_heat_pump_ch_circuit_type": {
+      "attributes": {
+        "options": [
+          "Radiators",
+          "Fan Coil"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump CH Circuit Type",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "CH Circuit Type",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_Circuit1TypeSettings",
+      "unit": null
+    },
+    "select.grant_aerona_heat_pump_ch_operation_mode": {
+      "attributes": {
+        "options": [
+          "Off",
+          "Day",
+          "Night",
+          "Schedule"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump CH Operation Mode",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "CH Operation Mode",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_Circuit1WorkState",
+      "unit": null
+    },
+    "select.grant_aerona_heat_pump_ch_pump_blockade": {
+      "attributes": {
+        "options": [
+          "Yes",
+          "No"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump CH Pump Blockade",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "CH Pump Blockade",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_Circuit1ThermostatPumpBlockade",
+      "unit": null
+    },
+    "select.grant_aerona_heat_pump_ch_regulation_method": {
+      "attributes": {
+        "options": [
+          "Weather",
+          "Fixed"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump CH Regulation Method",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "CH Regulation Method",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_Circuit1RegulationMethod",
+      "unit": null
+    },
+    "select.grant_aerona_heat_pump_cooling_support": {
+      "attributes": {
+        "options": [
+          "Yes",
+          "No"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Cooling Support",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Cooling Support",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_CoolingSupport",
+      "unit": null
+    },
+    "select.grant_aerona_heat_pump_ext_temp_sensor": {
+      "attributes": {
+        "options": [
+          "Yes",
+          "No"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Ext Temp Sensor",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Ext Temp Sensor",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_ExternalTempSensorSupport",
+      "unit": null
+    },
+    "select.grant_aerona_heat_pump_heat_pump_lock": {
+      "attributes": {
+        "options": [
+          "Yes",
+          "No"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Heat Pump Lock",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Heat Pump Lock",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_HeatPumpLock",
+      "unit": null
+    },
+    "select.grant_aerona_heat_pump_heat_pump_mode": {
+      "attributes": {
+        "options": [
+          "Off",
+          "On",
+          "Schedule"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Heat Pump Mode",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Heat Pump Mode",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_GrantWorkState",
+      "unit": null
+    },
+    "select.grant_aerona_heat_pump_hw_boost": {
+      "attributes": {
+        "options": [
+          "Off",
+          "On"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump HW Boost",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "HW Boost",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_DHWBoost",
+      "unit": null
+    },
+    "select.grant_aerona_heat_pump_hw_heater": {
+      "attributes": {
+        "options": [
+          "Yes",
+          "No"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump HW Heater",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "HW Heater",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_DHWHeater",
+      "unit": null
+    },
+    "select.grant_aerona_heat_pump_hw_recirc_support": {
+      "attributes": {
+        "options": [
+          "Yes",
+          "No"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump HW Recirc Support",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "HW Recirc Support",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_DHWRecirculationSupport",
+      "unit": null
+    },
+    "select.grant_aerona_heat_pump_hw_specify_priority": {
+      "attributes": {
+        "options": [
+          "Yes",
+          "No"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump HW Specify Priority",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "HW Specify Priority",
+      "state": "No",
+      "unique_id": "econet_grant_synthetic-test-device_HDWSpecifyPriority",
+      "unit": null
+    },
+    "select.grant_aerona_heat_pump_hw_start_from_temp": {
+      "attributes": {
+        "options": [
+          "Yes",
+          "No"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump HW Start From Temp",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "HW Start From Temp",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_DHWStartFromTemp",
+      "unit": null
+    },
+    "select.grant_aerona_heat_pump_hw_support": {
+      "attributes": {
+        "options": [
+          "Yes",
+          "No"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump HW Support",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "HW Support",
+      "state": "Yes",
+      "unique_id": "econet_grant_synthetic-test-device_DHWSupport",
+      "unit": null
+    },
+    "select.grant_aerona_heat_pump_hw_work_mode": {
+      "attributes": {
+        "options": [
+          "Off",
+          "On",
+          "Schedule"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump HW Work Mode",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "HW Work Mode",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_HDWusermode",
+      "unit": null
+    },
+    "select.grant_aerona_heat_pump_hydraulic_scheme": {
+      "attributes": {
+        "options": [
+          "Direct",
+          "Buffer",
+          "Low Loss Header"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Hydraulic Scheme",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Hydraulic Scheme",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_currentSchemat",
+      "unit": null
+    },
+    "select.grant_aerona_heat_pump_off_circuits_on_hw": {
+      "attributes": {
+        "options": [
+          "Yes",
+          "No"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Off Circuits on HW",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Off Circuits on HW",
+      "state": "No",
+      "unique_id": "econet_grant_synthetic-test-device_OffCircuitsDuringCharging",
+      "unit": null
+    },
+    "select.grant_aerona_heat_pump_temp_sensor_source": {
+      "attributes": {
+        "options": [
+          "Heat Pump",
+          "ecoMulti"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Temp Sensor Source",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Temp Sensor Source",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_TempSensorSource",
+      "unit": null
+    },
+    "select.grant_aerona_heat_pump_work_mode": {
+      "attributes": {
+        "options": [
+          "Summer",
+          "Winter",
+          "Auto"
+        ]
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Work Mode",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Work Mode",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_workState2",
+      "unit": null
+    },
+    "sensor.grant_aerona_heat_pump_buffer_temp_lower": {
+      "attributes": {
+        "device_class": "temperature",
+        "state_class": "measurement",
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Buffer Temp (Lower)",
+      "original_device_class": "temperature",
+      "original_icon": null,
+      "original_name": "Buffer Temp (Lower)",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_TempBuforDown",
+      "unit": "\u00b0C"
+    },
+    "sensor.grant_aerona_heat_pump_ch_thermostat": {
+      "attributes": {
+        "device_class": "temperature",
+        "state_class": "measurement",
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump CH Thermostat",
+      "original_device_class": "temperature",
+      "original_icon": null,
+      "original_name": "CH Thermostat",
+      "state": "20.0",
+      "unique_id": "econet_grant_synthetic-test-device_Circuit1thermostat",
+      "unit": "\u00b0C"
+    },
+    "sensor.grant_aerona_heat_pump_compressor_frequency": {
+      "attributes": {
+        "state_class": "measurement",
+        "unit_of_measurement": "Hz"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Compressor Frequency",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Compressor Frequency",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_GrantCompressorFreq",
+      "unit": "Hz"
+    },
+    "sensor.grant_aerona_heat_pump_database_size": {
+      "attributes": {
+        "icon": "mdi:database",
+        "unit_of_measurement": "MB"
+      },
+      "entity_category": "diagnostic",
+      "friendly_name": "Grant Aerona Heat Pump Database Size",
+      "original_device_class": null,
+      "original_icon": "mdi:database",
+      "original_name": "Database Size",
+      "unique_id": "econet_grant_synthetic-test-device_database_size",
+      "unit": "MB"
+    },
+    "sensor.grant_aerona_heat_pump_fan_speed": {
+      "attributes": {
+        "state_class": "measurement",
+        "unit_of_measurement": "rpm"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Fan Speed",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Fan Speed",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_FanSpeed",
+      "unit": "rpm"
+    },
+    "sensor.grant_aerona_heat_pump_flow_temperature": {
+      "attributes": {
+        "device_class": "temperature",
+        "state_class": "measurement",
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Flow Temperature",
+      "original_device_class": "temperature",
+      "original_icon": null,
+      "original_name": "Flow Temperature",
+      "state": "32.0",
+      "unique_id": "econet_grant_synthetic-test-device_GrantOutgoingTemp",
+      "unit": "\u00b0C"
+    },
+    "sensor.grant_aerona_heat_pump_heat_exchanger_temp": {
+      "attributes": {
+        "device_class": "temperature",
+        "state_class": "measurement",
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Heat Exchanger Temp",
+      "original_device_class": "temperature",
+      "original_icon": null,
+      "original_name": "Heat Exchanger Temp",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_TempClutch",
+      "unit": "\u00b0C"
+    },
+    "sensor.grant_aerona_heat_pump_heat_source_preset_temp": {
+      "attributes": {
+        "device_class": "temperature",
+        "state_class": "measurement",
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Heat Source Preset Temp",
+      "original_device_class": "temperature",
+      "original_icon": null,
+      "original_name": "Heat Source Preset Temp",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_HeatSourceCalcPresetTemp",
+      "unit": "\u00b0C"
+    },
+    "sensor.grant_aerona_heat_pump_hw_temperature": {
+      "attributes": {
+        "device_class": "temperature",
+        "state_class": "measurement",
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump HW Temperature",
+      "original_device_class": "temperature",
+      "original_icon": null,
+      "original_name": "HW Temperature",
+      "state": "50.0",
+      "unique_id": "econet_grant_synthetic-test-device_TempCWU",
+      "unit": "\u00b0C"
+    },
+    "sensor.grant_aerona_heat_pump_last_default_snapshot": {
+      "attributes": {
+        "icon": "mdi:content-save-check"
+      },
+      "entity_category": "diagnostic",
+      "friendly_name": "Grant Aerona Heat Pump Last Default Snapshot",
+      "original_device_class": null,
+      "original_icon": "mdi:content-save-check",
+      "original_name": "Last Default Snapshot",
+      "unique_id": "econet_grant_synthetic-test-device_last_default_snapshot",
+      "unit": null
+    },
+    "sensor.grant_aerona_heat_pump_last_sensor_poll": {
+      "attributes": {
+        "icon": "mdi:clock-check"
+      },
+      "entity_category": "diagnostic",
+      "friendly_name": "Grant Aerona Heat Pump Last Sensor Poll",
+      "original_device_class": null,
+      "original_icon": "mdi:clock-check",
+      "original_name": "Last Sensor Poll",
+      "unique_id": "econet_grant_synthetic-test-device_last_reading",
+      "unit": null
+    },
+    "sensor.grant_aerona_heat_pump_last_settings_check": {
+      "attributes": {
+        "icon": "mdi:clock-alert"
+      },
+      "entity_category": "diagnostic",
+      "friendly_name": "Grant Aerona Heat Pump Last Settings Check",
+      "original_device_class": null,
+      "original_icon": "mdi:clock-alert",
+      "original_name": "Last Settings Check",
+      "unique_id": "econet_grant_synthetic-test-device_last_settings_check",
+      "unit": null
+    },
+    "sensor.grant_aerona_heat_pump_outdoor_temperature": {
+      "attributes": {
+        "device_class": "temperature",
+        "state_class": "measurement",
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Outdoor Temperature",
+      "original_device_class": "temperature",
+      "original_icon": null,
+      "original_name": "Outdoor Temperature",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_GrantOutdoorTemp",
+      "unit": "\u00b0C"
+    },
+    "sensor.grant_aerona_heat_pump_pump_speed": {
+      "attributes": {
+        "state_class": "measurement",
+        "unit_of_measurement": "rpm"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Pump Speed",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "Pump Speed",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_GrantPumpSpeed",
+      "unit": "rpm"
+    },
+    "sensor.grant_aerona_heat_pump_recent_changes_24h": {
+      "attributes": {
+        "icon": "mdi:delta"
+      },
+      "entity_category": "diagnostic",
+      "friendly_name": "Grant Aerona Heat Pump Recent Changes (24h)",
+      "original_device_class": null,
+      "original_icon": "mdi:delta",
+      "original_name": "Recent Changes (24h)",
+      "state": "0",
+      "unique_id": "econet_grant_synthetic-test-device_recent_changes",
+      "unit": null
+    },
+    "sensor.grant_aerona_heat_pump_remote_menu": {
+      "attributes": {
+        "icon": "mdi:remote"
+      },
+      "entity_category": "diagnostic",
+      "friendly_name": "Grant Aerona Heat Pump Remote Menu",
+      "original_device_class": null,
+      "original_icon": "mdi:remote",
+      "original_name": "Remote Menu",
+      "state": "false",
+      "unique_id": "econet_grant_synthetic-test-device_remote_menu",
+      "unit": null
+    },
+    "sensor.grant_aerona_heat_pump_return_temperature": {
+      "attributes": {
+        "device_class": "temperature",
+        "state_class": "measurement",
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Return Temperature",
+      "original_device_class": "temperature",
+      "original_icon": null,
+      "original_name": "Return Temperature",
+      "state": "27.0",
+      "unique_id": "econet_grant_synthetic-test-device_GrantReturnTemp",
+      "unit": "\u00b0C"
+    },
+    "sensor.grant_aerona_heat_pump_safe_mode": {
+      "attributes": {
+        "icon": "mdi:shield-lock"
+      },
+      "entity_category": "diagnostic",
+      "friendly_name": "Grant Aerona Heat Pump Safe Mode",
+      "original_device_class": null,
+      "original_icon": "mdi:shield-lock",
+      "original_name": "Safe Mode",
+      "state": "On",
+      "unique_id": "econet_grant_synthetic-test-device_safe_mode",
+      "unit": null
+    },
+    "sensor.grant_aerona_heat_pump_settings_version": {
+      "attributes": {
+        "icon": "mdi:counter"
+      },
+      "entity_category": "diagnostic",
+      "friendly_name": "Grant Aerona Heat Pump Settings Version",
+      "original_device_class": null,
+      "original_icon": "mdi:counter",
+      "original_name": "Settings Version",
+      "state": "1",
+      "unique_id": "econet_grant_synthetic-test-device_settings_version",
+      "unit": null
+    },
+    "sensor.grant_aerona_heat_pump_system_demand": {
+      "attributes": {},
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump System Demand",
+      "original_device_class": null,
+      "original_icon": null,
+      "original_name": "System Demand",
+      "state": "unknown",
+      "unique_id": "econet_grant_synthetic-test-device_SystemDemand",
+      "unit": null
+    },
+    "sensor.grant_aerona_heat_pump_weather_temperature": {
+      "attributes": {
+        "device_class": "temperature",
+        "state_class": "measurement",
+        "unit_of_measurement": "\u00b0C"
+      },
+      "entity_category": null,
+      "friendly_name": "Grant Aerona Heat Pump Weather Temperature",
+      "original_device_class": "temperature",
+      "original_icon": null,
+      "original_name": "Weather Temperature",
+      "state": "5.0",
+      "unique_id": "econet_grant_synthetic-test-device_TempWthr",
+      "unit": "\u00b0C"
+    }
+  },
+  "services": [
+    "backup_settings",
+    "restore_settings"
+  ]
+}
