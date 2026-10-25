@@ -1,7 +1,9 @@
 # Releasing, updating and rolling back
 
-Only the owner publishes. Agents and contributors prepare a branch; the owner
-reviews it, merges, tags and releases from a credentialed local clone.
+Only the owner publishes, from a credentialed local clone. Changes reach
+`main` only after the full test suite passes and an independent code review
+(done by a separate reviewing agent for this project) approves them. The
+owner doesn't need to review code.
 
 ## 1. Prepare the release commit
 
@@ -12,7 +14,8 @@ reviews it, merges, tags and releases from a credentialed local clone.
    PATCH for fixes and small changes, MINOR for new or changed functionality.
 3. Move the `Unreleased` entry in [CHANGELOG.md](CHANGELOG.md) under the new
    version and date.
-4. Merge into `main` and commit, using a clean working tree.
+4. Have the change independently reviewed, fix the findings, then merge it
+   into `main` with a clean working tree.
 
 ## 2. Preflight the exact commit
 
