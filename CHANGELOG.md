@@ -9,8 +9,9 @@ published; the others were local development candidates.
 - **Restore always reports its outcome.** Previously it finished silently when
   no snapshot existed, when settings already matched the snapshot, when the
   current settings couldn't be read, and after a real (Safe Mode off) restore.
-  Each case now produces an "EcoNet Grant - Restore ..." notification. The
-  Safe Mode preview is unchanged.
+  Each case now produces an "EcoNet Grant - Restore ..." notification. This
+  includes connection errors and an unreadable snapshot file. A result clears
+  any earlier Safe Mode preview, whose content is otherwise unchanged.
 - **New diagnostic sensor *Integration Version*.** It shows the version Home
   Assistant is actually running, so a pending restart after a HACS download is
   visible. The dashboard's Admin › About card now reads it instead of a
