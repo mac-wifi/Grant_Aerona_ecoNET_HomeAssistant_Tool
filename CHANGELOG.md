@@ -4,7 +4,7 @@ Versions follow `MAJOR.MINOR.PATCH`: PATCH for fixes and small changes, MINOR
 for new or changed functionality. Only versions with a GitHub Release were
 published; the others were local development candidates.
 
-## 0.7.0 — unreleased
+## 0.7.0 — 2026-11-01
 
 - **Restore always reports its outcome.** Previously it finished silently when
   no snapshot existed, when settings already matched the snapshot, when the
