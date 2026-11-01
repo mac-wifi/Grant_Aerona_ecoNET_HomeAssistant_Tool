@@ -262,12 +262,16 @@ async def test_restore_reports_written_changes(loaded):
     await hass.services.async_call("econet_grant", "backup_settings",
                                    {"snapshot_name": "Default"}, blocking=True)
     pump.guest_change("Circuit1ComfortTemp", 23)
+    await hass.services.async_call("econet_grant", "restore_settings",
+                                   {"snapshot_name": "Default"}, blocking=True)
+    assert "econet_grant_restore_preview" in hass.data["persistent_notification"]
     hass.config_entries.async_update_entry(entry, options={**entry.options, "safe_mode": False})
     await hass.async_block_till_done()
     await hass.services.async_call("econet_grant", "restore_settings",
                                    {"snapshot_name": "Default"}, blocking=True)
     await hass.async_block_till_done()
     assert pump.writes == [("Circuit1ComfortTemp", 20.0)]
+    assert "econet_grant_restore_preview" not in hass.data["persistent_notification"]
     result = hass.data["persistent_notification"]["econet_grant_restore_result"]
     assert "Restored 1 parameter" in result["message"]
     assert "Circuit1ComfortTemp" in result["message"]

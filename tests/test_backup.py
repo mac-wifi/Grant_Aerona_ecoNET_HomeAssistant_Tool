@@ -52,7 +52,14 @@ async def test_default_safe_mode_previews_without_write(hass, api, snapshot, edi
     api.set_param.assert_not_awaited()
 
 
-async def test_restore_write_failure_reported(hass, api, snapshot, edit_params):
+def restore_notice(notifications):
+    calls = [c.kwargs for c in notifications.call_args_list
+             if c.kwargs.get("notification_id") == "econet_grant_restore_result"]
+    assert len(calls) == 1
+    return calls[0]
+
+
+async def test_restore_write_failure_reported(hass, api, snapshot, edit_params, notifications):
     edit_params["data"]["100"]["value"] = 24
     api.set_param.return_value = False
     result = await backup.async_restore_settings(hass, api, safe_mode=False)
@@ -60,14 +67,42 @@ async def test_restore_write_failure_reported(hass, api, snapshot, edit_params):
     assert result["changes"] == 0
     assert result["failures"] == 1
     api.set_param.assert_awaited_once_with("Circuit1ComfortTemp", 20)
+    notice = restore_notice(notifications)
+    assert notice["title"] == "EcoNet Grant - Restore Failed"
+    assert "**1 failed**" in notice["message"]
+    assert "- Circuit1ComfortTemp: 24 -> 20 (**failed**)" in notice["message"]
 
 
-async def test_restore_fetch_failure_does_not_write(hass, api, snapshot):
-    api.fetch_edit_params.return_value = None
+async def test_restore_write_exception_still_reports(hass, api, snapshot, edit_params,
+                                                     notifications):
+    edit_params["data"]["100"]["value"] = 24
+    api.set_param.side_effect = OSError("synthetic connection reset")
+    result = await backup.async_restore_settings(hass, api, safe_mode=False)
+    assert result["success"] is False and result["failures"] == 1
+    assert restore_notice(notifications)["title"] == "EcoNet Grant - Restore Failed"
+
+
+async def test_restore_unreadable_snapshot_reports(hass, api, snapshot, notifications):
+    snapshot.write_text("{corrupt")
+    result = await backup.async_restore_settings(hass, api, safe_mode=False)
+    assert result["success"] is False
+    assert restore_notice(notifications)["title"] == "EcoNet Grant - Restore Not Possible"
+    api.set_param.assert_not_awaited()
+
+
+@pytest.mark.parametrize("failure", ["none", "exception"])
+async def test_restore_fetch_failure_does_not_write(hass, api, snapshot, notifications, failure):
+    if failure == "none":
+        api.fetch_edit_params.return_value = None
+    else:
+        api.fetch_edit_params.side_effect = OSError("synthetic connection refused")
     assert await backup.async_restore_settings(hass, api, safe_mode=False) == {
         "success": False, "error": "Cannot fetch current editParams",
     }
     api.set_param.assert_not_awaited()
+    notice = restore_notice(notifications)
+    assert notice["title"] == "EcoNet Grant - Restore Failed"
+    assert "Nothing was changed" in notice["message"]
 
 
 async def test_restore_missing_snapshot_does_not_fetch_or_write(hass, api):

@@ -12,7 +12,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from homeassistant.components.persistent_notification import async_create as pn_async_create
+from homeassistant.components.persistent_notification import (
+    async_create as pn_async_create,
+    async_dismiss as pn_async_dismiss,
+)
 from homeassistant.core import HomeAssistant
 
 from .api import EconetApi
@@ -44,8 +47,12 @@ def _notify_backup(hass: HomeAssistant, title: str, message: str) -> None:
     )
 
 
+RESTORE_PREVIEW_ID = f"{DOMAIN}_restore_preview"
+
+
 def _notify_restore(hass: HomeAssistant, title: str, message: str) -> None:
     """Every restore outcome is visible; a restore must never finish silently."""
+    pn_async_dismiss(hass, RESTORE_PREVIEW_ID)  # don't leave a stale preview beside a result
     pn_async_create(
         hass, message=message, title=f"EcoNet Grant - {title}",
         notification_id=RESTORE_NOTIFICATION_ID,
@@ -121,14 +128,26 @@ async def async_restore_settings(
         _notify_restore(
             hass, "Restore Not Possible",
             f"No '{snapshot_name}' snapshot has been saved yet. "
-            "Use **Take Default Snapshot** first. Nothing was changed.",
+            "Take a snapshot first. Nothing was changed.",
         )
         return {"success": False, "error": msg}
 
-    snapshot = json.loads(path.read_text())
-    saved_params = snapshot.get("parameters", {})
+    try:
+        saved_params = json.loads(path.read_text()).get("parameters", {})
+    except (OSError, ValueError, AttributeError):
+        _LOGGER.exception("Restore '%s': snapshot file unreadable", snapshot_name)
+        _notify_restore(
+            hass, "Restore Not Possible",
+            f"The '{snapshot_name}' snapshot file is unreadable. Take a new snapshot. "
+            "Nothing was changed.",
+        )
+        return {"success": False, "error": f"Snapshot '{snapshot_name}' unreadable"}
 
-    current_edit = await api.fetch_edit_params()
+    try:
+        current_edit = await api.fetch_edit_params()
+    except Exception:
+        _LOGGER.exception("Restore '%s': could not read current editParams", snapshot_name)
+        current_edit = None
     if current_edit is None:
         _notify_restore(
             hass, "Restore Failed",
@@ -173,7 +192,7 @@ async def async_restore_settings(
             hass,
             message=report,
             title="EcoNet Grant - Restore Preview (Safe Mode)",
-            notification_id=f"{DOMAIN}_restore_preview",
+            notification_id=RESTORE_PREVIEW_ID,
         )
         return {"success": True, "safe_mode": True, "changes": len(to_restore), "details": to_restore}
 
@@ -181,7 +200,11 @@ async def async_restore_settings(
     failures = 0
     lines: list[str] = []
     for item in to_restore:
-        ok = await api.set_param(item["name"], item["restore_value"])
+        try:
+            ok = await api.set_param(item["name"], item["restore_value"])
+        except Exception:  # connection/auth error: report it, keep the summary honest
+            _LOGGER.exception("Error restoring %s (idx %s)", item["name"], item["index"])
+            ok = False
         if ok:
             successes += 1
         else:

@@ -70,9 +70,6 @@ def test_deployment_header_matches_readme_registration():
 ])
 def test_about_card_shows_running_version(path):
     """The version is read live from the integration, never typed into the YAML."""
-    import re
-    import yaml
-
     file = ROOT / path
     if not file.exists():
         pytest.skip("Owner deployment artifact is local/ignored, not distributed")

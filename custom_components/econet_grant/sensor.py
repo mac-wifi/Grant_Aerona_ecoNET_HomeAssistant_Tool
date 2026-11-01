@@ -288,3 +288,8 @@ class EconetIntegrationVersionSensor(EconetDiagnosticEntity):
     def __init__(self, coordinator: Any, api: EconetApi, version: str) -> None:
         super().__init__(coordinator, api, "integration_version")
         self._attr_native_value = version
+
+    @property
+    def available(self) -> bool:
+        """Known locally, so still shown while the controller is unreachable."""
+        return True

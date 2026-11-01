@@ -33,7 +33,7 @@ The integration currently creates **22 sensors**, **24 number entities**, **21 s
 | Fan Speed | `tilesParams[3]` | Outdoor-unit fan speed (rpm) |
 | System Demand | `schemaParams.reakcja_termostat1` | Heating / No Demand status |
 
-Eight additional diagnostic sensors report the last sensor poll, last settings check, settings version, SQLite database size, safe-mode state, Remote Menu state, changes detected in the last 24 hours, and the last Default snapshot.
+Nine additional diagnostic sensors report the last sensor poll, last settings check, settings version, SQLite database size, safe-mode state, Remote Menu state, changes detected in the last 24 hours, the last Default snapshot, and the integration version actually running.
 
 ### Writable Number Entities (24, from `editParams`)
 
