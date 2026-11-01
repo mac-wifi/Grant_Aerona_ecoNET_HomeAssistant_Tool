@@ -543,7 +543,7 @@ views:
       - type: markdown
         title: About
         content: >
-          **EcoNet Grant Aerona** v0.4.0
+          **EcoNet Grant Aerona** v{{ states('sensor.grant_aerona_heat_pump_integration_version') }}
 
           Monitors and controls a Grant Aerona heat pump via the ecoNET local API.
 

@@ -9,10 +9,11 @@ from homeassistant.components.sensor import SensorEntity, SensorEntityDescriptio
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.loader import async_get_integration
 
 from .api import EconetApi
 from .backup import get_snapshot_info
-from .const import SENSOR_DEFINITIONS, TILES_SENSOR_DEFINITIONS
+from .const import DOMAIN, SENSOR_DEFINITIONS, TILES_SENSOR_DEFINITIONS
 from .database import EconetDatabase
 from .entity import EconetConfigEntry, EconetEntity, is_safe_mode
 
@@ -25,6 +26,7 @@ async def async_setup_entry(
     """Set up sensor entities from a config entry."""
     data = entry.runtime_data
     fast, slow, api, db = data.fast_coordinator, data.slow_coordinator, data.api, data.database
+    version = (await async_get_integration(hass, DOMAIN)).version
 
     entities: list[SensorEntity] = [
         EconetSensor(fast, api, _description(key, defn), defn.get("value_map"))
@@ -45,6 +47,7 @@ async def async_setup_entry(
         EconetRemoteMenuSensor(slow, api),
         EconetRecentChangesSensor(slow, api, db),
         EconetLastSnapshotSensor(fast, api, hass),
+        EconetIntegrationVersionSensor(fast, api, str(version)),
     ]
     async_add_entities(entities)
 
@@ -270,3 +273,18 @@ class EconetLastSnapshotSensor(EconetDiagnosticEntity):
         if self._info:
             return {"param_count": self._info.get("param_count", 0)}
         return {}
+
+
+class EconetIntegrationVersionSensor(EconetDiagnosticEntity):
+    """The integration version Home Assistant is actually running (manifest.json).
+
+    Lets the dashboard show the live version, and reveals a pending restart
+    after a HACS download.
+    """
+
+    _attr_name = "Integration Version"
+    _attr_icon = "mdi:tag"
+
+    def __init__(self, coordinator: Any, api: EconetApi, version: str) -> None:
+        super().__init__(coordinator, api, "integration_version")
+        self._attr_native_value = version

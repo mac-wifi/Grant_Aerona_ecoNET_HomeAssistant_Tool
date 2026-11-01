@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import re
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -61,3 +62,21 @@ def test_deployment_header_matches_readme_registration():
     assert match is not None
     expected = yaml.safe_load(match[1])
     assert config == expected
+
+
+@pytest.mark.parametrize("path", [
+    "custom_components/econet_grant/extras/econet_grant_dashboard.yaml",
+    "tools/owner-deployment/econet_grant_dashboard_live.yaml",
+])
+def test_about_card_shows_running_version(path):
+    """The version is read live from the integration, never typed into the YAML."""
+    import re
+    import yaml
+
+    file = ROOT / path
+    if not file.exists():
+        pytest.skip("Owner deployment artifact is local/ignored, not distributed")
+    admin = next(v for v in yaml.safe_load(file.read_text())["views"] if v["title"] == "Admin")
+    about = next(c for c in admin["cards"] if c.get("title") == "About")
+    assert "states('sensor.grant_aerona_heat_pump_integration_version')" in about["content"]
+    assert not re.search(r"v\d+\.\d+\.\d+", about["content"])

@@ -239,3 +239,46 @@ async def test_setting_entities_update_on_the_settings_poll(loaded):
     assert hass.states.get(number).state == "23"
     assert hass.states.get(bitmask).state == "Yes"
     assert pump.writes == []
+
+
+@pytest.mark.parametrize("case", ["missing", "unchanged"])
+async def test_restore_always_reports_outcome(loaded, case):
+    """The dashboard's Restore must never finish silently."""
+    hass, entry, pump = loaded
+    if case == "unchanged":
+        await hass.services.async_call("econet_grant", "backup_settings",
+                                       {"snapshot_name": "Default"}, blocking=True)
+    await hass.services.async_call("econet_grant", "restore_settings",
+                                   {"snapshot_name": "Default"}, blocking=True)
+    await hass.async_block_till_done()
+    result = hass.data["persistent_notification"]["econet_grant_restore_result"]
+    expected = "No 'Default' snapshot" if case == "missing" else "already match"
+    assert expected in result["message"]
+    assert pump.writes == []
+
+
+async def test_restore_reports_written_changes(loaded):
+    hass, entry, pump = loaded
+    await hass.services.async_call("econet_grant", "backup_settings",
+                                   {"snapshot_name": "Default"}, blocking=True)
+    pump.guest_change("Circuit1ComfortTemp", 23)
+    hass.config_entries.async_update_entry(entry, options={**entry.options, "safe_mode": False})
+    await hass.async_block_till_done()
+    await hass.services.async_call("econet_grant", "restore_settings",
+                                   {"snapshot_name": "Default"}, blocking=True)
+    await hass.async_block_till_done()
+    assert pump.writes == [("Circuit1ComfortTemp", 20.0)]
+    result = hass.data["persistent_notification"]["econet_grant_restore_result"]
+    assert "Restored 1 parameter" in result["message"]
+    assert "Circuit1ComfortTemp" in result["message"]
+
+
+async def test_integration_version_sensor_matches_manifest(loaded):
+    import json
+    from pathlib import Path
+
+    hass, entry, pump = loaded
+    manifest = Path(__file__).parents[1] / "custom_components/econet_grant/manifest.json"
+    version = json.loads(manifest.read_text())["version"]
+    state = hass.states.get("sensor.grant_aerona_heat_pump_integration_version")
+    assert state is not None and state.state == version

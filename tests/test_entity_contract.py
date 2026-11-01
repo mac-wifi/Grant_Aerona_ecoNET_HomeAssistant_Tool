@@ -20,9 +20,9 @@ from test_ha_integration import hass, hass_config_dir, loaded, notifications  # 
 pytestmark = pytest.mark.usefixtures("loopback_sockets")
 
 CONTRACT = Path(__file__).parent / "fixtures" / "entity_contract.json"
-# Values derived from wall-clock time or the local file system.
-TIME_DEPENDENT = ("_last_reading", "_last_settings_check", "_database_size",
-                  "_last_default_snapshot")
+# States derived from wall-clock time, the local file system or the release version.
+UNPINNED_STATES = ("_last_reading", "_last_settings_check", "_database_size",
+                   "_last_default_snapshot", "_integration_version")
 
 
 def _describe(hass, entry):
@@ -43,7 +43,7 @@ def _describe(hass, entry):
             "friendly_name": state.attributes.get("friendly_name"),
             "attributes": json.loads(json.dumps(attributes, default=str)),
         }
-        if not item.unique_id.endswith(TIME_DEPENDENT):
+        if not item.unique_id.endswith(UNPINNED_STATES):
             record["state"] = state.state
         entities[item.entity_id] = record
     devices = [

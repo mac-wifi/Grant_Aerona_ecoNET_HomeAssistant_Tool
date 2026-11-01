@@ -13,7 +13,7 @@ Released through GitHub Releases and HACS; see [CHANGELOG.md](CHANGELOG.md) for 
 
 ## What Works
 
-The integration currently creates **21 sensors**, **24 number entities**, **21 select entities**, and **1 button entity**.
+The integration currently creates **22 sensors**, **24 number entities**, **21 select entities**, and **1 button entity**.
 
 ### Operational Sensors (13, polled every 5 minutes from `regParams`)
 
@@ -393,7 +393,7 @@ not real phone delivery or heat-pump behaviour.
 
 After successful configuration, you'll have entities with the prefix `grant_aerona_heat_pump_`:
 
-- **21 sensors** -- 13 operational readings and 8 diagnostic/status sensors
+- **22 sensors** -- 13 operational readings and 9 diagnostic/status sensors (including **Integration Version**, the version actually running)
 - **24 number entities** -- writable setpoints, thresholds, timers and correction values
 - **21 select entities** -- 7 mode/type selectors and 14 bitmask controls
 - **1 button entity** -- Restore Default Settings
@@ -516,7 +516,7 @@ Before changing any settings, save a snapshot of the current configuration using
 3. Click the **Take Default Snapshot** button (you'll be asked to confirm)
 4. A persistent notification will confirm the snapshot was saved
 
-The **Last Default Snapshot** field on the Admin tab shows when the snapshot was taken. Open the entity's more-info dialog to see its `param_count` attribute. You can restore to this state using the **Restore Default** button next to it.
+The **Last Default Snapshot** field on the Admin tab shows when the snapshot was taken. Open the entity's more-info dialog to see its `param_count` attribute. You can restore to this state using the **Restore Default** button next to it. Restore always posts a notification: a preview (Safe Mode on), "Nothing to Restore" if settings already match, "Restore Not Possible" if no snapshot exists, or the restore result.
 
 > **Why now?** The backup captures the controller's current state. Taking it before you or the integration change anything gives you a known-good baseline to roll back to.
 

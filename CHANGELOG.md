@@ -4,7 +4,19 @@ Versions follow `MAJOR.MINOR.PATCH`: PATCH for fixes and small changes, MINOR
 for new or changed functionality. Only versions with a GitHub Release were
 published; the others were local development candidates.
 
-## 0.6.6 — unreleased
+## 0.7.0 — unreleased
+
+- **Restore always reports its outcome.** Previously it finished silently when
+  no snapshot existed, when settings already matched the snapshot, when the
+  current settings couldn't be read, and after a real (Safe Mode off) restore.
+  Each case now produces an "EcoNet Grant - Restore ..." notification. The
+  Safe Mode preview is unchanged.
+- **New diagnostic sensor *Integration Version*.** It shows the version Home
+  Assistant is actually running, so a pending restart after a HACS download is
+  visible. The dashboard's Admin › About card now reads it instead of a
+  hard-coded (stale "v0.4.0") label. Recopy the dashboard once to pick this up.
+
+## 0.6.6 — 2026-11-01
 
 Bug fixes (each has a regression test that fails on 0.6.5):
 

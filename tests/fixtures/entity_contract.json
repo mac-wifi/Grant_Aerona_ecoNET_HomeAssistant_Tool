@@ -907,6 +907,18 @@
       "unique_id": "econet_grant_synthetic-test-device_TempCWU",
       "unit": "\u00b0C"
     },
+    "sensor.grant_aerona_heat_pump_integration_version": {
+      "attributes": {
+        "icon": "mdi:tag"
+      },
+      "entity_category": "diagnostic",
+      "friendly_name": "Grant Aerona Heat Pump Integration Version",
+      "original_device_class": null,
+      "original_icon": "mdi:tag",
+      "original_name": "Integration Version",
+      "unique_id": "econet_grant_synthetic-test-device_integration_version",
+      "unit": null
+    },
     "sensor.grant_aerona_heat_pump_last_default_snapshot": {
       "attributes": {
         "icon": "mdi:content-save-check"
