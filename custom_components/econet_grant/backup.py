@@ -21,6 +21,7 @@ from .const import DOMAIN, SNAPSHOT_DIR_NAME
 _LOGGER = logging.getLogger(__name__)
 
 BACKUP_NOTIFICATION_ID = f"{DOMAIN}_backup_result"
+RESTORE_NOTIFICATION_ID = f"{DOMAIN}_restore_result"
 
 
 def _snapshot_dir(hass: HomeAssistant) -> Path:
@@ -40,6 +41,14 @@ def _notify_backup(hass: HomeAssistant, title: str, message: str) -> None:
     pn_async_create(
         hass, message=message, title=f"EcoNet Grant - {title}",
         notification_id=BACKUP_NOTIFICATION_ID,
+    )
+
+
+def _notify_restore(hass: HomeAssistant, title: str, message: str) -> None:
+    """Every restore outcome is visible; a restore must never finish silently."""
+    pn_async_create(
+        hass, message=message, title=f"EcoNet Grant - {title}",
+        notification_id=RESTORE_NOTIFICATION_ID,
     )
 
 
@@ -109,6 +118,11 @@ async def async_restore_settings(
     if not path.exists():
         msg = f"Snapshot '{snapshot_name}' not found at {path}"
         _LOGGER.error(msg)
+        _notify_restore(
+            hass, "Restore Not Possible",
+            f"No '{snapshot_name}' snapshot has been saved yet. "
+            "Use **Take Default Snapshot** first. Nothing was changed.",
+        )
         return {"success": False, "error": msg}
 
     snapshot = json.loads(path.read_text())
@@ -116,6 +130,10 @@ async def async_restore_settings(
 
     current_edit = await api.fetch_edit_params()
     if current_edit is None:
+        _notify_restore(
+            hass, "Restore Failed",
+            "Could not read the current settings from the heat pump. Nothing was changed.",
+        )
         return {"success": False, "error": "Cannot fetch current editParams"}
 
     current_data = current_edit.get("data", {})
@@ -134,6 +152,10 @@ async def async_restore_settings(
 
     if not to_restore:
         _LOGGER.info("Restore '%s': all parameters already match snapshot", snapshot_name)
+        _notify_restore(
+            hass, "Nothing to Restore",
+            f"All settings already match the '{snapshot_name}' snapshot. Nothing was changed.",
+        )
         return {"success": True, "changes": 0, "details": []}
 
     if safe_mode:
@@ -157,6 +179,7 @@ async def async_restore_settings(
 
     successes = 0
     failures = 0
+    lines: list[str] = []
     for item in to_restore:
         ok = await api.set_param(item["name"], item["restore_value"])
         if ok:
@@ -164,10 +187,21 @@ async def async_restore_settings(
         else:
             failures += 1
             _LOGGER.error("Failed to restore %s (idx %s)", item["name"], item["index"])
+        lines.append(
+            f"- {item['name']}: {item['current_value']} -> {item['restore_value']}"
+            + ("" if ok else " (**failed**)")
+        )
 
     _LOGGER.info(
         "Restore '%s' complete: %d succeeded, %d failed",
         snapshot_name, successes, failures,
+    )
+    summary = f"Restored {successes} parameter(s) from '{snapshot_name}'"
+    if failures:
+        summary += f"; **{failures} failed** -- check the controller before retrying"
+    _notify_restore(
+        hass, "Restore Failed" if failures else "Restore Complete",
+        summary + ".\n\n" + "\n".join(lines),
     )
     return {
         "success": failures == 0,
