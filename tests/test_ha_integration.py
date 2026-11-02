@@ -299,3 +299,24 @@ async def test_last_snapshot_sensor_updates_right_after_backup(loaded):
     state = hass.states.get(sensor)
     assert state.state not in ("unknown", "unavailable")
     assert state.attributes["param_count"] > 0
+
+
+@pytest.mark.parametrize("safe_mode", [True, False])
+async def test_restore_service_ignores_self_changing_values(loaded, safe_mode):
+    """Owner report: an unchanged system previewed 'GrantReg03Float 39.0 -> 38.0'."""
+    hass, entry, pump = loaded
+    pump.edit["data"]["1148"] = {"name": "GrantReg03Float", "value": 39.0,
+                                 "minv": 0, "maxv": 100, "edit": True}
+    await hass.services.async_call("econet_grant", "backup_settings",
+                                   {"snapshot_name": "Default"}, blocking=True)
+    pump.edit["data"]["1148"]["value"] = 38.0  # the controller changes it by itself
+    hass.config_entries.async_update_entry(entry, options={**entry.options,
+                                                           "safe_mode": safe_mode})
+    await hass.async_block_till_done()
+    await hass.services.async_call("econet_grant", "restore_settings",
+                                   {"snapshot_name": "Default"}, blocking=True)
+    await hass.async_block_till_done()
+    notices = hass.data["persistent_notification"]
+    assert "econet_grant_restore_preview" not in notices
+    assert "already match" in notices["econet_grant_restore_result"]["message"]
+    assert pump.writes == []

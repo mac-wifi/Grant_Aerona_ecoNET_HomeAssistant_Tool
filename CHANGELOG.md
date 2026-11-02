@@ -6,11 +6,11 @@ published; the others were local development candidates.
 
 ## 0.7.1 — unreleased
 
-- **Restore skips values the controller changes by itself**, the same
-  `VOLATILE_PARAMETERS` list that change detection already ignores (for
-  example `GrantReg03Float` and the boost-time-left counters). Previously
-  Restore listed them as differences, and with Safe Mode off it would have
-  written them back to the controller.
+- **Restore skips values the controller changes by itself.** With nothing
+  changed, the preview listed e.g. `GrantReg03Float: 39.0 -> 38.0`. Restore
+  now ignores the same `VOLATILE_PARAMETERS` list that change detection
+  ignores (this value and the boost-time-left counters). With Safe Mode off
+  it would previously have written them back to the controller.
 
 - **Last Default Snapshot** now updates as soon as a backup completes.
   Previously it kept showing *Unknown* (or the old time) until the next
