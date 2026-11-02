@@ -4,7 +4,7 @@ Versions follow `MAJOR.MINOR.PATCH`: PATCH for fixes and small changes, MINOR
 for new or changed functionality. Only versions with a GitHub Release were
 published; the others were local development candidates.
 
-## 0.7.1 — unreleased
+## 0.7.1 — 2026-11-02
 
 - **Restore skips values the controller changes by itself.** With nothing
   changed, the preview listed e.g. `GrantReg03Float: 39.0 -> 38.0`. Restore
