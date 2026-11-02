@@ -153,3 +153,17 @@ async def test_deferred_noop_restore_does_not_suppress_guest_alert(
         "param_name": "Circuit1ComfortTemp", "param_index": "100",
         "old_value": 20, "new_value": 24,
     })
+
+
+@pytest.mark.parametrize("safe_mode", [True, False])
+async def test_restore_ignores_volatile_parameters(hass, api, edit_params, notifications,
+                                                   safe_mode):
+    """Self-changing values (VOLATILE_PARAMETERS) must never be previewed or written."""
+    edit_params["data"]["1148"] = {"name": "GrantReg03Float", "value": 39.0,
+                                   "minv": 0, "maxv": 100, "edit": True}
+    assert await backup.async_backup_settings(hass, api)
+    edit_params["data"]["1148"]["value"] = 38.0
+    result = await backup.async_restore_settings(hass, api, safe_mode=safe_mode)
+    assert result["changes"] == 0
+    api.set_param.assert_not_awaited()
+    assert restore_notice(notifications)["title"] == "EcoNet Grant - Nothing to Restore"

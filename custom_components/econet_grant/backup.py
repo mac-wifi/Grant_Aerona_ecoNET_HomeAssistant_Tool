@@ -20,7 +20,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .api import EconetApi
-from .const import DOMAIN, SIGNAL_SNAPSHOT_SAVED, SNAPSHOT_DIR_NAME
+from .const import DOMAIN, SIGNAL_SNAPSHOT_SAVED, SNAPSHOT_DIR_NAME, VOLATILE_PARAMETERS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -161,6 +161,9 @@ async def async_restore_settings(
 
     to_restore: list[dict[str, Any]] = []
     for index, saved in saved_params.items():
+        if saved.get("name") in VOLATILE_PARAMETERS:
+            # Values the controller changes by itself are never restored.
+            continue
         current = current_data.get(index, {})
         current_val = current.get("value") if isinstance(current, dict) else None
         if current_val != saved["value"]:
