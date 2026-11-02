@@ -8,12 +8,18 @@ from typing import Any
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.loader import async_get_integration
 
 from .api import EconetApi
 from .backup import get_snapshot_info
-from .const import DOMAIN, SENSOR_DEFINITIONS, TILES_SENSOR_DEFINITIONS
+from .const import (
+    DOMAIN,
+    SENSOR_DEFINITIONS,
+    SIGNAL_SNAPSHOT_SAVED,
+    TILES_SENSOR_DEFINITIONS,
+)
 from .database import EconetDatabase
 from .entity import EconetConfigEntry, EconetEntity, is_safe_mode
 
@@ -247,19 +253,40 @@ class EconetRecentChangesSensor(EconetDiagnosticEntity):
 
 
 class EconetLastSnapshotSensor(EconetDiagnosticEntity):
-    """When the 'Default' settings snapshot was last taken."""
+    """When the 'Default' settings snapshot was last taken.
+
+    Refreshed at start-up, as soon as a backup completes, and on each poll
+    (which also catches files changed outside HA). The file is read in the
+    executor, never on the event loop.
+    """
 
     _attr_name = "Last Default Snapshot"
     _attr_icon = "mdi:content-save-check"
 
     def __init__(self, coordinator: Any, api: EconetApi, hass: HomeAssistant) -> None:
         super().__init__(coordinator, api, "last_default_snapshot")
-        self._hass_ref = hass
-        self._info: dict[str, Any] | None = get_snapshot_info(hass, "Default")
+        self._info: dict[str, Any] | None = None
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_SNAPSHOT_SAVED, self._on_snapshot_saved)
+        )
+        await self._async_refresh()
+
+    @callback
+    def _on_snapshot_saved(self, snapshot_name: str) -> None:
+        if snapshot_name == "Default":
+            self.hass.async_create_task(self._async_refresh())
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        self._info = get_snapshot_info(self._hass_ref, "Default")
+        self.hass.async_create_task(self._async_refresh())
+
+    async def _async_refresh(self) -> None:
+        self._info = await self.hass.async_add_executor_job(
+            get_snapshot_info, self.hass, "Default"
+        )
         self.async_write_ha_state()
 
     @property

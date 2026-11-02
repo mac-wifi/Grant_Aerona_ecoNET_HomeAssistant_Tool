@@ -17,9 +17,10 @@ from homeassistant.components.persistent_notification import (
     async_dismiss as pn_async_dismiss,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .api import EconetApi
-from .const import DOMAIN, SNAPSHOT_DIR_NAME
+from .const import DOMAIN, SIGNAL_SNAPSHOT_SAVED, SNAPSHOT_DIR_NAME
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -103,6 +104,7 @@ async def async_backup_settings(
         "Saved snapshot '%s' with %d parameters to %s",
         snapshot_name, param_count, path,
     )
+    async_dispatcher_send(hass, SIGNAL_SNAPSHOT_SAVED, snapshot_name)
     _notify_backup(
         hass, "Backup Complete",
         f"Backup **'{snapshot_name}'** completed successfully.\n\n"

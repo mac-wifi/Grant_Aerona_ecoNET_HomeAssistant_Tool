@@ -26,6 +26,8 @@ SERVICE_RESTORE_SETTINGS = "restore_settings"
 
 DATABASE_FILENAME = "econet_grant.db"
 SNAPSHOT_DIR_NAME = "econet_grant_snapshots"
+# Dispatcher signal sent after a snapshot file is written.
+SIGNAL_SNAPSHOT_SAVED = f"{DOMAIN}_snapshot_saved"
 
 DEVICE_NAME = "Grant Aerona Heat Pump"
 DEVICE_MANUFACTURER = "Grant"

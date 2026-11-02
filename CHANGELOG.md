@@ -4,6 +4,13 @@ Versions follow `MAJOR.MINOR.PATCH`: PATCH for fixes and small changes, MINOR
 for new or changed functionality. Only versions with a GitHub Release were
 published; the others were local development candidates.
 
+## 0.7.1 — unreleased
+
+- **Last Default Snapshot** now updates as soon as a backup completes.
+  Previously it kept showing *Unknown* (or the old time) until the next
+  5-minute poll. Its snapshot file is now also read off Home Assistant's main
+  event loop.
+
 ## 0.7.0 — 2026-11-01
 
 - **Restore always reports its outcome.** Previously it finished silently when

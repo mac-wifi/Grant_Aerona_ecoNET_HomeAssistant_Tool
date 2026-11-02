@@ -77,4 +77,5 @@ def notifications(monkeypatch):
     for module in (backup, change_detector, entity):
         monkeypatch.setattr(module, "pn_async_create", notification)
     monkeypatch.setattr(backup, "pn_async_dismiss", Mock())
+    monkeypatch.setattr(backup, "async_dispatcher_send", Mock())
     return notification

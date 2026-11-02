@@ -286,3 +286,16 @@ async def test_integration_version_sensor_matches_manifest(loaded):
     version = json.loads(manifest.read_text())["version"]
     state = hass.states.get("sensor.grant_aerona_heat_pump_integration_version")
     assert state is not None and state.state == version
+
+
+async def test_last_snapshot_sensor_updates_right_after_backup(loaded):
+    """The Admin tab must show the new snapshot without waiting for the next poll."""
+    hass, entry, pump = loaded
+    sensor = "sensor.grant_aerona_heat_pump_last_default_snapshot"
+    assert hass.states.get(sensor).state == "unknown"
+    await hass.services.async_call("econet_grant", "backup_settings",
+                                   {"snapshot_name": "Default"}, blocking=True)
+    await hass.async_block_till_done()
+    state = hass.states.get(sensor)
+    assert state.state not in ("unknown", "unavailable")
+    assert state.attributes["param_count"] > 0
