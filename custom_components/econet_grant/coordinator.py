@@ -43,7 +43,8 @@ class _EconetCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         update_interval: timedelta,
     ) -> None:
         super().__init__(
-            hass, _LOGGER, name=f"{DOMAIN}_{name}", update_interval=update_interval,
+            hass, _LOGGER, config_entry=entry,
+            name=f"{DOMAIN}_{name}", update_interval=update_interval,
         )
         self.api = api
         self._entry = entry

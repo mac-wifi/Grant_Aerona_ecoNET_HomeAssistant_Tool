@@ -52,7 +52,7 @@ async def async_setup_entry(
         EconetSafeModeSensor(fast, api, entry),
         EconetRemoteMenuSensor(slow, api),
         EconetRecentChangesSensor(slow, api, db),
-        EconetLastSnapshotSensor(fast, api, hass),
+        EconetLastSnapshotSensor(fast, api),
         EconetIntegrationVersionSensor(fast, api, str(version)),
     ]
     async_add_entities(entities)
@@ -263,7 +263,7 @@ class EconetLastSnapshotSensor(EconetDiagnosticEntity):
     _attr_name = "Last Default Snapshot"
     _attr_icon = "mdi:content-save-check"
 
-    def __init__(self, coordinator: Any, api: EconetApi, hass: HomeAssistant) -> None:
+    def __init__(self, coordinator: Any, api: EconetApi) -> None:
         super().__init__(coordinator, api, "last_default_snapshot")
         self._info: dict[str, Any] | None = None
 
@@ -277,11 +277,11 @@ class EconetLastSnapshotSensor(EconetDiagnosticEntity):
     @callback
     def _on_snapshot_saved(self, snapshot_name: str) -> None:
         if snapshot_name == "Default":
-            self.hass.async_create_task(self._async_refresh())
+            self.coordinator.config_entry.async_create_task(self.hass, self._async_refresh())
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        self.hass.async_create_task(self._async_refresh())
+        self.coordinator.config_entry.async_create_task(self.hass, self._async_refresh())
 
     async def _async_refresh(self) -> None:
         self._info = await self.hass.async_add_executor_job(
