@@ -9,8 +9,8 @@ published; the others were local development candidates.
 - **Change the controller address without reinstalling.** If the ecoNET
   module gets a new IP address, use **Settings > Devices & services > EcoNet
   Grant Aerona > ⋮ > Reconfigure**. Entities, entity IDs, history, options and
-  snapshots are kept. The new address must answer as the same controller, or
-  it is refused ("different ecoNET controller"); it also cannot duplicate
+  snapshots are kept. Once the integration has connected at least once, the new
+  address must answer as the same controller, or it is refused ("different ecoNET controller"); it also cannot duplicate
   another entry. Spaces around the address are now trimmed when setting up.
   Works even when the entry is stuck retrying because the old address is
   wrong: it reloads straight away instead of waiting for the next retry.

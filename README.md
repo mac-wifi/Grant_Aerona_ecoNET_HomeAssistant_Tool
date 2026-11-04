@@ -403,7 +403,7 @@ Go to **Settings > Devices & Services > EcoNet Grant Aerona** to see the full li
 
 #### Changing the controller's IP address later
 
-If the ecoNET module gets a new IP address, go to **Settings > Devices & services > EcoNet Grant Aerona > ⋮ > Reconfigure** and enter the new address. Entities, entity IDs, history, options and snapshots are kept; the saved username and password are reused, and the new address must answer as the same controller. To stop the address changing again, give the module a DHCP reservation (a fixed address) in your router.
+If the ecoNET module gets a new IP address, go to **Settings > Devices & services > EcoNet Grant Aerona > ⋮ > Reconfigure** and enter the new address. Entities, entity IDs, history, options and snapshots are kept; the saved username and password are reused, and (once the integration has connected at least once) the new address must answer as the same controller. To stop the address changing again, give the module a DHCP reservation (a fixed address) in your router.
 
 ---
 
