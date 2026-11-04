@@ -1,7 +1,9 @@
 """Real HA config-entry/platform lifecycle against a loopback heat pump."""
+import asyncio
 from datetime import timedelta
 
 import pytest
+from aiohttp import web
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
@@ -429,5 +431,65 @@ async def test_reconfigure_rejects_host_used_by_another_entry(loaded):
     result = await _reconfigure(hass, entry, other)
     assert result["type"] == "form"
     assert result["errors"] == {"base": "already_configured"}
+    assert entry.data["host"] == old_host
+    assert entry.unique_id == "synthetic-entry"
+
+
+async def test_reconfigure_reloads_exactly_once(loaded, aiohttp_server, caplog):
+    """The entry's update listener reloads; a second reload doubles controller traffic."""
+    hass, entry, _pump = loaded
+    pump_b, new = await _second_pump(aiohttp_server)
+    await _reconfigure(hass, entry, new)
+    # 1 validation fetch + one setup (make_api + slow coordinator first refresh).
+    assert pump_b.requests.count("sysParams") == 3
+    assert pump_b.requests.count("regParams") == 1
+    assert "should use it for scheduling a reload" not in caplog.text
+
+
+async def test_reconfigure_ignores_host_fallback_identifier(loaded, aiohttp_server):
+    """A device keyed by the host (controller never gave a uid) is not a different pump."""
+    hass, entry, _pump = loaded
+    registry = dr.async_get(hass)
+    for device in dr.async_entries_for_config_entry(registry, entry.entry_id):
+        registry.async_update_device(
+            device.id, new_identifiers={(DOMAIN, entry.data["host"].rstrip("/"))})
+    _pump_b, new = await _second_pump(aiohttp_server)
+    result = await _reconfigure(hass, entry, new)
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data["host"] == new
+
+
+async def test_reconfigure_duplicate_check_normalises_host(loaded):
+    hass, entry, _pump = loaded
+    MockConfigEntry(
+        domain=DOMAIN, unique_id="192.0.2.10",
+        data={"host": "192.0.2.10", "username": "test", "password": "test-only"},
+    ).add_to_hass(hass)
+    old_host = entry.data["host"]
+    result = await _reconfigure(hass, entry, "http://192.0.2.10/")
+    assert result["errors"] == {"base": "already_configured"}
+    assert entry.data["host"] == old_host
+
+
+async def test_reconfigure_timeout_keeps_old_host(loaded, aiohttp_server, monkeypatch):
+    hass, entry, _pump = loaded
+    release = asyncio.Event()
+
+    async def hang(request):
+        await release.wait()
+        raise web.HTTPServiceUnavailable()
+
+    app = web.Application()
+    app.router.add_get("/{endpoint}", hang)
+    server = await aiohttp_server(app, host="127.0.0.1")
+    monkeypatch.setattr("custom_components.econet_grant.api.API_TIMEOUT", 0.1)
+    monkeypatch.setattr("custom_components.econet_grant.api.API_MAX_RETRIES", 2)
+    old_host = entry.data["host"]
+    try:
+        result = await _reconfigure(hass, entry, str(server.make_url("")))
+    finally:
+        release.set()
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "cannot_connect"}
     assert entry.data["host"] == old_host
     assert entry.unique_id == "synthetic-entry"

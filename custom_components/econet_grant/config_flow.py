@@ -14,7 +14,7 @@ from homeassistant.config_entries import (
     ConfigFlowResult,
     OptionsFlow,
 )
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -47,6 +47,27 @@ USER_SCHEMA = vol.Schema(
         vol.Required(CONF_PASSWORD): str,
     }
 )
+
+
+def _normalise_host(host: str) -> str:
+    host = host.strip().rstrip("/").lower()
+    for prefix in ("http://", "https://"):
+        if host.startswith(prefix):
+            return host[len(prefix):]
+    return host
+
+
+def _known_uids(hass: HomeAssistant, entry: ConfigEntry) -> set[str]:
+    """Controller ids on the entry's devices, ignoring host-string fallbacks."""
+    host = _normalise_host(entry.data[CONF_HOST])
+    return {
+        value
+        for device in dr.async_entries_for_config_entry(
+            dr.async_get(hass), entry.entry_id
+        )
+        for domain, value in device.identifiers
+        if domain == DOMAIN and _normalise_host(value) != host
+    }
 
 
 class EconetGrantConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -104,8 +125,12 @@ class EconetGrantConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
+            wanted = _normalise_host(host)
             if any(
-                host in (other.unique_id, other.data.get(CONF_HOST))
+                wanted in (
+                    _normalise_host(other.unique_id or ""),
+                    _normalise_host(other.data.get(CONF_HOST) or ""),
+                )
                 for other in self._async_current_entries(include_ignore=False)
                 if other.entry_id != entry.entry_id
             ):
@@ -130,14 +155,7 @@ class EconetGrantConfigFlow(ConfigFlow, domain=DOMAIN):
                     if sys_params is None:
                         errors["base"] = "cannot_connect"
                     else:
-                        known = {
-                            value
-                            for device in dr.async_entries_for_config_entry(
-                                dr.async_get(self.hass), entry.entry_id
-                            )
-                            for domain, value in device.identifiers
-                            if domain == DOMAIN
-                        }
+                        known = _known_uids(self.hass, entry)
                         new_uid = sys_params.get("uid")
                         if known and new_uid and new_uid not in known:
                             errors["base"] = "wrong_device"
@@ -147,7 +165,7 @@ class EconetGrantConfigFlow(ConfigFlow, domain=DOMAIN):
                 title = entry.title
                 if title == f"EcoNet Grant ({entry.data[CONF_HOST]})":
                     title = f"EcoNet Grant ({host})"
-                return self.async_update_reload_and_abort(
+                return self.async_update_and_abort(
                     entry,
                     unique_id=host,
                     title=title,
