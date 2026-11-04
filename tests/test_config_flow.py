@@ -75,3 +75,32 @@ async def test_revert_service_is_optional_and_mobile_only(entry):
             schema({"revert_notify_service": invalid})
     entry.options["revert_notify_service"] = "mobile_app_test"
     assert (await flow.async_step_init())["data_schema"]({})["revert_notify_service"] == "mobile_app_test"
+
+
+async def test_user_step_strips_host_whitespace(hass, entry, api, monkeypatch):
+    monkeypatch.setattr(config_flow, "async_get_clientsession", Mock())
+    monkeypatch.setattr(config_flow, "EconetApi", Mock(return_value=api))
+    api.test_connection.return_value = True
+    flow = config_flow.EconetGrantConfigFlow()
+    flow.hass = hass
+    flow.async_set_unique_id = AsyncMock()
+    flow._abort_if_unique_id_configured = Mock()
+    flow.async_create_entry = Mock(return_value={"type": "create_entry"})
+    await flow.async_step_user({**entry.data, "host": "  econet.invalid "})
+    flow.async_set_unique_id.assert_awaited_once_with("econet.invalid")
+    assert flow.async_create_entry.call_args.kwargs["data"]["host"] == "econet.invalid"
+
+
+def test_translations_match_strings_and_cover_reconfigure():
+    import json
+    from pathlib import Path
+
+    base = Path(config_flow.__file__).parent
+    strings = json.loads((base / "strings.json").read_text())
+    english = json.loads((base / "translations" / "en.json").read_text())
+    assert strings == english
+    config = strings["config"]
+    assert "reconfigure" in config["step"]
+    assert "wrong_device" in config["error"]
+    assert "already_configured" in config["error"]
+    assert "reconfigure_successful" in config["abort"]

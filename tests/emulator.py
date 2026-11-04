@@ -19,6 +19,7 @@ class EconetEmulator:
         self.sys = self._load("sys_params")
         self.success = self._load("newparam_success")
         self.mode = "ok"
+        self.auth_fail = False  # answer every request with 401
         self.write_modes = []  # optional per-attempt responses for timeout recovery
         self.writes = []
         self.requests = []
@@ -75,6 +76,8 @@ class EconetEmulator:
         endpoint = request.match_info["endpoint"]
         self.requests.append(endpoint)
         self.auth_headers.add(request.headers.get("Authorization"))
+        if self.auth_fail:
+            raise web.HTTPUnauthorized()
         if endpoint in ("regParams", "editParams", "sysParams"):
             return web.json_response({"regParams": self.reg, "editParams": self.edit,
                                       "sysParams": self.sys}[endpoint])

@@ -4,6 +4,7 @@ from datetime import timedelta
 import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -320,3 +321,113 @@ async def test_restore_service_ignores_self_changing_values(loaded, safe_mode):
     assert "econet_grant_restore_preview" not in notices
     assert "already match" in notices["econet_grant_restore_result"]["message"]
     assert pump.writes == []
+
+
+async def _second_pump(aiohttp_server):
+    pump = EconetEmulator()
+    server = await aiohttp_server(pump.app, host="127.0.0.1")
+    return pump, str(server.make_url(""))
+
+
+async def _reconfigure(hass, entry, host):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "reconfigure", "entry_id": entry.entry_id})
+    if host is None:
+        return result
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"host": host})
+    await hass.async_block_till_done()
+    return result
+
+
+def _registry_snapshot(hass, entry):
+    entities = er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
+    devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+    return ({(e.entity_id, e.unique_id) for e in entities}, {d.id for d in devices})
+
+
+async def test_reconfigure_form_prefills_current_host(loaded):
+    hass, entry, _pump = loaded
+    result = await _reconfigure(hass, entry, None)
+    assert result["type"] == "form"
+    assert result["step_id"] == "reconfigure"
+    key = next(k for k in result["data_schema"].schema if k == "host")
+    assert key.description["suggested_value"] == entry.data["host"]
+
+
+async def test_reconfigure_moves_to_new_host_and_keeps_entities(loaded, aiohttp_server):
+    hass, entry, pump_a = loaded
+    pump_b, new = await _second_pump(aiohttp_server)
+    before = _registry_snapshot(hass, entry)
+    options = dict(entry.options)
+    result = await _reconfigure(hass, entry, new)
+    assert result["type"] == "abort"
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data["host"] == new
+    assert entry.data["username"] == "test" and entry.data["password"] == "test-only"
+    assert entry.unique_id == new
+    assert dict(entry.options) == options
+    assert entry.state is ConfigEntryState.LOADED
+    assert _registry_snapshot(hass, entry) == before
+    assert {"regParams", "editParams", "sysParams"} <= set(pump_b.requests)
+    assert pump_a.writes == [] and pump_b.writes == []
+
+
+async def test_reconfigure_rejects_different_controller(loaded, aiohttp_server):
+    hass, entry, _pump = loaded
+    pump_b, new = await _second_pump(aiohttp_server)
+    pump_b.sys = {**pump_b.sys, "uid": "some-other-device"}
+    old_host = entry.data["host"]
+    result = await _reconfigure(hass, entry, new)
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "wrong_device"}
+    assert entry.data["host"] == old_host
+    assert entry.unique_id == "synthetic-entry"
+
+
+async def test_reconfigure_unreachable_host_keeps_old_host(loaded, monkeypatch):
+    hass, entry, _pump = loaded
+    monkeypatch.setattr("custom_components.econet_grant.api.API_MAX_RETRIES", 1)
+    old_host = entry.data["host"]
+    result = await _reconfigure(hass, entry, "http://127.0.0.1:9")
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "cannot_connect"}
+    assert entry.data["host"] == old_host
+    assert entry.unique_id == "synthetic-entry"
+
+
+async def test_reconfigure_bad_credentials(loaded, aiohttp_server):
+    hass, entry, _pump = loaded
+    pump_b, new = await _second_pump(aiohttp_server)
+    pump_b.auth_fail = True
+    old_host = entry.data["host"]
+    result = await _reconfigure(hass, entry, new)
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "invalid_auth"}
+    assert entry.data["host"] == old_host
+
+
+@pytest.mark.parametrize("renamed", [True, False])
+async def test_reconfigure_title_handling(loaded, aiohttp_server, renamed):
+    hass, entry, _pump = loaded
+    _pump_b, new = await _second_pump(aiohttp_server)
+    title = "Heat pump" if renamed else f"EcoNet Grant ({entry.data['host']})"
+    hass.config_entries.async_update_entry(entry, title=title)
+    result = await _reconfigure(hass, entry, new)
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.title == ("Heat pump" if renamed else f"EcoNet Grant ({new})")
+
+
+async def test_reconfigure_rejects_host_used_by_another_entry(loaded):
+    hass, entry, _pump = loaded
+    other = "http://192.0.2.10"
+    MockConfigEntry(
+        domain=DOMAIN, unique_id=other,
+        data={"host": other, "username": "test", "password": "test-only"},
+    ).add_to_hass(hass)
+    old_host = entry.data["host"]
+    result = await _reconfigure(hass, entry, other)
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "already_configured"}
+    assert entry.data["host"] == old_host
+    assert entry.unique_id == "synthetic-entry"

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import aiohttp
 import voluptuous as vol
 
 from homeassistant.config_entries import (
@@ -14,6 +15,7 @@ from homeassistant.config_entries import (
     OptionsFlow,
 )
 from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import AuthError, EconetApi, EconetClient
@@ -59,7 +61,8 @@ class EconetGrantConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            host = user_input[CONF_HOST]
+            host = user_input[CONF_HOST].strip()
+            user_input = {**user_input, CONF_HOST: host}
             username = user_input[CONF_USERNAME]
             password = user_input[CONF_PASSWORD]
 
@@ -89,6 +92,74 @@ class EconetGrantConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=USER_SCHEMA,
+            errors=errors,
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Change the controller address; entities and history are kept."""
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            host = user_input[CONF_HOST].strip()
+            if any(
+                host in (other.unique_id, other.data.get(CONF_HOST))
+                for other in self._async_current_entries(include_ignore=False)
+                if other.entry_id != entry.entry_id
+            ):
+                errors["base"] = "already_configured"
+            else:
+                client = EconetClient(
+                    host,
+                    entry.data[CONF_USERNAME],
+                    entry.data[CONF_PASSWORD],
+                    async_get_clientsession(self.hass),
+                )
+                try:
+                    sys_params = await EconetApi(client).fetch_sys_params()
+                except AuthError:
+                    errors["base"] = "invalid_auth"
+                except (aiohttp.ClientError, OSError):
+                    errors["base"] = "cannot_connect"
+                except Exception:
+                    _LOGGER.exception("Unexpected error during reconfigure")
+                    errors["base"] = "unknown"
+                else:
+                    if sys_params is None:
+                        errors["base"] = "cannot_connect"
+                    else:
+                        known = {
+                            value
+                            for device in dr.async_entries_for_config_entry(
+                                dr.async_get(self.hass), entry.entry_id
+                            )
+                            for domain, value in device.identifiers
+                            if domain == DOMAIN
+                        }
+                        new_uid = sys_params.get("uid")
+                        if known and new_uid and new_uid not in known:
+                            errors["base"] = "wrong_device"
+
+            if not errors:
+                # Follow the address in the title unless the owner renamed it.
+                title = entry.title
+                if title == f"EcoNet Grant ({entry.data[CONF_HOST]})":
+                    title = f"EcoNet Grant ({host})"
+                return self.async_update_reload_and_abort(
+                    entry,
+                    unique_id=host,
+                    title=title,
+                    data_updates={CONF_HOST: host},
+                )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(
+                vol.Schema({vol.Required(CONF_HOST): str}),
+                user_input or {CONF_HOST: entry.data[CONF_HOST]},
+            ),
             errors=errors,
         )
 

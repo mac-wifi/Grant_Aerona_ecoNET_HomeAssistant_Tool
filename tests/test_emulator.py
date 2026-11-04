@@ -93,3 +93,16 @@ async def test_write_failure_modes(aiohttp_server, monkeypatch, mode):
     assert pump.edit["data"]["238"]["value"] == 20
     assert pump.reg["settingsVer"] == 1
     assert len(pump.writes) == (API_MAX_RETRIES if mode == "timeout" else 1)
+
+
+async def test_auth_fail_switch_returns_401(aiohttp_server, monkeypatch):
+    from custom_components.econet_grant.api import AuthError
+
+    pump = EconetEmulator()
+    pump.auth_fail = True
+    server = await aiohttp_server(pump.app, host="127.0.0.1")
+    monkeypatch.setattr("custom_components.econet_grant.api.MIN_REQUEST_GAP", 0)
+    async with ClientSession() as session:
+        api = EconetApi(EconetClient(str(server.make_url("")), "test", "test-only", session))
+        with pytest.raises(AuthError):
+            await api.fetch_sys_params()

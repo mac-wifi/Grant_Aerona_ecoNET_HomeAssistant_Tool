@@ -9,15 +9,28 @@
           "username": "Username",
           "password": "Password"
         }
+      },
+      "reconfigure": {
+        "title": "Change ecoNET address",
+        "description": "Enter the new IP address or host name of the ecoNET module. The saved username and password are reused. Entities, history and settings are kept.",
+        "data": {
+          "host": "Host (IP address)"
+        },
+        "data_description": {
+          "host": "For example 192.168.1.50. Give the module a fixed (reserved) address in your router so it doesn't change again."
+        }
       }
     },
     "error": {
       "cannot_connect": "Unable to connect to the ecoNET device.",
       "invalid_auth": "Invalid username or password.",
-      "unknown": "An unexpected error occurred."
+      "unknown": "An unexpected error occurred.",
+      "wrong_device": "That address answers, but it is a different ecoNET controller from the one this integration was set up with.",
+      "already_configured": "Another EcoNet Grant entry already uses this address."
     },
     "abort": {
-      "already_configured": "This device is already configured."
+      "already_configured": "This device is already configured.",
+      "reconfigure_successful": "Address updated. The integration has been reloaded."
     }
   },
   "options": {
