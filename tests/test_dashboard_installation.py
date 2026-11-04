@@ -77,3 +77,29 @@ def test_about_card_shows_running_version(path):
     about = next(c for c in admin["cards"] if c.get("title") == "About")
     assert "states('sensor.grant_aerona_heat_pump_integration_version')" in about["content"]
     assert not re.search(r"v\d+\.\d+\.\d+", about["content"])
+
+
+@pytest.mark.parametrize("path", [
+    "custom_components/econet_grant/extras/econet_grant_dashboard.yaml",
+    "tools/owner-deployment/econet_grant_dashboard_live.yaml",
+])
+def test_admin_view_has_connection_cards(path):
+    file = ROOT / path
+    if not file.exists():
+        pytest.skip("Owner deployment artifact is local/ignored, not distributed")
+    admin = next(v for v in yaml.safe_load(file.read_text())["views"] if v["title"] == "Admin")
+    text = json.dumps(admin["cards"])
+    assert "sensor.grant_aerona_heat_pump_controller_address" in text
+    assert '"navigation_path": "/config/integrations/integration/econet_grant"' in text
+    assert '"navigation_path": "/config/repairs"' in text
+    conditional = [
+        c for c in admin["cards"] if c.get("type") == "conditional"
+        and any(cond.get("entity") == "sensor.grant_aerona_heat_pump_outdoor_temperature"
+                and cond.get("state") == "unavailable" for cond in c["conditions"])
+    ]
+    assert conditional
+    # Entities referenced by the new cards must exist in the pinned contract.
+    contract = (ROOT / "tests/fixtures/entity_contract.json").read_text()
+    new_cards = [c for c in admin["cards"] if "controller_address" in json.dumps(c)] + conditional
+    for entity in set(re.findall(r"sensor\.grant_aerona_heat_pump_\w+", json.dumps(new_cards))):
+        assert f'"{entity}"' in contract, entity

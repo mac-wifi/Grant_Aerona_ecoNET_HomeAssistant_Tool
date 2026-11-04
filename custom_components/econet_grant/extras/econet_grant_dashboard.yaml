@@ -460,6 +460,44 @@ views:
     path: admin
     icon: mdi:shield-lock
     cards:
+      - type: conditional
+        conditions:
+          - entity: sensor.grant_aerona_heat_pump_outdoor_temperature
+            state: unavailable
+        card:
+          type: markdown
+          content: >
+            ## Heat pump not reachable
+
+            Its address or login may have changed. Tap **Change address or
+            login** below. After 10 minutes a **Fix** button also appears in
+            Settings > Repairs.
+
+      - type: entities
+        title: Connection
+        show_header_toggle: false
+        entities:
+          - entity: sensor.grant_aerona_heat_pump_controller_address
+            name: Controller Address
+            icon: mdi:ip-network
+          - type: button
+            name: Change address or login
+            icon: mdi:lan-pending
+            action_name: Open
+            tap_action:
+              action: navigate
+              navigation_path: /config/integrations/integration/econet_grant
+          - type: button
+            name: Repairs
+            icon: mdi:wrench
+            action_name: Open
+            tap_action:
+              action: navigate
+              navigation_path: /config/repairs
+      - type: markdown
+        content: >
+          **Change address or login** opens the integration page. Tap **⋮**
+          on the EcoNet Grant entry, then **Reconfigure**.
       - type: entities
         title: Snapshot & Backup
         show_header_toggle: false
