@@ -4,6 +4,21 @@ Versions follow `MAJOR.MINOR.PATCH`: PATCH for fixes and small changes, MINOR
 for new or changed functionality. Only versions with a GitHub Release were
 published; the others were local development candidates.
 
+## Unreleased
+
+- **Change the login as well as the address.** **Reconfigure** now also takes
+  the username and password; leave the password blank to keep the saved one.
+- **Re-authenticate.** If the controller rejects the saved login, Home
+  Assistant now offers a Re-authenticate prompt to enter the current one.
+- **Repairs "Fix" button.** After the controller has been unreachable for 10
+  minutes, Settings > Repairs shows a Fix button to enter a new address or
+  login. It clears itself once the controller answers again.
+- **Controller Address sensor.** A new diagnostic sensor shows the saved
+  address (never the login).
+- **Dashboard Connection card.** The Admin tab shows the saved address, a
+  "not reachable" notice and buttons to Reconfigure and Repairs. Recopy the
+  dashboard file to get it (README Step 7b).
+
 ## 0.8.0 — 2026-11-04
 
 - **Change the controller address without reinstalling.** If the ecoNET

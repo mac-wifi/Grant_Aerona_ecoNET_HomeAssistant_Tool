@@ -401,9 +401,17 @@ After successful configuration, you'll have entities with the prefix `grant_aero
 
 Go to **Settings > Devices & Services > EcoNet Grant Aerona** to see the full list.
 
-#### Changing the controller's IP address later
+#### Changing the controller's address or login later
 
-If the ecoNET module gets a new IP address, go to **Settings > Devices & services > EcoNet Grant Aerona > ⋮ > Reconfigure** and enter the new address. Entities, entity IDs, history, options and snapshots are kept; the saved username and password are reused, and (once the integration has connected at least once) the new address must answer as the same controller. To stop the address changing again, give the module a DHCP reservation (a fixed address) in your router.
+If the ecoNET module gets a new IP address, or its username or password changes, go to **Settings > Devices & services > EcoNet Grant Aerona > ⋮ > Reconfigure** and enter the new details. Leave the password blank to keep the current one. Entities, entity IDs, history, options and snapshots are kept, and (once the integration has connected at least once) the new address must answer as the same controller.
+
+Other ways in:
+
+- If the controller rejects the saved login, Home Assistant shows a **Re-authenticate** prompt; enter the current username and password.
+- If the controller has been unreachable for 10 minutes, **Settings > Repairs** shows a **Fix** button where you can enter the new address or login.
+- On the dashboard's **Admin** tab, the **Connection** card shows the saved address and has buttons that open the integration page and Repairs.
+
+To stop the address changing again, give the module a DHCP reservation (a fixed address) in your router.
 
 ---
 
@@ -430,6 +438,8 @@ This lets you verify the integration is reading correctly before you allow it to
 ### 7. Dashboard Setup
 
 The integration includes an owner-tested Lovelace dashboard with 6 tabs: Favourites, Circuit 1, Hot Water, System, Guest, and Admin. It uses two custom frontend cards. The Guest tab is an explanatory note only; it has no helper controls or automated checkout/restore actions. Deploy it if you want the supplied UI and its snapshot controls.
+
+> **Updating from an older version:** the 0.9.0 dashboard adds a **Connection** card to the Admin tab. Recopy the dashboard file (Step 7b) to get it.
 
 > **Entity ID compatibility:** This dashboard preserves the IDs from the owner's existing installation, including `heating_*` and `dhw_*` IDs, rather than assuming fresh-install CH/HW IDs. Home Assistant normally preserves existing entity IDs when friendly names change. On both fresh and upgraded installations, compare the actual IDs under **Settings > Devices & Services > EcoNet Grant Aerona > Device** and adjust your dashboard copy before deployment. Do not rename live entities just to fit the example.
 
@@ -699,7 +709,7 @@ Use this checklist to confirm everything is working. Tick off each item as you g
 - Verify the ecoNET IP is reachable: `curl http://<ip>/econet/regParams` from the HA terminal
 - Check credentials are for the local device, not the cloud account
 - Ensure nothing else is holding a connection to the device (the ecoNET app, another HA instance)
-- If the integration shows "Failed to set up" or "Retrying" after a router change, the module's IP address may have moved. Use **Reconfigure** (see Step 5) to enter the new address
+- If the integration shows "Failed to set up" or "Retrying" after a router change, the module's IP address may have moved. Use **Reconfigure** (see Step 5) to enter the new address, or the **Fix** button in **Settings > Repairs** once it has been unreachable for 10 minutes
 
 #### Entities show "Unavailable"
 
