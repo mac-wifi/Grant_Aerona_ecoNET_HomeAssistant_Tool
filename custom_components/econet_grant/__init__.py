@@ -103,6 +103,8 @@ async def _async_connect(hass: HomeAssistant, entry: EconetConfigEntry) -> Econe
             entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD],
         )
     except AuthError as err:
+        # The controller answered, so it is reachable: clear any stale outage.
+        async_report_success(hass, entry)
         raise ConfigEntryAuthFailed("Invalid credentials") from err
     except Exception as err:
         async_report_failure(hass, entry)

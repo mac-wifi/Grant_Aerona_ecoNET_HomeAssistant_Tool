@@ -12,7 +12,8 @@ published; the others were local development candidates.
   Assistant now offers a Re-authenticate prompt to enter the current one.
 - **Repairs "Fix" button.** After the controller has been unreachable for 10
   minutes, Settings > Repairs shows a Fix button to enter a new address or
-  login. It clears itself once the controller answers again.
+  login. It clears itself once the controller answers again, including when
+  the controller answers by rejecting the login.
 - **Controller Address sensor.** A new diagnostic sensor shows the saved
   address (never the login).
 - **Dashboard Connection card.** The Admin tab shows the saved address, a

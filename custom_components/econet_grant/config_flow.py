@@ -133,6 +133,8 @@ def async_apply_connection(
     """Store the new connection and make sure the entry reloads exactly once."""
     # Read before updating: the update listener can start its reload straight away.
     was_loaded = entry.state is ConfigEntryState.LOADED
+    # A new address or login starts a fresh outage clock.
+    hass.data.get(f"{DOMAIN}_connection_failures", {}).pop(entry.entry_id, None)
     # Follow the address in the title unless the owner renamed it.
     title = entry.title
     if title == f"EcoNet Grant ({entry.data[CONF_HOST]})":

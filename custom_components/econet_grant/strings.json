@@ -42,7 +42,7 @@
     },
     "abort": {
       "already_configured": "This device is already configured.",
-      "reconfigure_successful": "Address updated. The integration has been reloaded.",
+      "reconfigure_successful": "Connection updated. The integration has been reloaded.",
       "reauth_successful": "Login updated. The integration has been reloaded."
     }
   },

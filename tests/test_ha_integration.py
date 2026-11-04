@@ -13,9 +13,10 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.setup import async_setup_component
+from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.econet_grant import repairs
+from custom_components.econet_grant import config_flow, repairs
 from custom_components.econet_grant.const import DOMAIN
 from emulator import EconetEmulator
 
@@ -785,3 +786,52 @@ async def test_removing_entry_removes_issue(
     await hass.config_entries.async_remove(entry.entry_id)
     await hass.async_block_till_done()
     assert _issues(hass) == {}
+
+
+async def test_login_rejection_clears_stale_unreachable_issue(
+        real_hass, enable_custom_integrations, aiohttp_server, monkeypatch):
+    hass = real_hass
+    monkeypatch.setattr(repairs, "CONNECTION_ISSUE_AFTER", timedelta(0))
+    entry = await _closed_port_entry(hass, monkeypatch)
+    assert (DOMAIN, f"cannot_connect_{entry.entry_id}") in ir.async_get(hass).issues
+    pump, url = await _second_pump(aiohttp_server)
+    pump.credentials = ("test", "different-pass")
+    hass.config_entries.async_update_entry(entry, data={**entry.data, "host": url})
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert _issues(hass) == {}
+    assert any(
+        f["context"]["source"] == "reauth" for f in hass.config_entries.flow.async_progress()
+    )
+
+
+async def test_applying_connection_resets_outage_clock(loaded, aiohttp_server):
+    hass, entry, _pump = loaded
+    failures = hass.data.setdefault(f"{DOMAIN}_connection_failures", {})
+    failures[entry.entry_id] = dt_util.utcnow() - timedelta(hours=3)
+    _pump_b, new = await _second_pump(aiohttp_server)
+    # Synchronous check: a later successful reload would clear it anyway.
+    config_flow.async_apply_connection(hass, entry, new, "test", "test")
+    assert entry.entry_id not in hass.data.get(f"{DOMAIN}_connection_failures", {})
+    await hass.async_block_till_done()
+
+
+async def test_issue_raised_only_at_threshold(real_hass, monkeypatch):
+    hass = real_hass
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"host": "http://127.0.0.1:9", "username": "t", "password": "p"},
+    )
+    entry.add_to_hass(hass)
+    start = dt_util.utcnow()
+    now = [start]
+    monkeypatch.setattr(repairs.dt_util, "utcnow", lambda: now[0])
+    assert repairs.CONNECTION_ISSUE_AFTER == timedelta(minutes=10)
+    key = (DOMAIN, f"cannot_connect_{entry.entry_id}")
+    repairs.async_report_failure(hass, entry)
+    now[0] = start + timedelta(minutes=9)
+    repairs.async_report_failure(hass, entry)
+    assert key not in ir.async_get(hass).issues
+    now[0] = start + timedelta(minutes=10)
+    repairs.async_report_failure(hass, entry)
+    assert key in ir.async_get(hass).issues

@@ -79,6 +79,10 @@ class EconetFastCoordinator(_EconetCoordinator):
         """Track outages for the Repairs issue (auth failures use HA's reauth)."""
         try:
             data = await super()._async_update_data()
+        except ConfigEntryAuthFailed:
+            # A login rejection still means the controller answered.
+            async_report_success(self.hass, self._entry)
+            raise
         except UpdateFailed:
             async_report_failure(self.hass, self._entry)
             raise

@@ -104,3 +104,12 @@ def test_translations_match_strings_and_cover_reconfigure():
     assert "wrong_device" in config["error"]
     assert "already_configured" in config["error"]
     assert "reconfigure_successful" in config["abort"]
+
+
+def test_reconfigure_abort_text_covers_login_too():
+    import json
+    from pathlib import Path
+    base = Path(__file__).parent.parent / "custom_components" / "econet_grant"
+    for name in ("strings.json", "translations/en.json"):
+        text = json.loads((base / name).read_text())["config"]["abort"]["reconfigure_successful"]
+        assert text == "Connection updated. The integration has been reloaded."
