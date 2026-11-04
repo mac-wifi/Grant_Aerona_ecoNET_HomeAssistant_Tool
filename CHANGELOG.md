@@ -4,6 +4,15 @@ Versions follow `MAJOR.MINOR.PATCH`: PATCH for fixes and small changes, MINOR
 for new or changed functionality. Only versions with a GitHub Release were
 published; the others were local development candidates.
 
+## Unreleased
+
+- **Change the controller address without reinstalling.** If the ecoNET
+  module gets a new IP address, use **Settings > Devices & services > EcoNet
+  Grant Aerona > ⋮ > Reconfigure**. Entities, entity IDs, history, options and
+  snapshots are kept. The new address must answer as the same controller, or
+  it is refused ("different ecoNET controller"); it also cannot duplicate
+  another entry. Spaces around the address are now trimmed when setting up.
+
 ## 0.7.1 — 2026-11-02
 
 - **Restore skips values the controller changes by itself.** With nothing

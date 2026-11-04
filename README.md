@@ -401,6 +401,10 @@ After successful configuration, you'll have entities with the prefix `grant_aero
 
 Go to **Settings > Devices & Services > EcoNet Grant Aerona** to see the full list.
 
+#### Changing the controller's IP address later
+
+If the ecoNET module gets a new IP address, go to **Settings > Devices & services > EcoNet Grant Aerona > ⋮ > Reconfigure** and enter the new address. Entities, entity IDs, history, options and snapshots are kept; the saved username and password are reused, and the new address must answer as the same controller. To stop the address changing again, give the module a DHCP reservation (a fixed address) in your router.
+
 ---
 
 ### 6. Understand Safe Mode
@@ -695,6 +699,7 @@ Use this checklist to confirm everything is working. Tick off each item as you g
 - Verify the ecoNET IP is reachable: `curl http://<ip>/econet/regParams` from the HA terminal
 - Check credentials are for the local device, not the cloud account
 - Ensure nothing else is holding a connection to the device (the ecoNET app, another HA instance)
+- If the integration shows "Failed to set up" or "Retrying" after a router change, the module's IP address may have moved. Use **Reconfigure** (see Step 5) to enter the new address
 
 #### Entities show "Unavailable"
 
