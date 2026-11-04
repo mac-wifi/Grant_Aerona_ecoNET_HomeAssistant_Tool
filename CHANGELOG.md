@@ -4,7 +4,7 @@ Versions follow `MAJOR.MINOR.PATCH`: PATCH for fixes and small changes, MINOR
 for new or changed functionality. Only versions with a GitHub Release were
 published; the others were local development candidates.
 
-## Unreleased
+## 0.8.0 — 2026-11-04
 
 - **Change the controller address without reinstalling.** If the ecoNET
   module gets a new IP address, use **Settings > Devices & services > EcoNet
