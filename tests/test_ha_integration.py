@@ -493,3 +493,26 @@ async def test_reconfigure_timeout_keeps_old_host(loaded, aiohttp_server, monkey
     assert result["errors"] == {"base": "cannot_connect"}
     assert entry.data["host"] == old_host
     assert entry.unique_id == "synthetic-entry"
+
+
+async def test_reconfigure_recovers_entry_stuck_in_setup_retry(
+        real_hass, enable_custom_integrations, aiohttp_server, monkeypatch):
+    """Wrong host at setup leaves no update listener; reconfigure must still reload."""
+    hass = real_hass
+    monkeypatch.setattr("custom_components.econet_grant.api.MIN_REQUEST_GAP", 0)
+    assert await async_setup_component(hass, "persistent_notification", {})
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Synthetic heat pump", unique_id="synthetic-entry",
+        data={"host": "http://127.0.0.1:9", "username": "test", "password": "test-only"},
+        options={"safe_mode": True, "push_notifications": False},
+    )
+    entry.add_to_hass(hass)
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+    pump, new = await _second_pump(aiohttp_server)
+    # No time advance: it must load now, not at HA's next back-off retry.
+    result = await _reconfigure(hass, entry, new)
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.data["host"] == new
+    assert "regParams" in pump.requests

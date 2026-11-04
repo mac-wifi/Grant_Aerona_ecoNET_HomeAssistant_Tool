@@ -165,7 +165,16 @@ class EconetGrantConfigFlow(ConfigFlow, domain=DOMAIN):
                 title = entry.title
                 if title == f"EcoNet Grant ({entry.data[CONF_HOST]})":
                     title = f"EcoNet Grant ({host})"
-                return self.async_update_and_abort(
+                # Loaded entry: its update listener reloads once. Failed setup
+                # has no listener yet, so reload explicitly.
+                if entry.update_listeners:
+                    return self.async_update_and_abort(
+                        entry,
+                        unique_id=host,
+                        title=title,
+                        data_updates={CONF_HOST: host},
+                    )
+                return self.async_update_reload_and_abort(
                     entry,
                     unique_id=host,
                     title=title,

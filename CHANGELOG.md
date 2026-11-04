@@ -12,6 +12,8 @@ published; the others were local development candidates.
   snapshots are kept. The new address must answer as the same controller, or
   it is refused ("different ecoNET controller"); it also cannot duplicate
   another entry. Spaces around the address are now trimmed when setting up.
+  Works even when the entry is stuck retrying because the old address is
+  wrong: it reloads straight away instead of waiting for the next retry.
 
 ## 0.7.1 — 2026-11-02
 
