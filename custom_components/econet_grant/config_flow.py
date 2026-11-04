@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 import logging
 from typing import Any
 
@@ -10,6 +11,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import (
     ConfigEntry,
+    ConfigEntryState,
     ConfigFlow,
     ConfigFlowResult,
     OptionsFlow,
@@ -17,6 +19,11 @@ from homeassistant.config_entries import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import (
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
+)
 
 from .api import AuthError, EconetApi, EconetClient
 from .const import (
@@ -70,6 +77,83 @@ def _known_uids(hass: HomeAssistant, entry: ConfigEntry) -> set[str]:
     }
 
 
+_PASSWORD_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
+
+
+def connection_schema(username: str) -> vol.Schema:
+    """Address and login form; a blank or missing password keeps the saved one."""
+    return vol.Schema(
+        {
+            vol.Required(CONF_HOST): str,
+            vol.Required(CONF_USERNAME, default=username): str,
+            vol.Optional(CONF_PASSWORD): _PASSWORD_SELECTOR,
+        }
+    )
+
+
+async def async_check_connection(
+    hass: HomeAssistant, entry: ConfigEntry, host: str, username: str, password: str
+) -> str | None:
+    """Return an error key, or None if this login works at this address."""
+    wanted = _normalise_host(host)
+    if any(
+        wanted in (
+            _normalise_host(other.unique_id or ""),
+            _normalise_host(other.data.get(CONF_HOST) or ""),
+        )
+        for other in hass.config_entries.async_entries(DOMAIN, include_ignore=False)
+        if other.entry_id != entry.entry_id
+    ):
+        return "already_configured"
+
+    client = EconetClient(host, username, password, async_get_clientsession(hass))
+    try:
+        sys_params = await EconetApi(client).fetch_sys_params()
+    except AuthError:
+        return "invalid_auth"
+    except (aiohttp.ClientError, OSError):
+        return "cannot_connect"
+    except Exception:
+        _LOGGER.exception("Unexpected error checking the ecoNET connection")
+        return "unknown"
+    if sys_params is None:
+        return "cannot_connect"
+
+    known = _known_uids(hass, entry)
+    new_uid = sys_params.get("uid")
+    if known and new_uid and new_uid not in known:
+        return "wrong_device"
+    return None
+
+
+@callback
+def async_apply_connection(
+    hass: HomeAssistant, entry: ConfigEntry, host: str, username: str, password: str
+) -> None:
+    """Store the new connection and make sure the entry reloads exactly once."""
+    # Read before updating: the update listener can start its reload straight away.
+    was_loaded = entry.state is ConfigEntryState.LOADED
+    # Follow the address in the title unless the owner renamed it.
+    title = entry.title
+    if title == f"EcoNet Grant ({entry.data[CONF_HOST]})":
+        title = f"EcoNet Grant ({host})"
+    hass.config_entries.async_update_entry(
+        entry,
+        unique_id=host,
+        title=title,
+        data={
+            **entry.data,
+            CONF_HOST: host,
+            CONF_USERNAME: username,
+            CONF_PASSWORD: password,
+        },
+    )
+    # Loaded entry: its update listener reloads once on a change. Anything else
+    # (failed setup, retrying) has no listener yet, so reload explicitly.
+    if not was_loaded:
+        hass.config_entries.async_schedule_reload(entry.entry_id)
+
+
 class EconetGrantConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for EcoNet Grant Aerona."""
 
@@ -119,74 +203,76 @@ class EconetGrantConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Change the controller address; entities and history are kept."""
+        """Change the controller address and login; entities and history are kept."""
         entry = self._get_reconfigure_entry()
         errors: dict[str, str] = {}
 
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
-            wanted = _normalise_host(host)
-            if any(
-                wanted in (
-                    _normalise_host(other.unique_id or ""),
-                    _normalise_host(other.data.get(CONF_HOST) or ""),
-                )
-                for other in self._async_current_entries(include_ignore=False)
-                if other.entry_id != entry.entry_id
-            ):
-                errors["base"] = "already_configured"
-            else:
-                client = EconetClient(
-                    host,
-                    entry.data[CONF_USERNAME],
-                    entry.data[CONF_PASSWORD],
-                    async_get_clientsession(self.hass),
-                )
-                try:
-                    sys_params = await EconetApi(client).fetch_sys_params()
-                except AuthError:
-                    errors["base"] = "invalid_auth"
-                except (aiohttp.ClientError, OSError):
-                    errors["base"] = "cannot_connect"
-                except Exception:
-                    _LOGGER.exception("Unexpected error during reconfigure")
-                    errors["base"] = "unknown"
-                else:
-                    if sys_params is None:
-                        errors["base"] = "cannot_connect"
-                    else:
-                        known = _known_uids(self.hass, entry)
-                        new_uid = sys_params.get("uid")
-                        if known and new_uid and new_uid not in known:
-                            errors["base"] = "wrong_device"
+            username = user_input[CONF_USERNAME].strip()
+            password = user_input.get(CONF_PASSWORD) or entry.data[CONF_PASSWORD]
+            error = await async_check_connection(
+                self.hass, entry, host, username, password
+            )
+            if error is None:
+                async_apply_connection(self.hass, entry, host, username, password)
+                return self.async_abort(reason="reconfigure_successful")
+            errors["base"] = error
 
-            if not errors:
-                # Follow the address in the title unless the owner renamed it.
-                title = entry.title
-                if title == f"EcoNet Grant ({entry.data[CONF_HOST]})":
-                    title = f"EcoNet Grant ({host})"
-                # Loaded entry: its update listener reloads once. Failed setup
-                # has no listener yet, so reload explicitly.
-                if entry.update_listeners:
-                    return self.async_update_and_abort(
-                        entry,
-                        unique_id=host,
-                        title=title,
-                        data_updates={CONF_HOST: host},
-                    )
-                return self.async_update_reload_and_abort(
-                    entry,
-                    unique_id=host,
-                    title=title,
-                    data_updates={CONF_HOST: host},
-                )
-
+        # The password is never prefilled, and a failed submit doesn't echo it.
+        suggested = {
+            CONF_HOST: entry.data[CONF_HOST],
+            CONF_USERNAME: entry.data[CONF_USERNAME],
+        }
+        if user_input is not None:
+            suggested = {
+                CONF_HOST: user_input[CONF_HOST],
+                CONF_USERNAME: user_input[CONF_USERNAME],
+            }
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=self.add_suggested_values_to_schema(
-                vol.Schema({vol.Required(CONF_HOST): str}),
-                user_input or {CONF_HOST: entry.data[CONF_HOST]},
+                connection_schema(entry.data[CONF_USERNAME]), suggested
             ),
+            errors=errors,
+        )
+
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> ConfigFlowResult:
+        """The controller rejected the saved login."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        entry = self._get_reauth_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            host = entry.data[CONF_HOST]
+            username = user_input[CONF_USERNAME].strip()
+            password = user_input[CONF_PASSWORD]
+            error = await async_check_connection(
+                self.hass, entry, host, username, password
+            )
+            if error is None:
+                async_apply_connection(self.hass, entry, host, username, password)
+                return self.async_abort(reason="reauth_successful")
+            errors["base"] = error
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=self.add_suggested_values_to_schema(
+                vol.Schema(
+                    {
+                        vol.Required(CONF_USERNAME): str,
+                        vol.Required(CONF_PASSWORD): _PASSWORD_SELECTOR,
+                    }
+                ),
+                {CONF_USERNAME: entry.data[CONF_USERNAME]},
+            ),
+            description_placeholders={"host": entry.data[CONF_HOST]},
             errors=errors,
         )
 

@@ -1,8 +1,10 @@
 """Real HA config-entry/platform lifecycle against a loopback heat pump."""
 import asyncio
+import base64
 from datetime import timedelta
 
 import pytest
+import voluptuous as vol
 from aiohttp import web
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
@@ -516,3 +518,134 @@ async def test_reconfigure_recovers_entry_stuck_in_setup_retry(
     assert entry.state is ConfigEntryState.LOADED
     assert entry.data["host"] == new
     assert "regParams" in pump.requests
+
+
+# --- Part A: credentials in Reconfigure, Re-authenticate -------------------
+
+async def _reconfigure_with(hass, entry, user_input):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "reconfigure", "entry_id": entry.entry_id})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input)
+    await hass.async_block_till_done()
+    return result
+
+
+async def test_reconfigure_changes_username_and_password(loaded, aiohttp_server, caplog):
+    hass, entry, pump_a = loaded
+    old_host = entry.data["host"]
+    # Same host: pump A itself now demands the new login.
+    pump_a.credentials = ("new-user", "new-pass")
+    before = _registry_snapshot(hass, entry)
+    result = await _reconfigure_with(
+        hass, entry, {"host": old_host, "username": "new-user", "password": "new-pass"})
+    assert result["type"] == "abort"
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data["username"] == "new-user"
+    assert entry.data["password"] == "new-pass"
+    assert entry.state is ConfigEntryState.LOADED
+    assert _registry_snapshot(hass, entry) == before
+    expected = "Basic " + base64.b64encode(b"new-user:new-pass").decode()
+    assert expected in pump_a.auth_headers
+    assert "new-pass" not in caplog.text
+
+
+async def test_reconfigure_new_host_and_login(loaded, aiohttp_server):
+    hass, entry, _pump = loaded
+    pump_b, new = await _second_pump(aiohttp_server)
+    pump_b.credentials = ("new-user", "new-pass")
+    result = await _reconfigure_with(
+        hass, entry, {"host": new, "username": "new-user", "password": "new-pass"})
+    assert result["reason"] == "reconfigure_successful"
+    expected = "Basic " + base64.b64encode(b"new-user:new-pass").decode()
+    assert expected in pump_b.auth_headers
+    assert entry.data["host"] == new and entry.state is ConfigEntryState.LOADED
+
+
+async def test_reconfigure_blank_password_keeps_stored(loaded, aiohttp_server):
+    hass, entry, _pump = loaded
+    _pump_b, new = await _second_pump(aiohttp_server)
+    result = await _reconfigure_with(hass, entry, {"host": new, "username": "test"})
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data["password"] == "test-only"
+    _pump_c, other = await _second_pump(aiohttp_server)
+    result = await _reconfigure_with(
+        hass, entry, {"host": other, "username": "test", "password": ""})
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data["password"] == "test-only"
+
+
+async def test_reconfigure_wrong_password_rejected(loaded, aiohttp_server):
+    hass, entry, _pump = loaded
+    pump_b, new = await _second_pump(aiohttp_server)
+    pump_b.credentials = ("new-user", "new-pass")
+    before = dict(entry.data)
+    result = await _reconfigure_with(
+        hass, entry, {"host": new, "username": "new-user", "password": "wrong"})
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "invalid_auth"}
+    assert dict(entry.data) == before
+
+
+async def test_reconfigure_form_never_prefills_password(loaded):
+    hass, entry, _pump = loaded
+    result = await _reconfigure(hass, entry, None)
+    keys = {str(k): k for k in result["data_schema"].schema}
+    assert keys["username"].description["suggested_value"] == "test"
+    password = keys["password"]
+    assert "suggested_value" not in (password.description or {})
+    assert password.default is vol.UNDEFINED
+
+
+async def _failed_setup_entry(hass, aiohttp_server, monkeypatch):
+    monkeypatch.setattr("custom_components.econet_grant.api.MIN_REQUEST_GAP", 0)
+    assert await async_setup_component(hass, "persistent_notification", {})
+    pump, url = await _second_pump(aiohttp_server)
+    pump.credentials = ("test", "new-pass")
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Synthetic heat pump", unique_id="synthetic-entry",
+        data={"host": url, "username": "test", "password": "test-only"},
+        options={"safe_mode": True, "push_notifications": False},
+    )
+    entry.add_to_hass(hass)
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+    return entry, pump
+
+
+def _reauth_flow(hass):
+    flows = [f for f in hass.config_entries.flow.async_progress()
+             if f["context"]["source"] == "reauth"]
+    assert len(flows) == 1
+    return flows[0]
+
+
+async def test_reauth_from_failed_setup(
+        real_hass, enable_custom_integrations, aiohttp_server, monkeypatch, caplog):
+    hass = real_hass
+    entry, _pump = await _failed_setup_entry(hass, aiohttp_server, monkeypatch)
+    flow = _reauth_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        flow["flow_id"], {"username": "test", "password": "new-pass"})
+    await hass.async_block_till_done()
+    assert result["type"] == "abort"
+    assert result["reason"] == "reauth_successful"
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.data["password"] == "new-pass"
+    assert "new-pass" not in caplog.text
+
+
+async def test_reauth_wrong_password_keeps_entry(
+        real_hass, enable_custom_integrations, aiohttp_server, monkeypatch):
+    hass = real_hass
+    entry, _pump = await _failed_setup_entry(hass, aiohttp_server, monkeypatch)
+    flow = _reauth_flow(hass)
+    form = await hass.config_entries.flow.async_configure(flow["flow_id"], None)
+    assert form["step_id"] == "reauth_confirm"
+    assert form["description_placeholders"]["host"] == entry.data["host"]
+    result = await hass.config_entries.flow.async_configure(
+        flow["flow_id"], {"username": "test", "password": "wrong"})
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "invalid_auth"}
+    assert entry.data["password"] == "test-only"
+    assert entry.state is ConfigEntryState.SETUP_ERROR

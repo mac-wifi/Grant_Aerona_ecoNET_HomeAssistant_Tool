@@ -11,13 +11,25 @@
         }
       },
       "reconfigure": {
-        "title": "Change ecoNET address",
-        "description": "Enter the new IP address or host name of the ecoNET module. The saved username and password are reused. Entities, history and settings are kept.",
+        "title": "Change ecoNET connection",
+        "description": "Change the address or login of the ecoNET module. Leave the password blank to keep the saved one. Entities, history and settings are kept.",
         "data": {
-          "host": "Host (IP address)"
+          "host": "Host (IP address)",
+          "username": "Username",
+          "password": "Password"
         },
         "data_description": {
-          "host": "For example 192.168.1.50. Give the module a fixed (reserved) address in your router so it doesn't change again."
+          "host": "For example 192.168.1.50. Give the module a fixed (reserved) address in your router so it doesn't change again.",
+          "username": "The ecoNET login name.",
+          "password": "Leave blank to keep the current password."
+        }
+      },
+      "reauth_confirm": {
+        "title": "ecoNET login rejected",
+        "description": "The ecoNET module at {host} no longer accepts the saved username or password. Enter the current login.",
+        "data": {
+          "username": "Username",
+          "password": "Password"
         }
       }
     },
@@ -30,7 +42,8 @@
     },
     "abort": {
       "already_configured": "This device is already configured.",
-      "reconfigure_successful": "Address updated. The integration has been reloaded."
+      "reconfigure_successful": "Address updated. The integration has been reloaded.",
+      "reauth_successful": "Login updated. The integration has been reloaded."
     }
   },
   "options": {

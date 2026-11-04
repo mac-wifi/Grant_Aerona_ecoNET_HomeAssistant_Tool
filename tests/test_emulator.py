@@ -106,3 +106,19 @@ async def test_auth_fail_switch_returns_401(aiohttp_server, monkeypatch):
         api = EconetApi(EconetClient(str(server.make_url("")), "test", "test-only", session))
         with pytest.raises(AuthError):
             await api.fetch_sys_params()
+
+
+async def test_credentials_switch_accepts_only_matching_login(aiohttp_server, monkeypatch):
+    from custom_components.econet_grant.api import AuthError
+
+    pump = EconetEmulator()
+    assert pump.credentials is None
+    pump.credentials = ("new-user", "new-pass")
+    server = await aiohttp_server(pump.app, host="127.0.0.1")
+    monkeypatch.setattr("custom_components.econet_grant.api.MIN_REQUEST_GAP", 0)
+    host = str(server.make_url(""))
+    async with ClientSession() as session:
+        with pytest.raises(AuthError):
+            await EconetApi(EconetClient(host, "test", "test-only", session)).fetch_sys_params()
+        good = EconetApi(EconetClient(host, "new-user", "new-pass", session))
+        assert await good.fetch_sys_params() is not None

@@ -1,5 +1,6 @@
 """Reduced stateful ecoNET HTTP emulator; never connects to a real device."""
 import asyncio
+import base64
 from contextlib import asynccontextmanager
 import json
 from pathlib import Path
@@ -20,6 +21,7 @@ class EconetEmulator:
         self.success = self._load("newparam_success")
         self.mode = "ok"
         self.auth_fail = False  # answer every request with 401
+        self.credentials = None  # (user, password): other logins get 401; None accepts any
         self.write_modes = []  # optional per-attempt responses for timeout recovery
         self.writes = []
         self.requests = []
@@ -78,6 +80,10 @@ class EconetEmulator:
         self.auth_headers.add(request.headers.get("Authorization"))
         if self.auth_fail:
             raise web.HTTPUnauthorized()
+        if self.credentials is not None:
+            expected = base64.b64encode(":".join(self.credentials).encode("latin-1"))
+            if request.headers.get("Authorization") != "Basic " + expected.decode():
+                raise web.HTTPUnauthorized()
         if endpoint in ("regParams", "editParams", "sysParams"):
             return web.json_response({"regParams": self.reg, "editParams": self.edit,
                                       "sysParams": self.sys}[endpoint])
