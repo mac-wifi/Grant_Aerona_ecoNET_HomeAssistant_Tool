@@ -15,6 +15,7 @@ from homeassistant.loader import async_get_integration
 from .api import EconetApi
 from .backup import get_snapshot_info
 from .const import (
+    CONF_HOST,
     DOMAIN,
     SENSOR_DEFINITIONS,
     SIGNAL_SNAPSHOT_SAVED,
@@ -54,6 +55,7 @@ async def async_setup_entry(
         EconetRecentChangesSensor(slow, api, db),
         EconetLastSnapshotSensor(fast, api),
         EconetIntegrationVersionSensor(fast, api, str(version)),
+        EconetControllerAddressSensor(fast, api, entry),
     ]
     async_add_entities(entities)
 
@@ -315,6 +317,28 @@ class EconetIntegrationVersionSensor(EconetDiagnosticEntity):
     def __init__(self, coordinator: Any, api: EconetApi, version: str) -> None:
         super().__init__(coordinator, api, "integration_version")
         self._attr_native_value = version
+
+    @property
+    def available(self) -> bool:
+        """Known locally, so still shown while the controller is unreachable."""
+        return True
+
+
+class EconetControllerAddressSensor(EconetDiagnosticEntity):
+    """The saved controller address, so a dead connection is easy to diagnose.
+
+    Address only: never the username or password.
+    """
+
+    _attr_name = "Controller Address"
+    _attr_icon = "mdi:ip-network"
+
+    def __init__(self, coordinator: Any, api: EconetApi, entry: EconetConfigEntry) -> None:
+        super().__init__(coordinator, api, "controller_address")
+        host = str(entry.data[CONF_HOST]).strip()
+        for prefix in ("http://", "https://"):
+            host = host.removeprefix(prefix)
+        self._attr_native_value = host.rstrip("/")
 
     @property
     def available(self) -> bool:

@@ -45,7 +45,10 @@ def entry():
 
 
 @pytest.fixture
-def hass(tmp_path, real_hass):
+def hass(tmp_path, real_hass, monkeypatch):
+    # Boundary tests use a fake hass with no issue registry.
+    monkeypatch.setattr("custom_components.econet_grant.repairs.ir", Mock())
+    monkeypatch.setattr("custom_components.econet_grant.ir", Mock())
     return SimpleNamespace(
         data={}, config=SimpleNamespace(config_dir=str(tmp_path)),
         bus=SimpleNamespace(async_fire=Mock(), async_listen=Mock(return_value=Mock())),

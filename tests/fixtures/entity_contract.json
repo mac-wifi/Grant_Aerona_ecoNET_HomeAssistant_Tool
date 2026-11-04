@@ -820,6 +820,18 @@
       "unique_id": "econet_grant_synthetic-test-device_GrantCompressorFreq",
       "unit": "Hz"
     },
+    "sensor.grant_aerona_heat_pump_controller_address": {
+      "attributes": {
+        "icon": "mdi:ip-network"
+      },
+      "entity_category": "diagnostic",
+      "friendly_name": "Grant Aerona Heat Pump Controller Address",
+      "original_device_class": null,
+      "original_icon": "mdi:ip-network",
+      "original_name": "Controller Address",
+      "unique_id": "econet_grant_synthetic-test-device_controller_address",
+      "unit": null
+    },
     "sensor.grant_aerona_heat_pump_database_size": {
       "attributes": {
         "icon": "mdi:database",

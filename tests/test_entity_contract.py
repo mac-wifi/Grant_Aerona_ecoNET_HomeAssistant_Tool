@@ -22,7 +22,8 @@ pytestmark = pytest.mark.usefixtures("loopback_sockets")
 CONTRACT = Path(__file__).parent / "fixtures" / "entity_contract.json"
 # States derived from wall-clock time, the local file system or the release version.
 UNPINNED_STATES = ("_last_reading", "_last_settings_check", "_database_size",
-                   "_last_default_snapshot", "_integration_version")
+                   "_last_default_snapshot", "_integration_version",
+                   "_controller_address")
 
 
 def _describe(hass, entry):

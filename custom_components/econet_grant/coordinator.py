@@ -25,6 +25,7 @@ from .const import (
     DOMAIN,
     FAST_POLL_INTERVAL,
 )
+from .repairs import async_report_failure, async_report_success
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -73,6 +74,16 @@ class EconetFastCoordinator(_EconetCoordinator):
         super().__init__(
             hass, api, entry, "fast", timedelta(seconds=FAST_POLL_INTERVAL),
         )
+
+    async def _async_update_data(self) -> dict[str, Any]:
+        """Track outages for the Repairs issue (auth failures use HA's reauth)."""
+        try:
+            data = await super()._async_update_data()
+        except UpdateFailed:
+            async_report_failure(self.hass, self._entry)
+            raise
+        async_report_success(self.hass, self._entry)
+        return data
 
     async def _async_fetch(self) -> dict[str, Any]:
         reg_params = await self.api.fetch_reg_params()

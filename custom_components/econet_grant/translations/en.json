@@ -46,6 +46,34 @@
       "reauth_successful": "Login updated. The integration has been reloaded."
     }
   },
+  "issues": {
+    "cannot_connect": {
+      "title": "EcoNet heat pump not reachable at {host}",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Fix the ecoNET connection",
+            "description": "Home Assistant hasn't been able to reach the ecoNET module at {host} for 10 minutes. If its address or login changed, enter the new details. Leave the password blank to keep the saved one.",
+            "data": {
+              "host": "Host (IP address)",
+              "username": "Username",
+              "password": "Password"
+            }
+          }
+        },
+        "error": {
+          "cannot_connect": "Unable to connect to the ecoNET device.",
+          "invalid_auth": "Invalid username or password.",
+          "wrong_device": "That address answers, but it is a different ecoNET controller from the one this integration was set up with.",
+          "already_configured": "Another EcoNet Grant entry already uses this address.",
+          "unknown": "An unexpected error occurred."
+        },
+        "abort": {
+          "entry_removed": "This EcoNet Grant entry no longer exists."
+        }
+      }
+    }
+  },
   "options": {
     "step": {
       "init": {

@@ -13,6 +13,7 @@ from typing import Any
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import AuthError, EconetApi, make_api
@@ -24,10 +25,12 @@ from .const import (
     CONF_USERNAME,
     DATA_RETENTION_DAYS,
     DATABASE_FILENAME,
+    DOMAIN,
 )
 from .coordinator import EconetFastCoordinator, EconetSlowCoordinator
 from .database import EconetDatabase
 from .entity import EconetConfigEntry, EconetRuntimeData
+from .repairs import async_report_failure, async_report_success, issue_id
 from .revert import RevertActions
 from .services import async_register_services
 
@@ -81,6 +84,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: EconetConfigEntry) -> b
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
+async def async_remove_entry(hass: HomeAssistant, entry: EconetConfigEntry) -> None:
+    """Drop the unreachable-controller issue along with the entry."""
+    hass.data.get(f"{DOMAIN}_connection_failures", {}).pop(entry.entry_id, None)
+    ir.async_delete_issue(hass, DOMAIN, issue_id(entry))
+
+
 async def _async_options_updated(hass: HomeAssistant, entry: EconetConfigEntry) -> None:
     """Reload so changed polling/notification options take effect immediately."""
     await hass.config_entries.async_reload(entry.entry_id)
@@ -89,14 +98,17 @@ async def _async_options_updated(hass: HomeAssistant, entry: EconetConfigEntry) 
 async def _async_connect(hass: HomeAssistant, entry: EconetConfigEntry) -> EconetApi:
     host = entry.data[CONF_HOST]
     try:
-        return await make_api(
+        api = await make_api(
             async_get_clientsession(hass), host,
             entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD],
         )
     except AuthError as err:
         raise ConfigEntryAuthFailed("Invalid credentials") from err
     except Exception as err:
+        async_report_failure(hass, entry)
         raise ConfigEntryNotReady(f"Cannot connect to {host}") from err
+    async_report_success(hass, entry)
+    return api
 
 
 async def _async_record_baseline(hass: HomeAssistant, data: EconetRuntimeData) -> None:

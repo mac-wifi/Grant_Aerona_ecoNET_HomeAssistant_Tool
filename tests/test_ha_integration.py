@@ -8,11 +8,14 @@ import voluptuous as vol
 from aiohttp import web
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.components.repairs import repairs_flow_manager
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.econet_grant import repairs
 from custom_components.econet_grant.const import DOMAIN
 from emulator import EconetEmulator
 
@@ -649,3 +652,136 @@ async def test_reauth_wrong_password_keeps_entry(
     assert result["errors"] == {"base": "invalid_auth"}
     assert entry.data["password"] == "test-only"
     assert entry.state is ConfigEntryState.SETUP_ERROR
+
+
+# --- Part B: Repairs fix, Controller Address sensor -------------------------
+
+ADDRESS_ENTITY = "sensor.grant_aerona_heat_pump_controller_address"
+
+
+def _issues(hass):
+    return {k: v for k, v in ir.async_get(hass).issues.items() if k[0] == DOMAIN}
+
+
+async def _closed_port_entry(hass, monkeypatch):
+    monkeypatch.setattr("custom_components.econet_grant.api.MIN_REQUEST_GAP", 0)
+    assert await async_setup_component(hass, "persistent_notification", {})
+    assert await async_setup_component(hass, "repairs", {})
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Synthetic heat pump", unique_id="synthetic-entry",
+        data={"host": "http://127.0.0.1:9", "username": "test", "password": "test-only"},
+        options={"safe_mode": True, "push_notifications": False},
+    )
+    entry.add_to_hass(hass)
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+    return entry
+
+
+async def test_no_repair_issue_on_short_outage(
+        real_hass, enable_custom_integrations, monkeypatch):
+    await _closed_port_entry(real_hass, monkeypatch)
+    assert _issues(real_hass) == {}
+
+
+async def test_repair_issue_after_threshold(
+        real_hass, enable_custom_integrations, monkeypatch):
+    monkeypatch.setattr(repairs, "CONNECTION_ISSUE_AFTER", timedelta(0))
+    entry = await _closed_port_entry(real_hass, monkeypatch)
+    issue = ir.async_get(real_hass).async_get_issue(DOMAIN, f"cannot_connect_{entry.entry_id}")
+    assert issue is not None and issue.is_fixable
+    assert issue.translation_placeholders == {"host": "http://127.0.0.1:9"}
+    assert "test-only" not in repr(issue.translation_placeholders) + repr(issue.data)
+    assert issue.data == {"entry_id": entry.entry_id}
+
+
+async def test_repair_fix_flow_repairs_connection(
+        real_hass, enable_custom_integrations, aiohttp_server, monkeypatch):
+    hass = real_hass
+    monkeypatch.setattr(repairs, "CONNECTION_ISSUE_AFTER", timedelta(0))
+    entry = await _closed_port_entry(hass, monkeypatch)
+    iid = f"cannot_connect_{entry.entry_id}"
+    _pump, url = await _second_pump(aiohttp_server)
+    mgr = repairs_flow_manager(hass)
+    form = await mgr.async_init(DOMAIN, data={"issue_id": iid})
+    assert form["type"] == "form"
+    keys = {str(k): k for k in form["data_schema"].schema}
+    assert "suggested_value" not in (keys["password"].description or {})
+    assert keys["password"].default is vol.UNDEFINED
+    assert form["description_placeholders"]["host"] == "http://127.0.0.1:9"
+    result = await mgr.async_configure(
+        form["flow_id"], {"host": url, "username": "test", "password": ""})
+    assert result["type"] == "create_entry"
+    await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.data["host"] == url
+    assert entry.data["password"] == "test-only"
+    assert _issues(hass) == {}
+
+
+async def test_repair_fix_flow_errors_keep_issue(
+        real_hass, enable_custom_integrations, monkeypatch):
+    hass = real_hass
+    monkeypatch.setattr(repairs, "CONNECTION_ISSUE_AFTER", timedelta(0))
+    entry = await _closed_port_entry(hass, monkeypatch)
+    iid = f"cannot_connect_{entry.entry_id}"
+    mgr = repairs_flow_manager(hass)
+    form = await mgr.async_init(DOMAIN, data={"issue_id": iid})
+    result = await mgr.async_configure(
+        form["flow_id"], {"host": "http://127.0.0.1:9", "username": "test"})
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "cannot_connect"}
+    assert (DOMAIN, iid) in ir.async_get(hass).issues
+
+
+async def test_repair_fix_flow_entry_removed(
+        real_hass, enable_custom_integrations, monkeypatch):
+    hass = real_hass
+    monkeypatch.setattr(repairs, "CONNECTION_ISSUE_AFTER", timedelta(0))
+    entry = await _closed_port_entry(hass, monkeypatch)
+    iid = f"cannot_connect_{entry.entry_id}"
+    mgr = repairs_flow_manager(hass)
+    form = await mgr.async_init(DOMAIN, data={"issue_id": iid})
+    await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+    result = await mgr.async_configure(
+        form["flow_id"], {"host": "http://127.0.0.1:9", "username": "test"})
+    assert result["type"] == "abort"
+    assert result["reason"] == "entry_removed"
+
+
+async def test_loaded_entry_losing_controller_raises_then_clears_issue(
+        loaded, monkeypatch):
+    hass, entry, pump = loaded
+    assert await async_setup_component(hass, "repairs", {})
+    monkeypatch.setattr(repairs, "CONNECTION_ISSUE_AFTER", timedelta(0))
+    good = pump.reg["curr"]
+    pump.reg["curr"] = {}  # regParams now unusable -> UpdateFailed
+    await entry.runtime_data.fast_coordinator.async_refresh()
+    assert (DOMAIN, f"cannot_connect_{entry.entry_id}") in ir.async_get(hass).issues
+    pump.reg["curr"] = good
+    await entry.runtime_data.fast_coordinator.async_refresh()
+    assert _issues(hass) == {}
+
+
+async def test_controller_address_sensor(loaded, aiohttp_server):
+    hass, entry, _pump = loaded
+    host = entry.data["host"].removeprefix("http://").rstrip("/")
+    state = hass.states.get(ADDRESS_ENTITY)
+    assert state.state == host
+    assert "test-only" not in repr(state.attributes)
+    _pump_b, new = await _second_pump(aiohttp_server)
+    result = await _reconfigure_with(hass, entry, {"host": new, "username": "test"})
+    assert result["reason"] == "reconfigure_successful"
+    assert hass.states.get(ADDRESS_ENTITY).state == new.removeprefix("http://").rstrip("/")
+
+
+async def test_removing_entry_removes_issue(
+        real_hass, enable_custom_integrations, monkeypatch):
+    hass = real_hass
+    monkeypatch.setattr(repairs, "CONNECTION_ISSUE_AFTER", timedelta(0))
+    entry = await _closed_port_entry(hass, monkeypatch)
+    assert _issues(hass)
+    await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+    assert _issues(hass) == {}
