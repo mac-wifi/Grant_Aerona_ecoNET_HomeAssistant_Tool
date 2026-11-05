@@ -4,7 +4,7 @@ Versions follow `MAJOR.MINOR.PATCH`: PATCH for fixes and small changes, MINOR
 for new or changed functionality. Only versions with a GitHub Release were
 published; the others were local development candidates.
 
-## Unreleased
+## 0.9.0 — 2026-11-05
 
 - **Change the login as well as the address.** **Reconfigure** now also takes
   the username and password; leave the password blank to keep the saved one.
