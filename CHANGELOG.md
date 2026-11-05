@@ -4,7 +4,7 @@ Versions follow `MAJOR.MINOR.PATCH`: PATCH for fixes and small changes, MINOR
 for new or changed functionality. Only versions with a GitHub Release were
 published; the others were local development candidates.
 
-## Unreleased
+## 0.10.0 — 2026-11-05
 
 - **Follows the controller to a new IP automatically.** The integration now
   learns the module's MAC address. If the router gives the module a new
