@@ -39,24 +39,29 @@ only: it does not create tags or inspect the remote.
 2. Tag that commit, `git tag vX.Y.Z <commit>`, then run `git push origin vX.Y.Z`.
    Never move or reuse a published tag.
 3. Create a GitHub **Release** for the tag, using the changelog entry as the
-   notes. HACS offers versions from releases, not bare tags.
+   notes. The Marketplace (formerly HACS) offers versions from releases, not bare tags. It also requires `hacs.json` in the repository, so keep it.
 
 ## Updating an installation
 
-1. Take a Home Assistant backup. HACS replaces
+1. Take a Home Assistant backup. The Marketplace replaces
    `custom_components/econet_grant/`, so local edits there are lost.
-2. In HACS, open EcoNet Grant Aerona, use **Update information** if needed,
-   then **Download/Redownload** the chosen release.
-3. Restart Home Assistant when convenient. Check that the integration loads,
+2. In **Settings > Updates** (or **Settings > Marketplace**, EcoNet Grant
+   Aerona), install the update. The Marketplace checks the catalog about every
+   6 hours and custom repositories every 48 hours with a GitHub connection, so
+   a brand-new release can take a while to appear. (On Core before 2026.11
+   with HACS: **Update information**, then **Download/Redownload**.)
+3. Restart Home Assistant when convenient; a repair offers to do it. Check that the integration loads,
    that Safe Mode is still on, and the entity states and logs. Downloading code
    is not permission to write to the controller.
-4. HACS does not update a dashboard you copied into `dashboards/`. Compare it
+4. The Marketplace does not update a dashboard you copied into `dashboards/`. Compare it
    with `custom_components/econet_grant/extras/econet_grant_dashboard.yaml`
    and reconcile it deliberately.
 
 ## Rolling back
 
-Use HACS **Need a different version?** to install an earlier release, or
+Use the Marketplace three-dot menu > **Install another version** (HACS:
+**Need a different version?**) to install an earlier release, or restore a
+Home Assistant backup, or
 replace the whole `custom_components/econet_grant/` directory with a
 known-good version (never overlay versions). Then restart.
 
@@ -68,6 +73,8 @@ marker defect (#11) is still open.
 ## Support baseline
 
 `hacs.json` requires Home Assistant Core **2026.9.4**, which is the version the
-suite tests (`pytest-homeassistant-custom-component==0.13.367`, Python 3.14).
-Later Core versions are expected to work but are not verified until the test
-pin moves.
+CI suite tests (`pytest-homeassistant-custom-component==0.13.367`, Python 3.14).
+Core 2026.11.0 (the first release with the built-in Marketplace and the new
+entity naming) passed the full suite once by hand with two harness
+workarounds; see TESTING.md. CI stays on 2026.9.4 until an upstream harness
+release for 2026.11 exists.

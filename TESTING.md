@@ -12,7 +12,21 @@ python -m pytest
 ```
 
 `requirements-test.txt` pins Home Assistant Core 2026.9.4 through
-`pytest-homeassistant-custom-component`. GitHub Actions
+`pytest-homeassistant-custom-component`. That plugin's newest release
+(0.13.375, 2026-10-25) targets Core 2026.10.4; there is no release for
+2026.11 yet.
+
+**Core 2026.11.0 check (manual, 2026-11-05):** real Core 2026.11.0 with
+plugin 0.13.375 ran the whole suite: 433 passed, 1 expected xfail, the same as
+the 2026.9.4 baseline, including the real-HA and emulator tests. Two harness
+workarounds were needed, neither in this repository: (1) the plugin imports
+`_clear_logger_overwrites` from `homeassistant.components.logger`, where 2026.11
+moved it to `.logger.helpers` (one-line patch of the plugin's `common.py`);
+(2) 2026.11 aliases `httpx` to `httpx2` when `homeassistant` is first imported,
+so `homeassistant` must be imported before any plugin imports `httpx` (a
+`.pth` file containing `import homeassistant` in the scratch venv). Without them
+pytest fails at start-up. Move the CI pin once upstream publishes a 2026.11
+release. GitHub Actions
 (`.github/workflows/tests.yml`) runs the same command on every push and pull
 request.
 

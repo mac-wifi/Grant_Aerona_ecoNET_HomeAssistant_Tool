@@ -4,6 +4,15 @@ Versions follow `MAJOR.MINOR.PATCH`: PATCH for fixes and small changes, MINOR
 for new or changed functionality. Only versions with a GitHub Release were
 published; the others were local development candidates.
 
+## Unreleased
+
+- **Docs follow Home Assistant 2026.11.** HACS is now the built-in
+  **Marketplace** (Settings > Marketplace). The README, release notes and
+  dashboard header now give the Marketplace steps (Add from link, Install,
+  Settings > Updates, Install another version) and keep a short HACS note for
+  Core 2026.9.4 to 2026.10. The entity naming change is noted: entity IDs are
+  unchanged, only displayed names differ. No integration behaviour changed.
+
 ## 0.10.0 — 2026-11-05
 
 - **Follows the controller to a new IP automatically.** The integration now

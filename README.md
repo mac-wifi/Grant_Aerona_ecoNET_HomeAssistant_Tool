@@ -9,7 +9,7 @@ This project was created to remotely manage a holiday home heat pump, allowing t
 
 ## Current Status
 
-Released through GitHub Releases and HACS; see [CHANGELOG.md](CHANGELOG.md) for what changed in each version. Parameter mappings were checked manually against one controller. Each release is tested offline against real Home Assistant Core 2026.9.4 with a synthetic loopback controller, not against a real heat pump. See [TESTING.md](TESTING.md) for coverage and [RELEASE.md](RELEASE.md) for the release, update and rollback procedure.
+Released through GitHub Releases and installed through the Home Assistant **Marketplace** (built into Core 2026.11 and later; it replaced HACS, which older Core versions still use); see [CHANGELOG.md](CHANGELOG.md) for what changed in each version. Parameter mappings were checked manually against one controller. Each release is tested offline against real Home Assistant Core 2026.9.4 (the pinned test baseline) with a synthetic loopback controller, not against a real heat pump. The suite was also run once, by hand, against Core 2026.11.0 and passed (see [TESTING.md](TESTING.md)). See [TESTING.md](TESTING.md) for coverage and [RELEASE.md](RELEASE.md) for the release, update and rollback procedure.
 
 ## What Works
 
@@ -103,7 +103,7 @@ These read and modify one bit within a larger settings value. The integration wr
 - **Change Detection**: Monitors both `editParams` and `sysParams`, filters volatile values, and uses version counters from `regParams` to trigger an immediate settings refresh. It fires `econet_grant_setting_changed`, `econet_grant_urgent_change`, and `econet_grant_sys_param_changed` events. Persistent and optional push notifications are enabled by default.
 - **History and Audit**: A bundled SQLite database records live readings, settings history, system snapshots, and a source-tagged change log. Retention for the first three defaults to 10 years, is configurable from 30 days to 20 years, and is enforced when the integration is set up or reloaded. Change-log audit entries and named JSON backup snapshots are currently retained indefinitely.
 - **Backup & Restore**: Services create named JSON snapshots and restore changed editable parameters. Safe Mode previews a restore without writing. Home Assistant also exposes a Restore Default Settings button; dashboard cards call both services.
-- **Dashboard YAML**: The Lovelace dashboard uses Mushroom Cards and Mini Graph Card. Its single canonical copy is `custom_components/econet_grant/extras/econet_grant_dashboard.yaml`, where HACS can package it and manual installers can also access it.
+- **Dashboard YAML**: The Lovelace dashboard uses Mushroom Cards and Mini Graph Card. Its single canonical copy is `custom_components/econet_grant/extras/econet_grant_dashboard.yaml`, where the Marketplace (or HACS on older Core) installs it and manual installers can also access it.
 - **Optional Grafana support**: Example InfluxDB and Grafana configuration is included for users who want Grafana dashboards. It is not required for the integration, change detection, SQLite audit history, or Home Assistant history.
 
 ## Architecture
@@ -136,9 +136,9 @@ Step-by-step instructions for installing the integration on a clean Home Assista
 ### Contents
 
 1. [Before You Start](#1-before-you-start)
-2. [Install HACS](#2-install-hacs)
+2. [Marketplace (formerly HACS)](#2-marketplace-formerly-hacs)
 3. [Optional: Install & Configure InfluxDB](#3-optional-install--configure-influxdb)
-4. [Install the Integration via HACS](#4-install-the-integration-via-hacs)
+4. [Install the Integration via the Marketplace](#4-install-the-integration-via-the-marketplace)
 5. [Alternative: Manual Installation](#4-alt-manual-installation)
 6. [Configure the Integration](#5-configure-the-integration)
 7. [Understand Safe Mode](#6-understand-safe-mode)
@@ -181,22 +181,22 @@ If your HA VM is on a different VLAN or subnet, ensure there is a route and no f
 
 ---
 
-### 2. Install HACS
+### 2. Marketplace (formerly HACS)
 
-If HACS is already installed, skip to [Step 3](#3-optional-install--configure-influxdb).
+**Home Assistant Core 2026.11 or later:** nothing to install. HACS is now built in as the **Marketplace**, under **Settings > Marketplace**. If you used HACS before, Home Assistant migrated it on the first start after updating and your installed projects keep their updates. Skip to [Step 3](#3-optional-install--configure-influxdb).
 
-1. In Home Assistant, go to **Settings > Apps > Install app**
-2. Search for and install the **Terminal & SSH** app (if not already installed) and start it
-3. Open the terminal and run:
-   ```bash
-   wget -O - https://get.hacs.xyz | bash -
-   ```
-4. Restart Home Assistant: **Settings > System > Restart**
-5. After restart, go to **Settings > Devices & Services > Add Integration**
-6. Search for **HACS** and complete the setup (you'll need a GitHub account to authorise)
-7. HACS will appear in the sidebar once configured
+You need a GitHub connection only to add a custom repository (Step 4). The first time you open the Marketplace you must accept its notice before you can install or update anything. Everything in it is community-made and not reviewed by the Home Assistant project.
 
-> **Reference:** [HACS installation docs](https://hacs.xyz/docs/use/)
+**Home Assistant Core 2026.9.4 to 2026.10 (older):** the Marketplace does not exist yet, so install HACS the old way:
+
+1. Go to **Settings > Apps > Install app**, install and start the **Terminal & SSH** app
+2. In its terminal run `wget -O - https://get.hacs.xyz | bash -`
+3. Restart Home Assistant: **Settings > System > Restart**
+4. Go to **Settings > Devices & Services > Add Integration**, search for **HACS** and complete the setup (a GitHub account is needed to authorise)
+
+Do not run the HACS installer on Core 2026.11 or later; it no longer works there.
+
+> **References:** [Marketplace documentation](https://www.home-assistant.io/integrations/marketplace/) · [HACS documentation](https://hacs.xyz/docs/use/) (older Core only)
 
 ---
 
@@ -276,29 +276,28 @@ With a working connection and matching filters, subsequent HA entity-state event
 
 ---
 
-### 4. Install the Integration via HACS
+### 4. Install the Integration via the Marketplace
 
-1. Open **HACS** from the sidebar (this takes you straight to the Home Assistant Community Store page)
-2. Click the **three-dot menu** (top right) > **Custom repositories**
-3. In the dialog:
-   - **Repository:** `https://github.com/mac-wifi/Grant_Aerona_ecoNET_HomeAssistant_Tool`
-   - **Category:** Integration
-   - Click **Add**
-4. Close the dialog. The **EcoNet Grant Aerona** card should now appear
-5. Open the repository > **Download**, inspect the selected version, then confirm. Without GitHub releases HACS uses the default branch and may show a short commit hash; custom repositories can also offer numbered releases. A manifest bump or Git tag alone does not publish a HACS release.
-6. **Restart Home Assistant:** Settings > System > Restart
+On Core 2026.11 or later:
 
-After the restart, the integration files will be in place at `custom_components/econet_grant/`.
+1. Go to **Settings > Marketplace** and accept the community-content notice if it appears
+2. Select **Add from link** (top right). The first time, the Marketplace asks you to connect GitHub: select **Continue**, open the link it shows, enter the code and approve. This only reads public information
+3. Under **GitHub link** enter `mac-wifi/Grant_Aerona_ecoNET_HomeAssistant_Tool` (or the full `https://github.com/...` URL) and select **Add**. If it asks for a type, choose **Integration**
+4. Open the **EcoNet Grant Aerona** repository, select **Install**, check the version shown, and confirm. The integration's setup page opens straight away when Home Assistant can load it; if you close it, add the integration later under **Settings > Devices & services**. If a repair says a restart is needed, restart from the repair or via **Settings > System > Restart**
 
-**Updates and earlier versions:** HACS > repository three-dot menu > **Update information** refreshes metadata only. To install, use **Redownload** > **Need a different version?**, select an available release, confirm, then restart Home Assistant when you choose. The selector requires repository versioning; no earlier-release choices are promised before releases exist. HACS already supplies update entities, so this integration adds none and enables no automatic update. See [release/update and rollback procedure](RELEASE.md#owner-controlled-installation-and-rollback) before changing versions.
+After installation the integration files are at `custom_components/econet_grant/`. Continue with [Step 5](#5-configure-the-integration).
 
-These steps follow the [current HACS dashboard documentation](https://www.hacs.xyz/docs/use/repositories/dashboard/); this repository's live update detection and version selector remain owner validation after publication.
+**Updates and earlier versions:** the Marketplace creates an update entity for the repository, so updates appear under **Settings > Updates** next to Home Assistant's own. It offers published stable releases only; a manifest bump or Git tag alone does not publish one. After an update, restart Home Assistant (a repair offers to do it). To install a different version, open the repository page, use the three-dot menu > **Install another version**, and restart. The Marketplace advises restoring a backup rather than using this to go back after an update. To receive pre-releases, turn on the repository's **Pre-release** switch (its entity is disabled by default; enable it first on the Marketplace device page). This integration adds no update entity of its own and enables no automatic update. See the [release/update and rollback procedure](RELEASE.md#owner-controlled-installation-and-rollback) before changing versions.
+
+On older Core (2026.9.4 to 2026.10) with HACS: open **HACS** in the sidebar, three-dot menu > **Custom repositories**, add the same repository with category **Integration**, then **Download** and restart. Updates use **Update information** and **Redownload** > **Need a different version?**.
+
+The Marketplace steps follow the [Marketplace documentation](https://www.home-assistant.io/integrations/marketplace/); live update detection and the version selector for this repository remain owner validation after publication.
 
 ---
 
 ### 4-ALT. Manual Installation
 
-Use this method if you prefer not to use HACS, or for quick testing.
+Use this method if you prefer not to use the Marketplace, or for quick testing.
 
 1. Prefer downloading the source archive of the explicitly chosen release from the repository's Releases page once releases exist. Until then, a clone uses development/default-branch content, not a tested release:
    ```bash
@@ -448,22 +447,22 @@ The integration includes an owner-tested Lovelace dashboard with 6 tabs: Favouri
 
 > **Updating from an older version:** the 0.9.0 dashboard adds a **Connection** card to the Admin tab. Recopy the dashboard file (Step 7b) to get it.
 
-> **Entity ID compatibility:** This dashboard preserves the IDs from the owner's existing installation, including `heating_*` and `dhw_*` IDs, rather than assuming fresh-install CH/HW IDs. Home Assistant normally preserves existing entity IDs when friendly names change. On both fresh and upgraded installations, compare the actual IDs under **Settings > Devices & Services > EcoNet Grant Aerona > Device** and adjust your dashboard copy before deployment. Do not rename live entities just to fit the example.
+> **Entity ID compatibility:** This dashboard preserves the IDs from the owner's existing installation, including `heating_*` and `dhw_*` IDs, rather than assuming fresh-install CH/HW IDs. Home Assistant keeps existing entity IDs when names change, including the 2026.11 naming redesign, which only changes the names shown (a card without its own name shows the device name followed by the entity name; the bundled dashboard names most of its cards itself). On both fresh and upgraded installations, compare the actual IDs under **Settings > Devices & Services > EcoNet Grant Aerona > Device** and adjust your dashboard copy before deployment. Do not rename live entities just to fit the example.
 
-#### 7a. Install required HACS frontend cards
+#### 7a. Install required frontend cards
 
-The dashboard uses two custom card libraries. Install both from HACS:
+The dashboard uses two custom card libraries. Install both from the Marketplace (Core 2026.11 or later):
 
-1. Open **HACS** from the sidebar
-2. Go to **Frontend** (tab at top)
-3. Click **Explore & Download Repositories** (bottom right)
-4. Search for **Mushroom** and install it
-5. Search for **Mini Graph Card** and install it
-6. When prompted, **reload the browser** (or clear cache / hard refresh with Ctrl+Shift+R)
+1. Go to **Settings > Marketplace**
+2. Use **Search** (or **Filters** to show dashboard content) to find **Mushroom** and select **Install**
+3. Do the same for **Mini Graph Card**
+4. **Reload the browser** (or hard refresh with Ctrl+Shift+R). The Marketplace adds them as dashboard resources under `/local/community/` automatically. Only if you manage dashboard resources in YAML, add the resource that the install dialog shows (a repair also reminds you to change old `/hacsfiles/` paths)
+
+On older Core, install the same two cards from HACS > **Frontend** instead. Cards already installed through HACS carry over to the Marketplace on update.
 
 #### 7b. Copy the dashboard file
 
-The canonical YAML ships inside the HACS integration tree, not as a separate dashboard repository. If you installed via HACS, the dashboard file is already on your system at:
+The canonical YAML ships inside the integration package, not as a separate dashboard repository. If you installed via the Marketplace (or HACS), the dashboard file is already on your system at:
 
 ```
 /homeassistant/custom_components/econet_grant/extras/econet_grant_dashboard.yaml
@@ -479,7 +478,7 @@ cp /homeassistant/custom_components/econet_grant/extras/econet_grant_dashboard.y
 
 > **Alternative:** If you prefer, use the **File Editor** app or **Samba** share to copy the file manually. The source and destination paths are shown above.
 
-> **Manual installation?** If you cloned the repo instead of using HACS, use `custom_components/econet_grant/extras/econet_grant_dashboard.yaml` from the clone and copy it to `/homeassistant/dashboards/`.
+> **Manual installation?** If you cloned the repo instead of using the Marketplace, use `custom_components/econet_grant/extras/econet_grant_dashboard.yaml` from the clone and copy it to `/homeassistant/dashboards/`.
 
 #### 7c. Register the dashboard
 
@@ -515,9 +514,9 @@ Before restarting, verify your YAML is valid:
 
 > **Note:** The Guest tab requires no helpers and displays an explanatory note. The System-tab Grafana card provides optional authenticated-access instructions (see Step 11). The preserved About card's `v0.4.0` text is not the installed integration version.
 
-#### 7f. Updating the dashboard after a HACS update
+#### 7f. Updating the dashboard after an integration update
 
-HACS updates the bundled source in `custom_components/econet_grant/extras/`; it does not automatically update your custom dashboard copy in `/dashboards/`. Back up that copy, compare the new source, and merge changes if you have customised entity IDs or cards. Do not edit the bundled source as your working dashboard: an integration update can replace it. Only if you intend to replace your copy, re-run the copy command from Step 7b:
+The Marketplace (or HACS) updates the bundled source in `custom_components/econet_grant/extras/`; it does not automatically update your custom dashboard copy in `/dashboards/`. Back up that copy, compare the new source, and merge changes if you have customised entity IDs or cards. Do not edit the bundled source as your working dashboard: an integration update can replace it. Only if you intend to replace your copy, re-run the copy command from Step 7b:
 
 ```bash
 cp /homeassistant/custom_components/econet_grant/extras/econet_grant_dashboard.yaml \
@@ -785,7 +784,7 @@ The standalone utilities in `scripts/` use Python 3.10+ and the standard library
 they do not require Home Assistant or third-party packages. Run them from a local
 repository checkout, keeping `export_econet.py` and `compare_econet.py` together.
 They are not integration services or restore files, and are not installed into
-Home Assistant by the HACS integration package. Their presence in this checkout
+Home Assistant by the Marketplace/HACS integration package. Their presence in this checkout
 does not imply a published release.
 
 **Privacy:** sanitisation is best-effort, not a guarantee of anonymity. It redacts

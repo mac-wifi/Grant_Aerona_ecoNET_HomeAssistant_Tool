@@ -308,7 +308,7 @@ class EconetIntegrationVersionSensor(EconetDiagnosticEntity):
     """The integration version Home Assistant is actually running (manifest.json).
 
     Lets the dashboard show the live version, and reveals a pending restart
-    after a HACS download.
+    after a Marketplace (HACS) update.
     """
 
     _attr_name = "Integration Version"

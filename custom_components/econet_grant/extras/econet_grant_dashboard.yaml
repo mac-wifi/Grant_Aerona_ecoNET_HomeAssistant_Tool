@@ -3,7 +3,7 @@
 # ============================================================
 # Deployment:
 #   1. Copy this file to /homeassistant/dashboards/econet_grant_dashboard.yaml
-#      (If installed via HACS, the file is already on your system at:
+#      (If installed via the Marketplace or HACS, the file is already on your system at:
 #       /homeassistant/custom_components/econet_grant/extras/econet_grant_dashboard.yaml)
 #      /dashboards/ is relative to the HA config directory, not the OS root.
 #      Use lowercase d. /homeassistant means the directory containing
@@ -25,15 +25,15 @@
 #
 #   3. Check Configuration under Developer Tools > YAML; fix errors first.
 #      Restart Home Assistant, then open the dashboard from the sidebar.
-#   Updates: HACS does not automatically update your custom dashboard copy.
+#   Updates: The Marketplace (HACS) does not automatically update your custom dashboard copy.
 #      Back it up and compare/merge new bundled YAML to preserve customisations.
-#      Edit the copy, not the bundled source that HACS can overwrite.
+#      Edit the copy, not the bundled source that an update can overwrite.
 #      Reload the dashboard/browser after dashboard-only edits; configuration
 #      registration changes and integration updates still require a restart.
 #
 # Prerequisites:
 #   - econet_grant integration installed and configured
-#   - HACS frontend cards installed: Mushroom, Mini Graph Card
+#   - Frontend cards installed from the Marketplace (HACS on older Core): Mushroom, Mini Graph Card
 
 #   - Optional: Grafana via its authenticated Open Web UI (see README Step 11)
 # ============================================================
