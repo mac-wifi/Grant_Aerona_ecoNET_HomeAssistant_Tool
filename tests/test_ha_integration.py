@@ -906,3 +906,193 @@ async def test_manifest_declares_registered_devices_dhcp(real_hass, enable_custo
     assert manifest["version"] == "0.9.0"
     assert {"domain": "econet_grant", "registered_devices": True} in \
         await loader.async_get_dhcp(real_hass)
+
+
+# --- DHCP flow: follow the controller to a new IP ---------------------------
+
+MAC = "aa:bb:cc:dd:ee:ff"
+
+
+async def _dhcp_setup(hass, aiohttp_server, monkeypatch, *, pump_a_up=True):
+    """Pump A on 127.0.0.1:P, pump B on 127.0.0.2:P, entry pointing at A."""
+    monkeypatch.setattr("custom_components.econet_grant.api.MIN_REQUEST_GAP", 0)
+
+    async def no_lookup(hass, ip):
+        return None
+
+    monkeypatch.setattr("custom_components.econet_grant.discovery.async_lookup_mac", no_lookup)
+    assert await async_setup_component(hass, "persistent_notification", {})
+    pump_a, pump_b = EconetEmulator(), EconetEmulator()
+    server_a = await aiohttp_server(pump_a.app, host="127.0.0.1")
+    port = server_a.port
+    await aiohttp_server(pump_b.app, host="127.0.0.2", port=port)
+    if not pump_a_up:
+        await server_a.close()
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Synthetic heat pump", unique_id="synthetic-entry",
+        data={"host": f"http://127.0.0.1:{port}", "username": "test", "password": "test-only"},
+        options={"safe_mode": True, "push_notifications": False},
+    )
+    entry.add_to_hass(hass)
+    registry = dr.async_get(hass)
+    if pump_a_up:
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        assert entry.state is ConfigEntryState.LOADED
+        device = dr.async_entries_for_config_entry(registry, entry.entry_id)[0]
+    else:
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+        assert entry.state is ConfigEntryState.SETUP_RETRY
+        # Setup never got far enough to create the device; add the one it would have.
+        device = registry.async_get_or_create(
+            config_entry_id=entry.entry_id, identifiers={(DOMAIN, pump_b.sys["uid"])})
+    registry.async_update_device(
+        device.id, new_connections=device.connections | {(dr.CONNECTION_NETWORK_MAC, MAC)})
+    return entry, pump_a, pump_b, port
+
+
+async def _dhcp(hass, ip, mac="aabbccddeeff"):
+    from homeassistant import config_entries
+    from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_DHCP},
+        data=DhcpServiceInfo(ip=ip, hostname="", macaddress=mac))
+    await hass.async_block_till_done()
+    return result
+
+
+@pytest.fixture
+def dhcp_env(real_hass, enable_custom_integrations, aiohttp_server, monkeypatch,
+             two_loopback_sockets):
+    async def build(**kwargs):
+        return (real_hass, *await _dhcp_setup(real_hass, aiohttp_server, monkeypatch, **kwargs))
+    return build
+
+
+async def test_dhcp_moves_entry_to_new_ip(dhcp_env):
+    hass, entry, pump_a, pump_b, port = await dhcp_env()
+    before = _registry_snapshot(hass, entry)
+    result = await _dhcp(hass, "127.0.0.2")
+    assert result["type"] == "abort"
+    assert result["reason"] == "address_updated"
+    assert entry.data["host"] == f"http://127.0.0.2:{port}"
+    assert entry.data["username"] == "test"
+    assert entry.data["password"] == "test-only"
+    assert entry.unique_id == entry.data["host"]
+    assert entry.state is ConfigEntryState.LOADED
+    assert "regParams" in pump_b.requests
+    assert _registry_snapshot(hass, entry) == before
+    notice = hass.data["persistent_notification"][f"econet_grant_address_changed_{entry.entry_id}"]
+    assert "127.0.0.1" in notice["message"] and "127.0.0.2" in notice["message"]
+    assert "test-only" not in notice["message"]
+    assert pump_a.writes == [] and pump_b.writes == []
+
+
+async def test_dhcp_refuses_different_controller(dhcp_env):
+    hass, entry, _a, pump_b, port = await dhcp_env()
+    pump_b.sys = {**pump_b.sys, "uid": "some-other-device"}
+    result = await _dhcp(hass, "127.0.0.2")
+    assert result["reason"] == "wrong_device"
+    assert entry.data["host"] == f"http://127.0.0.1:{port}"
+
+
+async def test_dhcp_refuses_unknown_device_id(dhcp_env):
+    hass, entry, _a, _b, port = await dhcp_env()
+    registry = dr.async_get(hass)
+    for device in dr.async_entries_for_config_entry(registry, entry.entry_id):
+        registry.async_update_device(
+            device.id, new_identifiers={(DOMAIN, entry.data["host"].rstrip("/"))})
+    result = await _dhcp(hass, "127.0.0.2")
+    assert result["reason"] == "wrong_device"
+    assert entry.data["host"] == f"http://127.0.0.1:{port}"
+
+
+async def test_dhcp_wrong_login_at_new_ip(dhcp_env):
+    hass, entry, _a, pump_b, port = await dhcp_env()
+    pump_b.credentials = ("test", "something-else")
+    result = await _dhcp(hass, "127.0.0.2")
+    assert result["reason"] == "invalid_auth"
+    assert entry.data["host"] == f"http://127.0.0.1:{port}"
+    assert f"econet_grant_address_changed_{entry.entry_id}" not in \
+        hass.data.get("persistent_notification", {})
+
+
+async def test_dhcp_same_address_does_not_reload(dhcp_env):
+    hass, entry, pump_a, pump_b, _port = await dhcp_env()
+    count = len(pump_a.requests)
+    result = await _dhcp(hass, "127.0.0.1")
+    assert result["reason"] == "already_configured"
+    assert len(pump_a.requests) == count
+    assert pump_b.requests == []
+
+
+async def test_dhcp_unknown_mac(dhcp_env):
+    hass, *_ = await dhcp_env()
+    result = await _dhcp(hass, "127.0.0.2", mac="112233445566")
+    assert result["reason"] == "not_econet_device"
+
+
+async def test_dhcp_recovers_failed_entry(dhcp_env):
+    hass, entry, _a, pump_b, port = await dhcp_env(pump_a_up=False)
+    result = await _dhcp(hass, "127.0.0.2")
+    assert result["reason"] == "address_updated"
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.data["host"] == f"http://127.0.0.2:{port}"
+    assert "regParams" in pump_b.requests
+
+
+async def test_dhcp_duplicate_reports_are_harmless(dhcp_env):
+    hass, entry, _a, pump_b, _port = await dhcp_env()
+    first = await _dhcp(hass, "127.0.0.2")
+    count = len(pump_b.requests)
+    second = await _dhcp(hass, "127.0.0.2")
+    assert first["reason"] == "address_updated"
+    assert second["reason"] == "already_configured"
+    assert len(pump_b.requests) == count
+    assert entry.state is ConfigEntryState.LOADED
+
+
+async def test_real_dhcp_watcher_starts_our_flow(dhcp_env, monkeypatch):
+    import sys
+    from unittest.mock import MagicMock
+
+    from homeassistant import config_entries, loader
+
+    # HA's dhcp package imports raw-socket helpers at module level; the watcher is
+    # never started here, so stub them when the test venv doesn't ship them.
+    for name in ("aiodhcpwatcher", "aiodiscover", "aiodiscover.discovery"):
+        try:
+            __import__(name)
+        except ImportError:  # the stub must also cover the submodule
+            monkeypatch.setitem(sys.modules, name, MagicMock())
+    try:
+        __import__("cached_ipaddress")
+    except ImportError:
+        import ipaddress
+        import types
+
+        def cached_ip_addresses(address):
+            try:
+                return ipaddress.ip_address(address)
+            except ValueError:
+                return None
+
+        monkeypatch.setitem(sys.modules, "cached_ipaddress", types.SimpleNamespace(
+            cached_ip_addresses=cached_ip_addresses))
+    from homeassistant.components import dhcp
+    from homeassistant.components.dhcp.models import DHCPData
+
+    hass, entry, *_ = await dhcp_env()
+    matchers = dhcp.async_index_integration_matchers(await loader.async_get_dhcp(hass))
+    watcher = dhcp.WatcherBase(hass, DHCPData(integration_matchers=matchers))
+    calls = []
+    monkeypatch.setattr(
+        "homeassistant.components.dhcp.discovery_flow.async_create_flow",
+        lambda hass, domain, context, data, **kw: calls.append((domain, context, data)))
+    watcher.async_process_client("192.0.2.50", "", "aabbccddeeff")
+    assert len(calls) == 1
+    domain, context, data = calls[0]
+    assert domain == DOMAIN
+    assert context["source"] == config_entries.SOURCE_DHCP
+    assert data.ip == "192.0.2.50"

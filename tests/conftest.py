@@ -26,6 +26,17 @@ def loopback_sockets():
 
 
 @pytest.fixture
+def two_loopback_sockets():
+    """Like loopback_sockets, plus 127.0.0.2 for a second pump on the same port."""
+    pytest_socket.enable_socket()
+    try:
+        pytest_socket.socket_allow_hosts(["127.0.0.1", "127.0.0.2"], allow_unix_socket=True)
+        yield
+    finally:
+        pytest_socket.disable_socket(allow_unix_socket=True)
+
+
+@pytest.fixture
 def edit_params():
     # Original boundary fixture preserved independently of the sample-based emulator.
     return {"editableParamsVer": 1, "data": {

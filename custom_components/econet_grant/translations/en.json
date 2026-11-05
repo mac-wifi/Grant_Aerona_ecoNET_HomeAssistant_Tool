@@ -43,7 +43,13 @@
     "abort": {
       "already_configured": "This device is already configured.",
       "reconfigure_successful": "Connection updated. The integration has been reloaded.",
-      "reauth_successful": "Login updated. The integration has been reloaded."
+      "reauth_successful": "Login updated. The integration has been reloaded.",
+      "address_updated": "The controller's new address was found and saved.",
+      "not_econet_device": "This device is not a known EcoNet controller.",
+      "cannot_connect": "Unable to connect to the ecoNET device.",
+      "invalid_auth": "Invalid username or password.",
+      "wrong_device": "That address answers, but it is a different ecoNET controller from the one this integration was set up with.",
+      "unknown": "An unexpected error occurred."
     }
   },
   "issues": {

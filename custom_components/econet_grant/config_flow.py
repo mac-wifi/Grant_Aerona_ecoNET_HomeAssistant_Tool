@@ -9,6 +9,7 @@ from typing import Any
 import aiohttp
 import voluptuous as vol
 
+from homeassistant.components import persistent_notification
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigEntryState,
@@ -24,7 +25,9 @@ from homeassistant.helpers.selector import (
     TextSelectorConfig,
     TextSelectorType,
 )
+from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 
+from . import discovery
 from .api import AuthError, EconetApi, EconetClient
 from .const import (
     CONF_HOST,
@@ -92,9 +95,18 @@ def connection_schema(username: str) -> vol.Schema:
 
 
 async def async_check_connection(
-    hass: HomeAssistant, entry: ConfigEntry, host: str, username: str, password: str
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    host: str,
+    username: str,
+    password: str,
+    require_same_device: bool = False,
 ) -> str | None:
-    """Return an error key, or None if this login works at this address."""
+    """Return an error key, or None if this login works at this address.
+
+    require_same_device makes the controller ID check strict: the address must
+    answer with an ID this entry already knows (used for unattended moves).
+    """
     wanted = _normalise_host(host)
     if any(
         wanted in (
@@ -121,7 +133,10 @@ async def async_check_connection(
 
     known = _known_uids(hass, entry)
     new_uid = sys_params.get("uid")
-    if known and new_uid and new_uid not in known:
+    if require_same_device:
+        if not known or not new_uid or new_uid not in known:
+            return "wrong_device"
+    elif known and new_uid and new_uid not in known:
         return "wrong_device"
     return None
 
@@ -139,7 +154,7 @@ def async_apply_connection(
     title = entry.title
     if title == f"EcoNet Grant ({entry.data[CONF_HOST]})":
         title = f"EcoNet Grant ({host})"
-    hass.config_entries.async_update_entry(
+    changed = hass.config_entries.async_update_entry(
         entry,
         unique_id=host,
         title=title,
@@ -150,6 +165,8 @@ def async_apply_connection(
             CONF_PASSWORD: password,
         },
     )
+    if not changed:
+        return
     # Loaded entry: its update listener reloads once on a change. Anything else
     # (failed setup, retrying) has no listener yet, so reload explicitly.
     if not was_loaded:
@@ -201,6 +218,50 @@ class EconetGrantConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=USER_SCHEMA,
             errors=errors,
         )
+
+    async def async_step_dhcp(self, discovery_info: DhcpServiceInfo) -> ConfigFlowResult:
+        """The controller's MAC appeared at an address; follow it if it is really ours."""
+        mac = dr.format_mac(discovery_info.macaddress)
+        entry = next(
+            (
+                found
+                for device in dr.async_get(self.hass).async_get_devices(
+                    connections={(dr.CONNECTION_NETWORK_MAC, mac)}
+                )
+                for entry_id in device.config_entries
+                if (found := self.hass.config_entries.async_get_entry(entry_id))
+                and found.domain == DOMAIN
+            ),
+            None,
+        )
+        if entry is None:
+            return self.async_abort(reason="not_econet_device")
+
+        old = entry.data[CONF_HOST]
+        new_host = discovery.replace_host_ip(old, discovery_info.ip)
+        if _normalise_host(new_host) == _normalise_host(old):
+            return self.async_abort(reason="already_configured")
+
+        username, password = entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD]
+        error = await async_check_connection(
+            self.hass, entry, new_host, username, password, require_same_device=True
+        )
+        if error:
+            _LOGGER.warning(
+                "ecoNET MAC seen at %s but not switching: %s", discovery_info.ip, error
+            )
+            return self.async_abort(reason=error)
+
+        async_apply_connection(self.hass, entry, new_host, username, password)
+        persistent_notification.async_create(
+            self.hass,
+            f"The ecoNET controller moved from {old} to {new_host}. The integration "
+            "now uses the new address. No heat-pump settings were changed.",
+            title="EcoNet Grant - controller address changed",
+            notification_id=f"econet_grant_address_changed_{entry.entry_id}",
+        )
+        _LOGGER.info("ecoNET controller moved from %s to %s", old, new_host)
+        return self.async_abort(reason="address_updated")
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
