@@ -95,7 +95,7 @@ async def async_register_controller_mac(hass: HomeAssistant, entry, api) -> None
             _LOGGER.debug("MAC not registered: device not found")
             return
         registry.async_update_device(
-            device.id, merge_connections={(dr.CONNECTION_NETWORK_MAC, mac)}
+            device.id, new_connections=device.connections | {(dr.CONNECTION_NETWORK_MAC, mac)}
         )
     except Exception:  # noqa: BLE001 - best effort, must never affect setup
         _LOGGER.debug("Could not register the controller MAC", exc_info=True)

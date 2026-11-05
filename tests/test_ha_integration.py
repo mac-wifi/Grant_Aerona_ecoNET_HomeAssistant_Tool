@@ -865,7 +865,7 @@ def _mac_connections(device):
 
 
 async def test_mac_registered_after_setup(
-        real_hass, enable_custom_integrations, aiohttp_server, monkeypatch):
+        real_hass, enable_custom_integrations, aiohttp_server, monkeypatch, caplog):
     async def lookup(hass, ip):
         return "aa:bb:cc:dd:ee:ff"
 
@@ -873,6 +873,7 @@ async def test_mac_registered_after_setup(
     assert entry.state is ConfigEntryState.LOADED
     assert (dr.CONNECTION_NETWORK_MAC, "aa:bb:cc:dd:ee:ff") in _pump_device(
         real_hass, entry).connections
+    assert "merge_connections" not in caplog.text  # deprecated; breaks in HA 2027.9
     assert pump.writes == []
 
 
