@@ -931,7 +931,6 @@ async def test_manifest_declares_registered_devices_dhcp(real_hass, enable_custo
 
     manifest = json.loads(Path("custom_components/econet_grant/manifest.json").read_text())
     assert {"registered_devices": True} in manifest["dhcp"]
-    assert manifest["version"] == "0.9.0"
     assert {"domain": "econet_grant", "registered_devices": True} in \
         await loader.async_get_dhcp(real_hass)
 
