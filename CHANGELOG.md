@@ -4,6 +4,16 @@ Versions follow `MAJOR.MINOR.PATCH`: PATCH for fixes and small changes, MINOR
 for new or changed functionality. Only versions with a GitHub Release were
 published; the others were local development candidates.
 
+## Unreleased
+
+- **Follows the controller to a new IP automatically.** The integration now
+  learns the module's MAC address. If the router gives the module a new
+  address, Home Assistant's DHCP discovery notices, and the integration
+  switches only after logging in at the new address and confirming it is the
+  same controller. It then posts a notification and changes no heat-pump
+  setting. Addresses saved as DNS names, or on another subnet, still need
+  Reconfigure.
+
 ## 0.9.0 — 2026-11-05
 
 - **Change the login as well as the address.** **Reconfigure** now also takes

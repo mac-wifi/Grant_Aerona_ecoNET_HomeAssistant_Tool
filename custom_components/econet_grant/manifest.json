@@ -1,14 +1,14 @@
 {
   "domain": "econet_grant",
   "name": "EcoNet Grant Aerona",
+  "after_dependencies": ["dhcp"],
   "codeowners": [],
   "config_flow": true,
-  "after_dependencies": ["dhcp"],
   "dependencies": [],
   "dhcp": [{"registered_devices": true}],
   "documentation": "https://github.com/mac-wifi/Grant_Aerona_ecoNET_HomeAssistant_Tool",
-  "issue_tracker": "https://github.com/mac-wifi/Grant_Aerona_ecoNET_HomeAssistant_Tool/issues",
   "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/mac-wifi/Grant_Aerona_ecoNET_HomeAssistant_Tool/issues",
   "requirements": ["aiohttp>=3.8.0"],
   "version": "0.9.0"
 }

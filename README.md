@@ -411,7 +411,14 @@ Other ways in:
 - If the controller has been unreachable for 10 minutes, **Settings > Repairs** shows a **Fix** button where you can enter the new address or login.
 - On the dashboard's **Admin** tab, the **Connection** card shows the saved address and has buttons that open the integration page and Repairs.
 
-To stop the address changing again, give the module a DHCP reservation (a fixed address) in your router.
+To stop the address changing again, give the module a DHCP reservation (a fixed address) in your router. Some routers (for example Starlink) can't do reservations, which is why the automatic follow below exists.
+
+**Automatic address follow (DHCP discovery)**
+
+- **What it does:** once it has connected, the integration learns the module's MAC address. If the router gives the module a new IP, Home Assistant notices (straight away from the module's DHCP request, or within about an hour from its network scan). The integration checks the saved login and the controller ID at the new address, switches to it, and posts a notification. It never changes any heat-pump setting.
+- **Requirements:** Home Assistant's DHCP discovery (on by default with `default_config`), and Home Assistant and the module on the same network/subnet.
+- **When it won't work:** different subnets or VLANs, or an address saved as a DNS name. Use Reconfigure or the Repairs **Fix** button as before.
+- **How to check it's active:** the **Grant Aerona Heat Pump** device page shows a MAC address.
 
 ---
 
