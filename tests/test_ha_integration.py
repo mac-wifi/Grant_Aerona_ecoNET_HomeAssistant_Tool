@@ -1000,8 +1000,8 @@ def dhcp_env(real_hass, enable_custom_integrations, aiohttp_server, monkeypatch,
 
 async def test_dhcp_moves_entry_to_new_ip(dhcp_env):
     hass, entry, pump_a, pump_b, port = await dhcp_env()
-    pump_a.auth_fail = True  # the old address has stopped answering
-    before =_registry_snapshot(hass, entry)
+    pump_a.unavailable = True  # the old address has stopped answering
+    before = _registry_snapshot(hass, entry)
     result = await _dhcp(hass, "127.0.0.2")
     assert result["type"] == "abort"
     assert result["reason"] == "address_updated"
@@ -1020,8 +1020,8 @@ async def test_dhcp_moves_entry_to_new_ip(dhcp_env):
 
 async def test_dhcp_refuses_different_controller(dhcp_env):
     hass, entry, pump_a, pump_b, port = await dhcp_env()
-    pump_a.auth_fail = True
-    pump_b.sys ={**pump_b.sys, "uid": "some-other-device"}
+    pump_a.unavailable = True
+    pump_b.sys = {**pump_b.sys, "uid": "some-other-device"}
     result = await _dhcp(hass, "127.0.0.2")
     assert result["reason"] == "wrong_device"
     assert entry.data["host"] == f"http://127.0.0.1:{port}"
@@ -1029,8 +1029,8 @@ async def test_dhcp_refuses_different_controller(dhcp_env):
 
 async def test_dhcp_refuses_unknown_device_id(dhcp_env):
     hass, entry, pump_a, _b, port = await dhcp_env()
-    pump_a.auth_fail = True
-    registry =dr.async_get(hass)
+    pump_a.unavailable = True
+    registry = dr.async_get(hass)
     for device in dr.async_entries_for_config_entry(registry, entry.entry_id):
         registry.async_update_device(
             device.id, new_identifiers={(DOMAIN, entry.data["host"].rstrip("/"))})
@@ -1041,7 +1041,7 @@ async def test_dhcp_refuses_unknown_device_id(dhcp_env):
 
 async def test_dhcp_wrong_login_at_new_ip(dhcp_env):
     hass, entry, pump_a, pump_b, port = await dhcp_env()
-    pump_a.auth_fail = True
+    pump_a.unavailable = True
     pump_b.credentials = ("test", "something-else")
     result = await _dhcp(hass, "127.0.0.2")
     assert result["reason"] == "invalid_auth"
@@ -1066,6 +1066,16 @@ async def test_dhcp_ignored_while_old_address_still_answers(dhcp_env):
     assert entry.data["host"] == f"http://127.0.0.1:{port}"
     assert f"econet_grant_address_changed_{entry.entry_id}" not in \
         hass.data.get("persistent_notification", {})
+    assert pump_b.requests == []  # the login was never sent to the new address
+
+
+async def test_dhcp_ignored_while_old_address_rejects_login(dhcp_env):
+    """A controller that still answers (even with 401) has not moved."""
+    hass, entry, pump_a, pump_b, port = await dhcp_env()
+    pump_a.auth_fail = True
+    result = await _dhcp(hass, "127.0.0.2")
+    assert result["reason"] == "already_configured"
+    assert entry.data["host"] == f"http://127.0.0.1:{port}"
     assert pump_b.requests == []  # the login was never sent to the new address
 
 
@@ -1107,8 +1117,8 @@ async def test_dhcp_recovers_failed_entry(dhcp_env):
 
 async def test_dhcp_duplicate_reports_are_harmless(dhcp_env):
     hass, entry, pump_a, pump_b, _port = await dhcp_env()
-    pump_a.auth_fail = True
-    first =await _dhcp(hass, "127.0.0.2")
+    pump_a.unavailable = True
+    first = await _dhcp(hass, "127.0.0.2")
     count = len(pump_b.requests)
     second = await _dhcp(hass, "127.0.0.2")
     assert first["reason"] == "address_updated"

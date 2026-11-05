@@ -21,6 +21,7 @@ class EconetEmulator:
         self.success = self._load("newparam_success")
         self.mode = "ok"
         self.auth_fail = False  # answer every request with 401
+        self.unavailable = False  # answer every request with 503 (not answering)
         self.credentials = None  # (user, password): other logins get 401; None accepts any
         self.write_modes = []  # optional per-attempt responses for timeout recovery
         self.writes = []
@@ -78,6 +79,8 @@ class EconetEmulator:
         endpoint = request.match_info["endpoint"]
         self.requests.append(endpoint)
         self.auth_headers.add(request.headers.get("Authorization"))
+        if self.unavailable:
+            raise web.HTTPServiceUnavailable()
         if self.auth_fail:
             raise web.HTTPUnauthorized()
         if self.credentials is not None:

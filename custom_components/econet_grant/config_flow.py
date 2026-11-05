@@ -247,11 +247,12 @@ class EconetGrantConfigFlow(ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="already_configured")
 
         username, password = entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD]
-        # Is the controller still answering at its current address? If so it has not
-        # moved, and we must not send the login anywhere else.
+        # Is the controller still answering at its current address (even if it
+        # rejects the login)? If so it has not moved, and we must not send the
+        # login anywhere else.
         if await async_check_connection(
             self.hass, entry, old, username, password, require_same_device=True
-        ) is None:
+        ) in (None, "invalid_auth"):
             _LOGGER.info(
                 "ecoNET MAC reported at %s, but the controller still answers at "
                 "its current address; ignoring", discovery_info.ip,
