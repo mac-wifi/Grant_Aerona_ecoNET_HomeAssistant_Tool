@@ -165,10 +165,11 @@ def async_apply_connection(
             CONF_PASSWORD: password,
         },
     )
-    if not changed:
+    if not changed and was_loaded:
         return
     # Loaded entry: its update listener reloads once on a change. Anything else
-    # (failed setup, retrying) has no listener yet, so reload explicitly.
+    # (failed setup, retrying) has no listener yet, so reload explicitly, even
+    # when the stored login is unchanged (reauth after fixing the controller).
     if not was_loaded:
         hass.config_entries.async_schedule_reload(entry.entry_id)
 
@@ -238,11 +239,24 @@ class EconetGrantConfigFlow(ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="not_econet_device")
 
         old = entry.data[CONF_HOST]
+        if discovery.host_ip(old) is None:
+            _LOGGER.debug("ecoNET entry uses a host name (%s); not moving it", old)
+            return self.async_abort(reason="not_ip_host")
         new_host = discovery.replace_host_ip(old, discovery_info.ip)
         if _normalise_host(new_host) == _normalise_host(old):
             return self.async_abort(reason="already_configured")
 
         username, password = entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD]
+        # Is the controller still answering at its current address? If so it has not
+        # moved, and we must not send the login anywhere else.
+        if await async_check_connection(
+            self.hass, entry, old, username, password, require_same_device=True
+        ) is None:
+            _LOGGER.info(
+                "ecoNET MAC reported at %s, but the controller still answers at "
+                "its current address; ignoring", discovery_info.ip,
+            )
+            return self.async_abort(reason="already_configured")
         error = await async_check_connection(
             self.hass, entry, new_host, username, password, require_same_device=True
         )

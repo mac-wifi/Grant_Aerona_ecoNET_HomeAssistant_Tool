@@ -415,7 +415,7 @@ To stop the address changing again, give the module a DHCP reservation (a fixed 
 
 **Automatic address follow (DHCP discovery)**
 
-- **What it does:** once it has connected, the integration learns the module's MAC address. If the router gives the module a new IP, Home Assistant notices (straight away from the module's DHCP request, or within about an hour from its network scan). The integration checks the saved login and the controller ID at the new address, switches to it, and posts a notification. It never changes any heat-pump setting.
+- **What it does:** once it has connected, the integration learns the module's MAC address. If the router gives the module a new IP, Home Assistant notices (straight away from the module's DHCP request, or within about an hour from its network scan). The integration checks the saved login and the controller ID at the new address, switches to it, and posts a notification. It never changes any heat-pump setting. It only moves when the old address has stopped answering, and it never sends the login to a new address while the controller still answers at the old one.
 - **Requirements:** Home Assistant's DHCP discovery (on by default with `default_config`), and Home Assistant and the module on the same network/subnet.
 - **When it won't work:** different subnets or VLANs, or an address saved as a DNS name. Use Reconfigure or the Repairs **Fix** button as before.
 - **How to check it's active:** the **Grant Aerona Heat Pump** device page shows a MAC address.

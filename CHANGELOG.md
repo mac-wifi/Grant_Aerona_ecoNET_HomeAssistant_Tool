@@ -9,8 +9,10 @@ published; the others were local development candidates.
 - **Follows the controller to a new IP automatically.** The integration now
   learns the module's MAC address. If the router gives the module a new
   address, Home Assistant's DHCP discovery notices, and the integration
-  switches only after logging in at the new address and confirming it is the
-  same controller. It then posts a notification and changes no heat-pump
+  switches only when the old address has stopped answering, and only after
+  logging in at the new address and confirming it is the same controller. It
+  never sends the login to a new address while the controller still answers at
+  the old one. It then posts a notification and changes no heat-pump
   setting. Addresses saved as DNS names, or on another subnet, still need
   Reconfigure.
 

@@ -624,6 +624,33 @@ def _reauth_flow(hass):
     return flows[0]
 
 
+async def test_reauth_reloads_failed_entry_when_nothing_changed(
+        real_hass, enable_custom_integrations, aiohttp_server, monkeypatch):
+    hass = real_hass
+    monkeypatch.setattr("custom_components.econet_grant.api.MIN_REQUEST_GAP", 0)
+    assert await async_setup_component(hass, "persistent_notification", {})
+    pump, url = await _second_pump(aiohttp_server)
+    pump.credentials = ("test", "other")
+    # unique_id == host like a real entry, so re-applying the same login changes nothing.
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Synthetic heat pump", unique_id=url,
+        data={"host": url, "username": "test", "password": "test-only"},
+        options={"safe_mode": True, "push_notifications": False},
+    )
+    entry.add_to_hass(hass)
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+    flow = _reauth_flow(hass)
+    # The owner fixes the password on the controller side.
+    pump.credentials = ("test", "test-only")
+    result = await hass.config_entries.flow.async_configure(
+        flow["flow_id"], {"username": "test", "password": "test-only"})
+    await hass.async_block_till_done()
+    assert result["reason"] == "reauth_successful"
+    assert entry.state is ConfigEntryState.LOADED
+
+
 async def test_reauth_from_failed_setup(
         real_hass, enable_custom_integrations, aiohttp_server, monkeypatch, caplog):
     hass = real_hass
@@ -973,7 +1000,8 @@ def dhcp_env(real_hass, enable_custom_integrations, aiohttp_server, monkeypatch,
 
 async def test_dhcp_moves_entry_to_new_ip(dhcp_env):
     hass, entry, pump_a, pump_b, port = await dhcp_env()
-    before = _registry_snapshot(hass, entry)
+    pump_a.auth_fail = True  # the old address has stopped answering
+    before =_registry_snapshot(hass, entry)
     result = await _dhcp(hass, "127.0.0.2")
     assert result["type"] == "abort"
     assert result["reason"] == "address_updated"
@@ -991,16 +1019,18 @@ async def test_dhcp_moves_entry_to_new_ip(dhcp_env):
 
 
 async def test_dhcp_refuses_different_controller(dhcp_env):
-    hass, entry, _a, pump_b, port = await dhcp_env()
-    pump_b.sys = {**pump_b.sys, "uid": "some-other-device"}
+    hass, entry, pump_a, pump_b, port = await dhcp_env()
+    pump_a.auth_fail = True
+    pump_b.sys ={**pump_b.sys, "uid": "some-other-device"}
     result = await _dhcp(hass, "127.0.0.2")
     assert result["reason"] == "wrong_device"
     assert entry.data["host"] == f"http://127.0.0.1:{port}"
 
 
 async def test_dhcp_refuses_unknown_device_id(dhcp_env):
-    hass, entry, _a, _b, port = await dhcp_env()
-    registry = dr.async_get(hass)
+    hass, entry, pump_a, _b, port = await dhcp_env()
+    pump_a.auth_fail = True
+    registry =dr.async_get(hass)
     for device in dr.async_entries_for_config_entry(registry, entry.entry_id):
         registry.async_update_device(
             device.id, new_identifiers={(DOMAIN, entry.data["host"].rstrip("/"))})
@@ -1010,7 +1040,8 @@ async def test_dhcp_refuses_unknown_device_id(dhcp_env):
 
 
 async def test_dhcp_wrong_login_at_new_ip(dhcp_env):
-    hass, entry, _a, pump_b, port = await dhcp_env()
+    hass, entry, pump_a, pump_b, port = await dhcp_env()
+    pump_a.auth_fail = True
     pump_b.credentials = ("test", "something-else")
     result = await _dhcp(hass, "127.0.0.2")
     assert result["reason"] == "invalid_auth"
@@ -1026,6 +1057,37 @@ async def test_dhcp_same_address_does_not_reload(dhcp_env):
     assert result["reason"] == "already_configured"
     assert len(pump_a.requests) == count
     assert pump_b.requests == []
+
+
+async def test_dhcp_ignored_while_old_address_still_answers(dhcp_env):
+    hass, entry, _a, pump_b, port = await dhcp_env()
+    result = await _dhcp(hass, "127.0.0.2")
+    assert result["reason"] == "already_configured"
+    assert entry.data["host"] == f"http://127.0.0.1:{port}"
+    assert f"econet_grant_address_changed_{entry.entry_id}" not in \
+        hass.data.get("persistent_notification", {})
+    assert pump_b.requests == []  # the login was never sent to the new address
+
+
+async def test_dhcp_does_not_overwrite_dns_host(dhcp_env):
+    hass, entry, *_ = await dhcp_env()
+    hass.config_entries.async_update_entry(
+        entry, data={**entry.data, "host": "http://econet.invalid"})
+    result = await _dhcp(hass, "127.0.0.2")
+    assert result["reason"] == "not_ip_host"
+    assert entry.data["host"] == "http://econet.invalid"
+
+
+async def test_lookup_mac_uses_dhcp_data_before_arp(real_hass, monkeypatch):
+    from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
+
+    from custom_components.econet_grant import discovery
+
+    dhcp = _import_dhcp_component(monkeypatch)
+    monkeypatch.setattr(dhcp, "async_discovered_service_info", lambda hass: [
+        DhcpServiceInfo(ip="192.0.2.7", hostname="", macaddress="aabbccddeeff")])
+    monkeypatch.setattr(discovery, "ARP_TABLE_PATH", "/nonexistent/arp")
+    assert await discovery.async_lookup_mac(real_hass, "192.0.2.7") == "aa:bb:cc:dd:ee:ff"
 
 
 async def test_dhcp_unknown_mac(dhcp_env):
@@ -1044,8 +1106,9 @@ async def test_dhcp_recovers_failed_entry(dhcp_env):
 
 
 async def test_dhcp_duplicate_reports_are_harmless(dhcp_env):
-    hass, entry, _a, pump_b, _port = await dhcp_env()
-    first = await _dhcp(hass, "127.0.0.2")
+    hass, entry, pump_a, pump_b, _port = await dhcp_env()
+    pump_a.auth_fail = True
+    first =await _dhcp(hass, "127.0.0.2")
     count = len(pump_b.requests)
     second = await _dhcp(hass, "127.0.0.2")
     assert first["reason"] == "address_updated"
@@ -1054,14 +1117,12 @@ async def test_dhcp_duplicate_reports_are_harmless(dhcp_env):
     assert entry.state is ConfigEntryState.LOADED
 
 
-async def test_real_dhcp_watcher_starts_our_flow(dhcp_env, monkeypatch):
+def _import_dhcp_component(monkeypatch):
+    """Import HA's dhcp component, stubbing raw-socket helpers the test venv lacks."""
     import sys
     from unittest.mock import MagicMock
 
-    from homeassistant import config_entries, loader
-
-    # HA's dhcp package imports raw-socket helpers at module level; the watcher is
-    # never started here, so stub them when the test venv doesn't ship them.
+    # The watcher is never started here, so stubs are enough.
     for name in ("aiodhcpwatcher", "aiodiscover", "aiodiscover.discovery"):
         try:
             __import__(name)
@@ -1082,6 +1143,14 @@ async def test_real_dhcp_watcher_starts_our_flow(dhcp_env, monkeypatch):
         monkeypatch.setitem(sys.modules, "cached_ipaddress", types.SimpleNamespace(
             cached_ip_addresses=cached_ip_addresses))
     from homeassistant.components import dhcp
+
+    return dhcp
+
+
+async def test_real_dhcp_watcher_starts_our_flow(dhcp_env, monkeypatch):
+    from homeassistant import config_entries, loader
+
+    dhcp = _import_dhcp_component(monkeypatch)
     from homeassistant.components.dhcp.models import DHCPData
 
     hass, entry, *_ = await dhcp_env()
