@@ -16,6 +16,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from . import discovery
 from .api import AuthError, EconetApi, make_api
 from .change_detector import ChangeDetector
 from .const import (
@@ -72,6 +73,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: EconetConfigEntry) -> bo
     entry.runtime_data = data
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.async_create_background_task(
+        hass,
+        discovery.async_register_controller_mac(hass, entry, api),
+        "econet_grant_register_mac",
+    )
     revert_actions.start()
     entry.async_on_unload(revert_actions.close)
     async_register_services(hass)

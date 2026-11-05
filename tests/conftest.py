@@ -41,6 +41,8 @@ def entry():
         entry_id="test-entry", options={"push_notifications": False},
         async_on_unload=Mock(), add_update_listener=Mock(return_value=Mock()),
         data={"host": "econet.invalid", "username": "test", "password": "test-only"},
+        # Boundary tests don't run the background MAC registration; close the coroutine.
+        async_create_background_task=Mock(side_effect=lambda hass, coro, name: coro.close()),
     )
 
 

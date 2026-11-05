@@ -835,3 +835,74 @@ async def test_issue_raised_only_at_threshold(real_hass, monkeypatch):
     now[0] = start + timedelta(minutes=10)
     repairs.async_report_failure(hass, entry)
     assert key in ir.async_get(hass).issues
+
+
+async def _setup_with_lookup(real_hass, aiohttp_server, monkeypatch, lookup):
+    pump = EconetEmulator()
+    server = await aiohttp_server(pump.app, host="127.0.0.1")
+    monkeypatch.setattr("custom_components.econet_grant.api.MIN_REQUEST_GAP", 0)
+    monkeypatch.setattr("custom_components.econet_grant.discovery.async_lookup_mac", lookup)
+    assert await async_setup_component(real_hass, "persistent_notification", {})
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Synthetic heat pump", unique_id="synthetic-entry",
+        data={"host": str(server.make_url("")), "username": "test", "password": "test-only"},
+        options={"safe_mode": True, "push_notifications": False},
+    )
+    entry.add_to_hass(real_hass)
+    assert await real_hass.config_entries.async_setup(entry.entry_id)
+    await real_hass.async_block_till_done()
+    return entry, pump
+
+
+def _pump_device(hass, entry):
+    devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+    assert devices
+    return devices[0]
+
+
+def _mac_connections(device):
+    return {c for c in device.connections if c[0] == dr.CONNECTION_NETWORK_MAC}
+
+
+async def test_mac_registered_after_setup(
+        real_hass, enable_custom_integrations, aiohttp_server, monkeypatch):
+    async def lookup(hass, ip):
+        return "aa:bb:cc:dd:ee:ff"
+
+    entry, pump = await _setup_with_lookup(real_hass, aiohttp_server, monkeypatch, lookup)
+    assert entry.state is ConfigEntryState.LOADED
+    assert (dr.CONNECTION_NETWORK_MAC, "aa:bb:cc:dd:ee:ff") in _pump_device(
+        real_hass, entry).connections
+    assert pump.writes == []
+
+
+async def test_no_mac_found_leaves_device_unchanged(
+        real_hass, enable_custom_integrations, aiohttp_server, monkeypatch):
+    async def lookup(hass, ip):
+        return None
+
+    entry, _ = await _setup_with_lookup(real_hass, aiohttp_server, monkeypatch, lookup)
+    assert entry.state is ConfigEntryState.LOADED
+    assert not _mac_connections(_pump_device(real_hass, entry))
+
+
+async def test_lookup_failure_does_not_break_setup(
+        real_hass, enable_custom_integrations, aiohttp_server, monkeypatch):
+    async def lookup(hass, ip):
+        raise RuntimeError("boom")
+
+    entry, _ = await _setup_with_lookup(real_hass, aiohttp_server, monkeypatch, lookup)
+    assert entry.state is ConfigEntryState.LOADED
+    assert not _mac_connections(_pump_device(real_hass, entry))
+
+
+async def test_manifest_declares_registered_devices_dhcp(real_hass, enable_custom_integrations):
+    import json
+    from pathlib import Path
+    from homeassistant import loader
+
+    manifest = json.loads(Path("custom_components/econet_grant/manifest.json").read_text())
+    assert {"registered_devices": True} in manifest["dhcp"]
+    assert manifest["version"] == "0.9.0"
+    assert {"domain": "econet_grant", "registered_devices": True} in \
+        await loader.async_get_dhcp(real_hass)
