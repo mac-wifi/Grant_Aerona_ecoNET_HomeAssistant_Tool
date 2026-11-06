@@ -39,18 +39,22 @@ only: it does not create tags or inspect the remote.
 2. Tag that commit, `git tag vX.Y.Z <commit>`, then run `git push origin vX.Y.Z`.
    Never move or reuse a published tag.
 3. Create a GitHub **Release** for the tag, using the changelog entry as the
-   notes. The Marketplace (formerly HACS) offers versions from releases, not bare tags. It also requires `hacs.json` in the repository, so keep it.
+   notes. Keep publishing a Release for every version: HACS offered versions from
+   releases, not bare tags, and the Marketplace is expected to behave the same
+   (owner to confirm). The Marketplace also requires `hacs.json`, so keep it.
 
 ## Updating an installation
 
 1. Take a Home Assistant backup. The Marketplace replaces
    `custom_components/econet_grant/`, so local edits there are lost.
 2. In **Settings > Updates** (or **Settings > Marketplace**, EcoNet Grant
-   Aerona), install the update. The Marketplace checks the catalog about every
-   6 hours and custom repositories every 48 hours with a GitHub connection, so
-   a brand-new release can take a while to appear. (On Core before 2026.11
+   Aerona), install the update. While this repository is added as a custom
+   repository (not in the catalog), the Marketplace checks it every 48 hours
+   if GitHub is connected, so a brand-new release can take up to that long to
+   appear; catalog repositories are checked every 6 hours. (On Core before 2026.11
    with HACS: **Update information**, then **Download/Redownload**.)
-3. Restart Home Assistant when convenient; a repair offers to do it. Check that the integration loads,
+3. Restart Home Assistant when convenient; a repair offers to do it. Check
+   that the integration loads,
    that Safe Mode is still on, and the entity states and logs. Downloading code
    is not permission to write to the controller.
 4. The Marketplace does not update a dashboard you copied into `dashboards/`. Compare it

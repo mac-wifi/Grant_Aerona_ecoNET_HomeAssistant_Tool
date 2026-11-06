@@ -287,7 +287,7 @@ On Core 2026.11 or later:
 
 After installation the integration files are at `custom_components/econet_grant/`. Continue with [Step 5](#5-configure-the-integration).
 
-**Updates and earlier versions:** the Marketplace creates an update entity for the repository, so updates appear under **Settings > Updates** next to Home Assistant's own. It offers published stable releases only; a manifest bump or Git tag alone does not publish one. After an update, restart Home Assistant (a repair offers to do it). To install a different version, open the repository page, use the three-dot menu > **Install another version**, and restart. The Marketplace advises restoring a backup rather than using this to go back after an update. To receive pre-releases, turn on the repository's **Pre-release** switch (its entity is disabled by default; enable it first on the Marketplace device page). This integration adds no update entity of its own and enables no automatic update. See the [release/update and rollback procedure](RELEASE.md#owner-controlled-installation-and-rollback) before changing versions.
+**Updates and earlier versions:** the Marketplace creates an update entity for the repository, so updates appear under **Settings > Updates** next to Home Assistant's own. It offers stable releases by default, so keep publishing a GitHub Release for each version (a manifest bump or Git tag alone is not a release). After an update, restart Home Assistant (a repair offers to do it). To install a different version, open the repository page, use the three-dot menu > **Install another version**, and restart. The Marketplace advises restoring a backup rather than using this to go back after an update. To receive pre-releases, turn on the repository's **Pre-release** switch (its entity is disabled by default; enable it first on the Marketplace device page). This integration adds no update entity of its own and enables no automatic update. See the [release/update and rollback procedure](RELEASE.md#updating-an-installation) before changing versions.
 
 On older Core (2026.9.4 to 2026.10) with HACS: open **HACS** in the sidebar, three-dot menu > **Custom repositories**, add the same repository with category **Integration**, then **Download** and restart. Updates use **Update information** and **Redownload** > **Need a different version?**.
 
@@ -447,7 +447,7 @@ The integration includes an owner-tested Lovelace dashboard with 6 tabs: Favouri
 
 > **Updating from an older version:** the 0.9.0 dashboard adds a **Connection** card to the Admin tab. Recopy the dashboard file (Step 7b) to get it.
 
-> **Entity ID compatibility:** This dashboard preserves the IDs from the owner's existing installation, including `heating_*` and `dhw_*` IDs, rather than assuming fresh-install CH/HW IDs. Home Assistant keeps existing entity IDs when names change, including the 2026.11 naming redesign, which only changes the names shown (a card without its own name shows the device name followed by the entity name; the bundled dashboard names most of its cards itself). On both fresh and upgraded installations, compare the actual IDs under **Settings > Devices & Services > EcoNet Grant Aerona > Device** and adjust your dashboard copy before deployment. Do not rename live entities just to fit the example.
+> **Entity ID compatibility:** This dashboard preserves the IDs from the owner's existing installation, including `heating_*` and `dhw_*` IDs, rather than assuming fresh-install CH/HW IDs. Home Assistant keeps existing entity IDs when names change, including the 2026.11 naming redesign, which only changes the names shown (a card without its own name now shows the device name followed by the entity name; set a name on the card to shorten it). On both fresh and upgraded installations, compare the actual IDs under **Settings > Devices & Services > EcoNet Grant Aerona > Device** and adjust your dashboard copy before deployment. Do not rename live entities just to fit the example.
 
 #### 7a. Install required frontend cards
 
@@ -456,7 +456,7 @@ The dashboard uses two custom card libraries. Install both from the Marketplace 
 1. Go to **Settings > Marketplace**
 2. Use **Search** (or **Filters** to show dashboard content) to find **Mushroom** and select **Install**
 3. Do the same for **Mini Graph Card**
-4. **Reload the browser** (or hard refresh with Ctrl+Shift+R). The Marketplace adds them as dashboard resources under `/local/community/` automatically. Only if you manage dashboard resources in YAML, add the resource that the install dialog shows (a repair also reminds you to change old `/hacsfiles/` paths)
+4. **Reload the browser** (or hard refresh with Ctrl+Shift+R). The Marketplace adds them as dashboard resources under `/local/community/` automatically. Only if you manage dashboard resources in YAML, add the resource that the install dialog shows (if you migrated from HACS with YAML resources, a repair also reminds you to change old `/hacsfiles/` paths)
 
 On older Core, install the same two cards from HACS > **Frontend** instead. Cards already installed through HACS carry over to the Marketplace on update.
 
