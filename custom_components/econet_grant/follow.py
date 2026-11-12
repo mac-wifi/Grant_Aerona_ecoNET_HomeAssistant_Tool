@@ -20,6 +20,9 @@ from .const import CONF_HOST, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+# Per entry: (ip, reason) refusals already logged at WARNING in this outage.
+FOLLOW_LOGGED = f"{DOMAIN}_follow_logged"
+
 
 @callback
 def async_schedule_follow_retry(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -46,17 +49,21 @@ async def async_retry_follow(hass: HomeAssistant, entry: ConfigEntry) -> str:
         ]
         candidates = [ip for ip in dict.fromkeys(seen) if ip != saved]
         if not candidates:
-            _LOGGER.info(
+            _LOGGER.debug(
                 "ecoNET controller not answering at %s and not seen at another "
                 "address yet", saved,
             )
             return "not_seen_elsewhere"
+        logged = hass.data.setdefault(FOLLOW_LOGGED, {}).setdefault(entry.entry_id, set())
         result = "not_seen_elsewhere"
         for ip in candidates:
             result = await async_follow_to_ip(hass, entry, ip)
             if result in ("address_updated", "already_configured", "in_progress"):
                 return result
-            _LOGGER.warning(
+            # Retried every failed poll: say it once, not every 5 minutes.
+            log = _LOGGER.debug if (ip, result) in logged else _LOGGER.warning
+            logged.add((ip, result))
+            log(
                 "ecoNET controller not answering at %s; seen at %s but not "
                 "switching yet (%s). Will try again after the next failed poll.",
                 saved, ip, result,

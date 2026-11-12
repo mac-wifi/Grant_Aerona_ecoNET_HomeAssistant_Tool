@@ -52,6 +52,8 @@ def async_report_failure(hass: HomeAssistant, entry: ConfigEntry) -> None:
 def async_report_success(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Contact works again: forget the outage and clear the issue."""
     hass.data.get(_FAILURES_KEY, {}).pop(entry.entry_id, None)
+    # A new outage should log its first address-follow refusal again.
+    hass.data.get(f"{DOMAIN}_follow_logged", {}).pop(entry.entry_id, None)
     ir.async_delete_issue(hass, DOMAIN, issue_id(entry))
 
 

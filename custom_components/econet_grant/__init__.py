@@ -94,6 +94,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: EconetConfigEntry) -> b
 async def async_remove_entry(hass: HomeAssistant, entry: EconetConfigEntry) -> None:
     """Drop the unreachable-controller issue along with the entry."""
     hass.data.get(f"{DOMAIN}_connection_failures", {}).pop(entry.entry_id, None)
+    hass.data.get(f"{DOMAIN}_follow_locks", {}).pop(entry.entry_id, None)
+    hass.data.get(f"{DOMAIN}_follow_logged", {}).pop(entry.entry_id, None)
     ir.async_delete_issue(hass, DOMAIN, issue_id(entry))
 
 

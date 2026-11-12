@@ -206,22 +206,31 @@ async def async_follow_to_ip(hass: HomeAssistant, entry: ConfigEntry, ip: str) -
             return "already_configured"
 
         username, password = entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD]
-        # Is the controller still answering at its current address (even if it
-        # rejects the login)? If so it has not moved, and we must not send the
-        # login anywhere else.
-        if await async_check_connection(
+        # Move only if the saved address is really gone. If it still answers
+        # (even by rejecting the login) the controller has not moved, and an
+        # unexpected error there proves nothing, so the login stays put.
+        at_old = await async_check_connection(
             hass, entry, old, username, password, require_same_device=True
-        ) in (None, "invalid_auth"):
-            _LOGGER.info(
-                "ecoNET MAC reported at %s, but the controller still answers at "
-                "its current address; ignoring", ip,
-            )
-            return "already_configured"
+        )
+        if at_old not in ("cannot_connect", "wrong_device"):
+            if at_old is None or at_old == "invalid_auth":
+                _LOGGER.info(
+                    "ecoNET MAC reported at %s, but the controller still "
+                    "answers at its current address; ignoring", ip,
+                )
+                return "already_configured"
+            return at_old
         error = await async_check_connection(
             hass, entry, new_host, username, password, require_same_device=True
         )
         if error:
             return error
+        # The checks can take minutes; don't undo a change made meanwhile.
+        if (
+            hass.config_entries.async_get_entry(entry.entry_id) is not entry
+            or entry.data[CONF_HOST] != old
+        ):
+            return "entry_changed"
 
         async_apply_connection(hass, entry, new_host, username, password)
         persistent_notification.async_create(

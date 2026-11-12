@@ -1247,6 +1247,87 @@ async def test_only_one_follow_at_a_time(dhcp_env):
     assert pump_b.requests == []
 
 
+async def test_dhcp_report_during_a_retry_is_skipped(dhcp_env):
+    hass, entry, pump_a, pump_b, _port = await dhcp_env()
+    pump_a.unavailable = True
+    async with config_flow.follow_lock(hass, entry):
+        result = await _dhcp(hass, "127.0.0.2")
+    assert result["reason"] == "in_progress"
+    assert pump_b.requests == []
+
+
+async def test_follow_does_not_overwrite_a_manual_change(dhcp_env, monkeypatch):
+    """Owner reconfigures while a follow is checking the new address."""
+    hass, entry, pump_a, pump_b, port = await dhcp_env()
+    pump_a.unavailable = True
+    manual = "http://127.0.0.1:1"  # the owner's new address (closed port)
+    _seen_at(monkeypatch, None)
+    real_check = config_flow.async_check_connection
+
+    async def check(hass_, entry_, host, *args, **kwargs):
+        result = await real_check(hass_, entry_, host, *args, **kwargs)
+        if "127.0.0.2" in host:
+            hass_.config_entries.async_update_entry(
+                entry_, data={**entry_.data, "host": manual})
+        return result
+
+    monkeypatch.setattr(config_flow, "async_check_connection", check)
+    assert await config_flow.async_follow_to_ip(hass, entry, "127.0.0.2") == "entry_changed"
+    assert entry.data["host"] == manual
+    assert f"econet_grant_address_changed_{entry.entry_id}" not in \
+        hass.data.get("persistent_notification", {})
+
+
+async def test_unexpected_error_at_saved_address_is_not_a_move(dhcp_env, monkeypatch):
+    hass, entry, pump_a, pump_b, port = await dhcp_env()
+    real_check = config_flow.async_check_connection
+
+    async def check(hass_, entry_, host, *args, **kwargs):
+        if "127.0.0.1" in host:
+            return "unknown"
+        return await real_check(hass_, entry_, host, *args, **kwargs)
+
+    monkeypatch.setattr(config_flow, "async_check_connection", check)
+    assert await config_flow.async_follow_to_ip(hass, entry, "127.0.0.2") == "unknown"
+    assert pump_b.requests == []
+    assert entry.data["host"] == f"http://127.0.0.1:{port}"
+
+
+async def test_retry_finds_the_controller_in_ha_dhcp_data(dhcp_env, monkeypatch):
+    """End to end from HA's DHCP address data, without stubbing the lookup."""
+    from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
+
+    from custom_components.econet_grant import discovery
+
+    hass, entry, pump_a, pump_b, port = await dhcp_env()
+    dhcp = _import_dhcp_component(monkeypatch)
+    monkeypatch.setattr(dhcp, "async_discovered_service_info", lambda hass: [
+        DhcpServiceInfo(ip="127.0.0.2", hostname="", macaddress="aabbccddeeff")])
+    monkeypatch.setattr(discovery, "ARP_TABLE_PATH", "/nonexistent/arp")
+    pump_a.unavailable = True
+    await _failed_poll(hass, entry)
+    assert entry.data["host"] == f"http://127.0.0.2:{port}"
+    assert entry.state is ConfigEntryState.LOADED
+
+
+async def test_repeated_refusal_is_logged_once(dhcp_env, monkeypatch, caplog):
+    hass, entry, pump_a, pump_b, _port = await dhcp_env()
+    pump_a.unavailable = pump_b.unavailable = True
+    _seen_at(monkeypatch, "127.0.0.2")
+    for _ in range(3):
+        await _failed_poll(hass, entry)
+    warnings = [r for r in caplog.records
+                if r.levelname == "WARNING" and "Will try again" in r.getMessage()]
+    assert len(warnings) == 1
+
+
+async def test_removing_entry_drops_its_follow_lock(dhcp_env):
+    hass, entry, *_ = await dhcp_env()
+    config_flow.follow_lock(hass, entry)
+    await hass.config_entries.async_remove(entry.entry_id)
+    assert entry.entry_id not in hass.data.get(f"{DOMAIN}_follow_locks", {})
+
+
 async def test_lookup_ips_uses_dhcp_data_then_arp(real_hass, monkeypatch, tmp_path):
     from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 

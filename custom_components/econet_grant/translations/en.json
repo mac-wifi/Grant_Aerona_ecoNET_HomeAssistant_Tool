@@ -48,6 +48,7 @@
       "not_econet_device": "This device is not a known EcoNet controller.",
       "not_ip_host": "The integration uses a host name, so it isn't moved automatically.",
       "in_progress": "A check of the controller's new address is already running.",
+      "entry_changed": "The connection was changed while the new address was being checked, so it was left as it is.",
       "cannot_connect": "Unable to connect to the ecoNET device.",
       "invalid_auth": "Invalid username or password.",
       "wrong_device": "That address answers, but it is a different ecoNET controller from the one this integration was set up with.",
