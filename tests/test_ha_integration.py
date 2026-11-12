@@ -1395,3 +1395,173 @@ async def test_real_dhcp_watcher_starts_our_flow(dhcp_env, monkeypatch):
     assert domain == DOMAIN
     assert context["source"] == config_entries.SOURCE_DHCP
     assert data.ip == "192.0.2.50"
+
+
+# --- Outage alerts to the owner's phone --------------------------------------
+# Production went 4 days unnoticed: one HA notice is easy to miss. While the
+# controller is unreachable, the phone gets a time-sensitive alert every hour
+# plus a Live Activity, and an all-clear when contact returns.
+
+PHONE = "mobile_app_test_phone"
+
+
+def _phone(hass):
+    sent = []
+
+    async def notify(call):
+        sent.append(dict(call.data))
+
+    hass.services.async_register("notify", PHONE, notify)
+    return sent
+
+
+def _outage_entry(hass, phone=PHONE, host="http://127.0.0.1:9"):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"host": host, "username": "t", "password": "test-only"},
+        options={"revert_notify_service": phone} if phone is not None else {},
+    )
+    entry.add_to_hass(hass)
+    return entry
+
+
+def _clock(monkeypatch):
+    start = dt_util.utcnow()
+    now = [start]
+    monkeypatch.setattr(repairs.dt_util, "utcnow", lambda: now[0])
+    return start, now
+
+
+async def _fail_at(hass, entry, now, when):
+    now[0] = when
+    repairs.async_report_failure(hass, entry)
+    await hass.async_block_till_done()
+
+
+def _alerts(sent):
+    return [m for m in sent if m.get("message") != "clear_notification"
+            and not m["data"].get("live_update")]
+
+
+def _live(sent):
+    return [m for m in sent if m["data"].get("live_update")]
+
+
+async def test_outage_alert_after_ten_minutes_then_hourly(real_hass, monkeypatch):
+    hass = real_hass
+    sent = _phone(hass)
+    entry = _outage_entry(hass)
+    start, now = _clock(monkeypatch)
+    await _fail_at(hass, entry, now, start)
+    await _fail_at(hass, entry, now, start + timedelta(minutes=9))
+    assert sent == []
+
+    await _fail_at(hass, entry, now, start + timedelta(minutes=10))
+    [alert] = _alerts(sent)
+    assert alert["data"]["push"]["interruption-level"] == "time-sensitive"
+    assert "critical" not in str(alert)  # never sounds when the phone is muted
+    assert "127.0.0.1:9" in alert["message"]
+    assert alert["data"]["tag"] == f"econet_grant_outage_{entry.entry_id}"
+    [live] = _live(sent)
+    assert live["data"]["tag"] == f"econet_grant_outage_live_{entry.entry_id}"
+    assert live["data"]["chronometer"] is True
+    assert live["data"]["when"] == pytest.approx(start.timestamp())
+    assert "test-only" not in str(sent)
+
+    # Every poll between reminders stays quiet.
+    for minutes in (15, 40, 67):  # up to 2 min early still counts as hourly
+        await _fail_at(hass, entry, now, start + timedelta(minutes=minutes))
+    assert len(_alerts(sent)) == 1
+    # About an hour after the last alert, another one.
+    await _fail_at(hass, entry, now, start + timedelta(minutes=70))
+    assert len(_alerts(sent)) == 2
+    assert "1 h" in _alerts(sent)[-1]["message"]
+    await _fail_at(hass, entry, now, start + timedelta(minutes=130))
+    assert len(_alerts(sent)) == 3
+    assert len(_live(sent)) == 1  # the Live Activity is started once
+
+
+async def test_outage_all_clear_when_contact_returns(real_hass, monkeypatch):
+    hass = real_hass
+    sent = _phone(hass)
+    entry = _outage_entry(hass)
+    start, now = _clock(monkeypatch)
+    await _fail_at(hass, entry, now, start)
+    await _fail_at(hass, entry, now, start + timedelta(minutes=10))
+    sent.clear()
+    now[0] = start + timedelta(minutes=95)
+    repairs.async_report_success(hass, entry)
+    await hass.async_block_till_done()
+    cleared = [m["data"]["tag"] for m in sent if m["message"] == "clear_notification"]
+    assert cleared == [f"econet_grant_outage_live_{entry.entry_id}"]
+    [ok] = _alerts(sent)
+    assert ok["data"]["tag"] == f"econet_grant_outage_{entry.entry_id}"  # replaces the alert
+    assert "back" in ok["message"].lower() and "1 h 35 min" in ok["message"]
+    # A second success sends nothing more.
+    sent.clear()
+    repairs.async_report_success(hass, entry)
+    await hass.async_block_till_done()
+    assert sent == []
+
+
+async def test_short_outage_sends_nothing(real_hass, monkeypatch):
+    hass = real_hass
+    sent = _phone(hass)
+    entry = _outage_entry(hass)
+    start, now = _clock(monkeypatch)
+    await _fail_at(hass, entry, now, start)
+    repairs.async_report_success(hass, entry)
+    await hass.async_block_till_done()
+    assert sent == []
+
+
+@pytest.mark.parametrize("phone", [None, "", "not a service"])
+async def test_no_outage_alert_without_a_valid_phone(real_hass, monkeypatch, phone):
+    hass = real_hass
+    sent = _phone(hass)
+    entry = _outage_entry(hass, phone=phone)
+    start, now = _clock(monkeypatch)
+    await _fail_at(hass, entry, now, start)
+    await _fail_at(hass, entry, now, start + timedelta(minutes=10))
+    assert sent == []
+
+
+async def test_outage_alert_survives_a_missing_notify_service(real_hass, monkeypatch, caplog):
+    hass = real_hass
+    entry = _outage_entry(hass, phone="mobile_app_gone")
+    start, now = _clock(monkeypatch)
+    await _fail_at(hass, entry, now, start)
+    await _fail_at(hass, entry, now, start + timedelta(minutes=10))
+    assert "Could not send the EcoNet outage alert" in caplog.text
+    key = (DOMAIN, f"cannot_connect_{entry.entry_id}")
+    assert key in ir.async_get(hass).issues  # the Repairs issue still appears
+
+
+async def test_outage_alert_from_a_real_failed_setup(
+        real_hass, enable_custom_integrations, monkeypatch):
+    """HA restarted while the controller was away: setup failures alert too."""
+    monkeypatch.setattr(repairs, "CONNECTION_ISSUE_AFTER", timedelta(0))
+    sent = _phone(real_hass)
+    monkeypatch.setattr("custom_components.econet_grant.api.MIN_REQUEST_GAP", 0)
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Synthetic heat pump",
+        data={"host": "http://127.0.0.1:9", "username": "test", "password": "test-only"},
+        options={"safe_mode": True, "push_notifications": False,
+                 "revert_notify_service": PHONE},
+    )
+    entry.add_to_hass(real_hass)
+    assert not await real_hass.config_entries.async_setup(entry.entry_id)
+    await real_hass.async_block_till_done()
+    assert len(_alerts(sent)) == 1 and len(_live(sent)) == 1
+
+
+async def test_outage_alert_state_dropped_with_entry(
+        real_hass, enable_custom_integrations, monkeypatch):
+    hass = real_hass
+    _phone(hass)
+    entry = _outage_entry(hass)
+    start, now = _clock(monkeypatch)
+    await _fail_at(hass, entry, now, start)
+    await _fail_at(hass, entry, now, start + timedelta(minutes=10))
+    await hass.config_entries.async_remove(entry.entry_id)
+    assert entry.entry_id not in hass.data.get(f"{DOMAIN}_outage_alerts", {})

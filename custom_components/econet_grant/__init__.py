@@ -16,7 +16,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from . import discovery
+from . import discovery, outage_alert
 from .api import AuthError, EconetApi, make_api
 from .change_detector import ChangeDetector
 from .const import (
@@ -96,6 +96,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: EconetConfigEntry) -> N
     hass.data.get(f"{DOMAIN}_connection_failures", {}).pop(entry.entry_id, None)
     hass.data.get(f"{DOMAIN}_follow_locks", {}).pop(entry.entry_id, None)
     hass.data.get(f"{DOMAIN}_follow_logged", {}).pop(entry.entry_id, None)
+    outage_alert.async_forget(hass, entry)
     ir.async_delete_issue(hass, DOMAIN, issue_id(entry))
 
 

@@ -20,6 +20,7 @@ from .config_flow import (
     connection_schema,
 )
 from .const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, DOMAIN
+from .outage_alert import async_outage_ongoing, async_outage_over
 
 CONNECTION_ISSUE_AFTER = timedelta(minutes=10)
 _FAILURES_KEY = f"{DOMAIN}_connection_failures"
@@ -46,12 +47,14 @@ def async_report_failure(hass: HomeAssistant, entry: ConfigEntry) -> None:
             translation_placeholders={"host": entry.data[CONF_HOST]},
             data={"entry_id": entry.entry_id},
         )
+        async_outage_ongoing(hass, entry, first, now)
 
 
 @callback
 def async_report_success(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Contact works again: forget the outage and clear the issue."""
     hass.data.get(_FAILURES_KEY, {}).pop(entry.entry_id, None)
+    async_outage_over(hass, entry, dt_util.utcnow())
     # A new outage should log its first address-follow refusal again.
     hass.data.get(f"{DOMAIN}_follow_logged", {}).pop(entry.entry_id, None)
     ir.async_delete_issue(hass, DOMAIN, issue_id(entry))

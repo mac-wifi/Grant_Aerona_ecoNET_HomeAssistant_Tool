@@ -6,6 +6,14 @@ published; the others were local development candidates.
 
 ## Unreleased
 
+- **Phone alerts while the heat pump can't be reached.** Once the
+  controller has been unreachable for 10 minutes, the phone set for Revert
+  buttons gets a time-sensitive alert, repeated about every hour until it
+  answers again, then a "back online" message. On iPhone, a Live Activity
+  on the lock screen also counts the time it has been down (needs the Home
+  Assistant app's beta Live Activities). The option is now labelled "Phone
+  for Revert buttons and outage alerts"; no setting changes are needed if a
+  Revert phone is already set.
 - **Fix: automatic address follow now keeps trying.** If the module
   restarted and took a new address before its web server was ready, the
   first attempt to switch failed and was never retried, because Home
