@@ -205,6 +205,7 @@ async def async_follow_to_ip(hass: HomeAssistant, entry: ConfigEntry, ip: str) -
         if _normalise_host(new_host) == _normalise_host(old):
             return "already_configured"
 
+        before = dict(entry.data)
         username, password = entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD]
         # Move only if the saved address is really gone. If it still answers
         # (even by rejecting the login) the controller has not moved, and an
@@ -228,7 +229,7 @@ async def async_follow_to_ip(hass: HomeAssistant, entry: ConfigEntry, ip: str) -
         # The checks can take minutes; don't undo a change made meanwhile.
         if (
             hass.config_entries.async_get_entry(entry.entry_id) is not entry
-            or entry.data[CONF_HOST] != old
+            or dict(entry.data) != before
         ):
             return "entry_changed"
 

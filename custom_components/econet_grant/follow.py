@@ -48,6 +48,8 @@ async def async_retry_follow(hass: HomeAssistant, entry: ConfigEntry) -> str:
             ip for mac in macs for ip in await discovery.async_lookup_ips(hass, mac)
         ]
         candidates = [ip for ip in dict.fromkeys(seen) if ip != saved]
+        if hass.config_entries.async_get_entry(entry.entry_id) is not entry:
+            return "entry_removed"
         if not candidates:
             _LOGGER.debug(
                 "ecoNET controller not answering at %s and not seen at another "
