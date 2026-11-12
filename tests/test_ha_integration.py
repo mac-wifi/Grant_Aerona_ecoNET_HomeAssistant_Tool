@@ -1532,7 +1532,7 @@ async def test_outage_alert_survives_a_missing_notify_service(real_hass, monkeyp
     start, now = _clock(monkeypatch)
     await _fail_at(hass, entry, now, start)
     await _fail_at(hass, entry, now, start + timedelta(minutes=10))
-    assert "Could not send the EcoNet outage alert" in caplog.text
+    assert "notify.mobile_app_gone doesn't exist" in caplog.text
     key = (DOMAIN, f"cannot_connect_{entry.entry_id}")
     assert key in ir.async_get(hass).issues  # the Repairs issue still appears
 
@@ -1687,8 +1687,8 @@ async def test_phone_change_mid_outage_moves_the_live_activity(real_hass, monkey
         entry, options={"revert_notify_service": "mobile_app_new_phone"})
     sent.clear()
     await _fail_at(hass, entry, now, start + timedelta(minutes=15))
-    assert [m["data"]["tag"] for m in sent if m["message"] == "clear_notification"] == [
-        f"econet_grant_outage_live_{entry.entry_id}"]
+    assert sorted(m["data"]["tag"] for m in sent if m["message"] == "clear_notification") == [
+        f"econet_grant_outage_{entry.entry_id}", f"econet_grant_outage_live_{entry.entry_id}"]
     assert len(_live(other)) == 1 and len(_alerts(other)) == 1
 
 
@@ -1699,3 +1699,65 @@ def test_alert_host_drops_any_login_in_the_address():
 
     entry = SimpleNamespace(data={"host": "http://user:secret@192.0.2.5:8080/"})
     assert outage_alert._host(entry) == "192.0.2.5:8080"
+
+
+async def test_card_is_cleared_even_if_the_first_alert_failed(real_hass, monkeypatch, hass_storage):
+    hass = real_hass
+    sent = []
+
+    async def notify(call):
+        if call.data["data"].get("push"):
+            raise RuntimeError("alert lost")
+        sent.append(dict(call.data))
+
+    hass.services.async_register("notify", PHONE, notify)
+    entry = _outage_entry(hass)
+    start, now = _clock(monkeypatch)
+    await _fail_at(hass, entry, now, start)
+    await _fail_at(hass, entry, now, start + timedelta(minutes=10))
+    assert len(_live(sent)) == 1
+    await _restart(hass)
+    repairs.async_report_success(hass, entry)
+    await hass.async_block_till_done()
+    assert f"econet_grant_outage_live_{entry.entry_id}" in [
+        m["data"]["tag"] for m in sent if m["message"] == "clear_notification"]
+
+
+def test_alert_host_never_fails_on_odd_addresses():
+    from types import SimpleNamespace
+
+    from custom_components.econet_grant import outage_alert
+
+    for host in ("fe80::1", "http://192.0.2.5:abc", "user:pw@192.0.2.9"):
+        result = outage_alert._host(SimpleNamespace(data={"host": host}))
+        assert "pw" not in result and result
+
+
+async def test_removing_an_entry_before_load_keeps_other_saved_outages(
+        real_hass, monkeypatch, hass_storage):
+    from custom_components.econet_grant import outage_alert
+
+    hass = real_hass
+    _phone(hass)
+    first, second = _outage_entry(hass), _outage_entry(hass)
+    start, now = _clock(monkeypatch)
+    await _fail_at(hass, first, now, start)
+    await _fail_at(hass, first, now, start + timedelta(minutes=10))
+    await _restart(hass)
+    for key in [k for k in hass.data if k.startswith(f"{DOMAIN}_")]:
+        hass.data.pop(key)  # nothing loaded yet in this session
+    outage_alert.async_forget(hass, second)
+    await outage_alert.async_load(hass)
+    assert first.entry_id in hass.data[outage_alert.OUTAGE_ALERTS]
+
+
+async def test_missing_phone_service_is_not_retried_every_poll(real_hass, monkeypatch, caplog):
+    hass = real_hass
+    entry = _outage_entry(hass, phone="mobile_app_gone")
+    start, now = _clock(monkeypatch)
+    await _fail_at(hass, entry, now, start)
+    for minutes in (10, 15, 20, 25):
+        await _fail_at(hass, entry, now, start + timedelta(minutes=minutes))
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"
+                and "outage alert" in r.getMessage()]
+    assert len(warnings) == 1

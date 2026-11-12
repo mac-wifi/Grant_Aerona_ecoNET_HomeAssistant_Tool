@@ -65,6 +65,9 @@ def hass(tmp_path, real_hass, monkeypatch):
     # Boundary tests have no real HA to run the background address retry in.
     monkeypatch.setattr(
         "custom_components.econet_grant.async_schedule_follow_retry", Mock())
+    # ...nor storage for saved outage alerts.
+    monkeypatch.setattr(
+        "custom_components.econet_grant.outage_alert.async_load", AsyncMock())
     return SimpleNamespace(
         data={}, config=SimpleNamespace(config_dir=str(tmp_path)),
         bus=SimpleNamespace(async_fire=Mock(), async_listen=Mock(return_value=Mock())),

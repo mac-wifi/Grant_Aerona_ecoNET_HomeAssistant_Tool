@@ -34,6 +34,7 @@ _LOGGER = logging.getLogger(__name__)
 
 OUTAGE_ALERTS = f"{DOMAIN}_outage_alerts"
 _STORE = f"{DOMAIN}_outage_store"
+_LOADED = f"{DOMAIN}_outage_loaded"
 REMINDER_EVERY = timedelta(hours=1)
 # Polls land a little before the hour; don't push the reminder to the next one.
 _REMINDER_SLACK = timedelta(minutes=2)
@@ -56,11 +57,17 @@ def _phone(entry: ConfigEntry) -> str | None:
 def _host(entry: ConfigEntry) -> str:
     """Address only: any user:password@ in the saved host is dropped."""
     host = str(entry.data[CONF_HOST]).strip()
-    parts = urlsplit(host if "://" in host else f"http://{host}")
-    name = parts.hostname or host
+    bare = host.split("://", 1)[-1].rpartition("@")[2].split("/", 1)[0]
+    try:
+        parts = urlsplit(host if "://" in host else f"http://{host}")
+        name, port = parts.hostname, parts.port
+    except ValueError:  # e.g. a bare IPv6 address or a non-numeric port
+        return bare
+    if not name:
+        return bare
     if ":" in name:
         name = f"[{name}]"
-    return f"{name}:{parts.port}" if parts.port else name
+    return f"{name}:{port}" if port else name
 
 
 def _clock(when: datetime) -> str:
@@ -90,34 +97,53 @@ def _states(hass: HomeAssistant) -> dict[str, dict[str, Any]]:
 
 async def async_load(hass: HomeAssistant) -> None:
     """Restore outages that were in progress when Home Assistant stopped."""
-    if OUTAGE_ALERTS in hass.data:
-        return
+    if _LOADED not in hass.data:
+        hass.data[_LOADED] = hass.async_create_task(_async_load(hass), eager_start=True)
+    await hass.data[_LOADED]
+
+
+async def _async_load(hass: HomeAssistant) -> None:
     states = _states(hass)
     try:
         saved = await _store(hass).async_load() or {}
         for entry_id, state in saved.items():
-            states[entry_id] = {
+            # Anything changed this session before loading wins.
+            states.setdefault(entry_id, {
                 "phone": state["phone"],
                 "since": dt_util.parse_datetime(state["since"]),
-                "last": dt_util.parse_datetime(state["last"]),
+                "last": state["last"] and dt_util.parse_datetime(state["last"]),
                 "live": bool(state.get("live")),
-            }
+            })
     except Exception:  # noqa: BLE001 - a bad file must not stop setup
         _LOGGER.warning("Could not read saved EcoNet outage alerts", exc_info=True)
 
 
+def _sent_something(state: dict[str, Any]) -> bool:
+    return state.get("last") is not None or bool(state.get("live"))
+
+
 @callback
 def _save(hass: HomeAssistant) -> None:
+    loading = hass.data.get(_LOADED)
+    if loading is None or not loading.done():
+        # Saving before the file is read would drop outages saved earlier.
+        async def load_then_save() -> None:
+            await async_load(hass)
+            _save(hass)
+
+        hass.async_create_background_task(load_then_save(), f"{DOMAIN}_outage_save")
+        return
+
     def data() -> dict[str, Any]:
         return {
             entry_id: {
                 "phone": state["phone"],
                 "since": state["since"].isoformat(),
-                "last": state["last"].isoformat(),
+                "last": state["last"] and state["last"].isoformat(),
                 "live": state["live"],
             }
             for entry_id, state in _states(hass).items()
-            if state.get("last") is not None
+            if _sent_something(state)
         }
 
     _store(hass).async_delay_save(data, 1)
@@ -149,14 +175,31 @@ def _ongoing(hass, entry, since, now, threshold_reached) -> None:
     phone = _phone(entry)
     if phone is None:
         return
+    if not hass.services.has_service("notify", phone):
+        if not (state or {}).get("missing_logged"):
+            _LOGGER.warning(
+                "EcoNet outage alert not sent: notify.%s doesn't exist. Check the "
+                "phone set in the integration's options.", phone,
+            )
+            if state is not None:
+                state["missing_logged"] = True
+            else:
+                _states(hass)[entry.entry_id] = {
+                    "phone": phone, "since": since, "last": None, "live": False,
+                    "missing_logged": True,
+                }
+        return
     if state is None:
         state = _states(hass)[entry.entry_id] = {
             "phone": phone, "since": since, "last": None, "live": False,
         }
     if state["phone"] != phone:
         # The phone setting changed: take the card off the old phone.
-        if state["live"]:
-            _send(hass, entry, state["phone"], [_clear_live(entry.entry_id)])
+        if _sent_something(state):
+            _send(hass, entry, state["phone"], [
+                _clear_live(entry.entry_id),
+                {"message": "clear_notification", "data": {"tag": _tag(entry.entry_id)}},
+            ])
         state.update(phone=phone, live=False, last=None)
 
     messages: list[dict[str, Any]] = []
@@ -214,11 +257,17 @@ def async_outage_over(hass: HomeAssistant, entry: ConfigEntry, now: datetime) ->
     """Contact is back: end the Live Activity and send an all-clear. Never raises."""
     try:
         state = _states(hass).pop(entry.entry_id, None)
-        if not state or state.get("last") is None:
+        if not state or not _sent_something(state):
+            if state:
+                _save(hass)
             return
         _save(hass)
-        _send(hass, entry, state["phone"], [
-            _clear_live(entry.entry_id),
+        messages = [_clear_live(entry.entry_id)]
+        if state["last"] is None:
+            # Only the card reached the phone: just take it away.
+            _send(hass, entry, state["phone"], messages)
+            return
+        _send(hass, entry, state["phone"], messages + [
             {
                 "title": "EcoNet heat pump back online",
                 "message": (
