@@ -1770,3 +1770,25 @@ async def test_missing_phone_service_is_not_retried_every_poll(real_hass, monkey
     warnings = [r for r in caplog.records if r.levelname == "WARNING"
                 and "outage alert" in r.getMessage()]
     assert len(warnings) == 1
+
+
+async def test_follow_still_works_after_a_manual_address_change(dhcp_env, monkeypatch):
+    """Owner sets the address by hand; hours later the module moves again."""
+    hass, entry, pump_a, pump_b, port = await dhcp_env()
+    a, b = f"http://127.0.0.1:{port}", f"http://127.0.0.2:{port}"
+    # The module moved to .2 and the owner fixed it by hand with Reconfigure.
+    pump_a.unavailable = True
+    result = await _reconfigure(hass, entry, b)
+    await hass.async_block_till_done()
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data["host"] == b
+    # Later the router moves it back to .1, before HA's DHCP watcher reports it.
+    pump_b.unavailable = True
+    pump_a.unavailable = False
+    _seen_at(monkeypatch, "127.0.0.1")
+    await _failed_poll(hass, entry)
+    assert entry.data["host"] == a
+    assert entry.state is ConfigEntryState.LOADED
+    notice = hass.data["persistent_notification"][f"econet_grant_address_changed_{entry.entry_id}"]
+    assert "127.0.0.2" in notice["message"] and "127.0.0.1" in notice["message"]
+
