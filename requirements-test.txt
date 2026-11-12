@@ -1,4 +1,5 @@
-# Test baseline: Python 3.14 / Home Assistant 2026.9.4 (not a minimum-version claim).
+# Test baseline: Python 3.14 / Home Assistant 2026.10.4, the newest Core this
+# harness supports (not a minimum-version claim; hacs.json keeps 2026.9.4).
 # This harness release pins Home Assistant and the pytest plugin versions exactly.
-pytest-homeassistant-custom-component==0.13.367
+pytest-homeassistant-custom-component==0.13.375
 PyYAML==6.0.3

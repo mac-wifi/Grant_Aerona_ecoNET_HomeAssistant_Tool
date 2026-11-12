@@ -6,6 +6,11 @@ published; the others were local development candidates.
 
 ## Unreleased
 
+- **Tests now run on Home Assistant 2026.10.4** (was 2026.9.4), the newest
+  version the test harness supports; the suite also passes on 2026.9.4 and,
+  checked by hand, on 2026.11.1. This exposed two device-registry calls that
+  Home Assistant has deprecated (they would stop working in 2027.8 and
+  2027.10); both are replaced, with no change in behaviour.
 - **Phone alerts while the heat pump can't be reached.** Once the
   controller has been unreachable for 10 minutes, the phone set for Revert
   buttons gets a time-sensitive alert, repeated about every hour until it

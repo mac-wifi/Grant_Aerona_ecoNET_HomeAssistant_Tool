@@ -76,9 +76,9 @@ marker defect (#11) is still open.
 
 ## Support baseline
 
-`hacs.json` requires Home Assistant Core **2026.9.4**, which is the version the
-CI suite tests (`pytest-homeassistant-custom-component==0.13.367`, Python 3.14).
-Core 2026.11.0 (the first release with the built-in Marketplace and the new
-entity naming) passed the full suite once by hand with two harness
-workarounds; see TESTING.md. CI stays on 2026.9.4 until an upstream harness
-release for 2026.11 exists.
+`hacs.json` requires Home Assistant Core **2026.9.4**. CI tests Core
+**2026.10.4** (`pytest-homeassistant-custom-component==0.13.375`, the newest
+harness release, Python 3.14); the suite also passes on 2026.9.4. Core 2026.11.1
+(production's line) passed the full suite by hand with two harness
+workarounds; see TESTING.md. Move CI to 2026.11 once an upstream harness
+release for it exists.

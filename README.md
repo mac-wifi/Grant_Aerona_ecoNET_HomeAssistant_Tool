@@ -158,7 +158,7 @@ Step-by-step instructions for installing the integration on a clean Home Assista
 
 | Item | Details |
 |------|---------|
-| **Home Assistant Core** | Minimum 2026.9.4, the owner-approved support and offline test baseline. Later Core versions need validation, not assumed compatibility. Production Core 2026.9.4 / HAOS 18.3 is owner-reported; the suite does not exercise HAOS. See [support evidence](RELEASE.md#home-assistant-support-evidence). |
+| **Home Assistant Core** | Minimum 2026.9.4. The offline test suite runs in CI on Core 2026.10.4 (the newest its test harness supports) and has also passed on 2026.9.4 and, by hand, on 2026.11.1. Production runs Core 2026.11 (owner-reported); the suite tests Core in Python and does not exercise HAOS. See [support evidence](RELEASE.md#home-assistant-support-evidence). |
 | **ecoNET device** | ecoNET300 module on the same LAN as your HA instance |
 | **ecoNET local credentials** | The username and password for the device's local REST API (not your econet24.com cloud account) |
 | **ecoNET IP address** | The local IP of the ecoNET300 module (check your router's DHCP table or the vendor app) |
