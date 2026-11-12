@@ -4,7 +4,7 @@ Versions follow `MAJOR.MINOR.PATCH`: PATCH for fixes and small changes, MINOR
 for new or changed functionality. Only versions with a GitHub Release were
 published; the others were local development candidates.
 
-## Unreleased
+## 0.11.0 — 2026-11-12
 
 - **Tests now run on Home Assistant 2026.10.4** (was 2026.9.4), the newest
   version the test harness supports; the suite also passes on 2026.9.4 and,
