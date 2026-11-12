@@ -6,6 +6,15 @@ published; the others were local development candidates.
 
 ## Unreleased
 
+- **Fix: automatic address follow now keeps trying.** If the module
+  restarted and took a new address before its web server was ready, the
+  first attempt to switch failed and was never retried, because Home
+  Assistant reports a new address only once. The integration then kept
+  polling the old address until the address was changed by hand. Now, after
+  every failed poll and every failed setup, it tries the saved address again
+  and then the address where Home Assistant last saw the module, with the
+  same safety checks, until the switch succeeds. A successful switch is now
+  written to the Home Assistant log as a warning so it is visible there.
 - **Docs follow Home Assistant 2026.11.** HACS is now the built-in
   **Marketplace** (Settings > Marketplace). The README, release notes and
   dashboard header now give the Marketplace steps (Add from link, Install,
