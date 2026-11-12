@@ -51,6 +51,7 @@ VERSION_KEYS = ("settingsVer", "editableParamsVer", "schedulesVer")
 
 async def async_setup_entry(hass: HomeAssistant, entry: EconetConfigEntry) -> bool:
     """Set up EcoNet Grant Aerona from a config entry."""
+    await outage_alert.async_load(hass)
     api = await _async_connect(hass, entry)
 
     fast = EconetFastCoordinator(hass, api, entry)

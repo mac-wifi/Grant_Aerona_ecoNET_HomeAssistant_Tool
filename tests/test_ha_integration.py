@@ -1565,3 +1565,137 @@ async def test_outage_alert_state_dropped_with_entry(
     await _fail_at(hass, entry, now, start + timedelta(minutes=10))
     await hass.config_entries.async_remove(entry.entry_id)
     assert entry.entry_id not in hass.data.get(f"{DOMAIN}_outage_alerts", {})
+
+
+async def _restart(hass):
+    """Forget everything in memory, as a Home Assistant restart would."""
+    from pytest_homeassistant_custom_component.common import flush_store
+
+    from custom_components.econet_grant import outage_alert
+
+    await flush_store(outage_alert._store(hass))
+    for key in list(hass.data):
+        if key.startswith(f"{DOMAIN}_"):
+            hass.data.pop(key)
+    await outage_alert.async_load(hass)
+
+
+async def test_all_clear_after_a_restart_mid_outage(real_hass, monkeypatch, hass_storage):
+    hass = real_hass
+    sent = _phone(hass)
+    entry = _outage_entry(hass)
+    start, now = _clock(monkeypatch)
+    await _fail_at(hass, entry, now, start)
+    await _fail_at(hass, entry, now, start + timedelta(minutes=10))
+    await _restart(hass)
+    sent.clear()
+    now[0] = start + timedelta(minutes=30)
+    repairs.async_report_success(hass, entry)
+    await hass.async_block_till_done()
+    assert [m["message"] for m in sent][0] == "clear_notification"
+    assert "30 min" in _alerts(sent)[0]["message"]
+
+
+async def test_outage_continuing_after_restart_keeps_its_start(real_hass, monkeypatch, hass_storage):
+    hass = real_hass
+    sent = _phone(hass)
+    entry = _outage_entry(hass)
+    start, now = _clock(monkeypatch)
+    await _fail_at(hass, entry, now, start)
+    await _fail_at(hass, entry, now, start + timedelta(minutes=10))
+    await _restart(hass)
+    sent.clear()
+    # Reminders carry on from the saved state, without a new 10-minute wait.
+    await _fail_at(hass, entry, now, start + timedelta(minutes=71))
+    [alert] = _alerts(sent)
+    assert "1 h 11 min" in alert["message"]
+
+
+async def test_one_failed_message_does_not_drop_the_rest(real_hass, monkeypatch):
+    hass = real_hass
+    sent = []
+
+    async def notify(call):
+        if not call.data["data"].get("live_update"):
+            raise RuntimeError("push relay down")
+        sent.append(dict(call.data))
+
+    hass.services.async_register("notify", PHONE, notify)
+    entry = _outage_entry(hass)
+    start, now = _clock(monkeypatch)
+    await _fail_at(hass, entry, now, start)
+    await _fail_at(hass, entry, now, start + timedelta(minutes=10))
+    assert len(_live(sent)) == 1  # the Live Activity still started
+
+
+async def test_failed_live_activity_is_tried_again(real_hass, monkeypatch):
+    hass = real_hass
+    fail = [True]
+    sent = []
+
+    async def notify(call):
+        if call.data["data"].get("live_update") and fail[0]:
+            raise RuntimeError("not yet")
+        sent.append(dict(call.data))
+
+    hass.services.async_register("notify", PHONE, notify)
+    entry = _outage_entry(hass)
+    start, now = _clock(monkeypatch)
+    await _fail_at(hass, entry, now, start)
+    await _fail_at(hass, entry, now, start + timedelta(minutes=10))
+    fail[0] = False
+    await _fail_at(hass, entry, now, start + timedelta(minutes=15))
+    assert len(_live(sent)) == 1
+    assert len(_alerts(sent)) == 1  # the hourly alert is not repeated early
+
+
+async def test_alert_error_never_breaks_setup(
+        real_hass, enable_custom_integrations, monkeypatch):
+    from custom_components.econet_grant import outage_alert
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("synthetic")
+
+    monkeypatch.setattr(outage_alert, "_host", boom)
+    monkeypatch.setattr(repairs, "CONNECTION_ISSUE_AFTER", timedelta(0))
+    monkeypatch.setattr("custom_components.econet_grant.api.MIN_REQUEST_GAP", 0)
+    _phone(real_hass)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"host": "http://127.0.0.1:9", "username": "test", "password": "test-only"},
+        options={"revert_notify_service": PHONE},
+    )
+    entry.add_to_hass(real_hass)
+    assert not await real_hass.config_entries.async_setup(entry.entry_id)
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+
+
+async def test_phone_change_mid_outage_moves_the_live_activity(real_hass, monkeypatch):
+    hass = real_hass
+    sent = _phone(hass)
+    other = []
+
+    async def notify_other(call):
+        other.append(dict(call.data))
+
+    hass.services.async_register("notify", "mobile_app_new_phone", notify_other)
+    entry = _outage_entry(hass)
+    start, now = _clock(monkeypatch)
+    await _fail_at(hass, entry, now, start)
+    await _fail_at(hass, entry, now, start + timedelta(minutes=10))
+    hass.config_entries.async_update_entry(
+        entry, options={"revert_notify_service": "mobile_app_new_phone"})
+    sent.clear()
+    await _fail_at(hass, entry, now, start + timedelta(minutes=15))
+    assert [m["data"]["tag"] for m in sent if m["message"] == "clear_notification"] == [
+        f"econet_grant_outage_live_{entry.entry_id}"]
+    assert len(_live(other)) == 1 and len(_alerts(other)) == 1
+
+
+def test_alert_host_drops_any_login_in_the_address():
+    from types import SimpleNamespace
+
+    from custom_components.econet_grant import outage_alert
+
+    entry = SimpleNamespace(data={"host": "http://user:secret@192.0.2.5:8080/"})
+    assert outage_alert._host(entry) == "192.0.2.5:8080"

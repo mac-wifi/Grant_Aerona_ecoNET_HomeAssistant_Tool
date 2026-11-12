@@ -348,11 +348,12 @@ change-detection baseline. It does not write settings to the heat pump.
 #### Optional: individual manual Revert notifications
 
 In integration **Configure** options, leave **Phone for Revert buttons and outage alerts** blank
-to keep the existing notify-only behaviour. (The same phone also receives the
-outage alerts described under "Changing the controller's address or login later".) To opt in, enable **Push notifications
+to keep the existing notify-only behaviour. To opt in, enable **Push notifications
 for setting changes** and enter one Companion App service name such as
 `mobile_app_your_phone`, without the `notify.` prefix. Find the actual service
-under **Developer Tools > Actions**. Saving options reloads the integration and
+under **Developer Tools > Actions**. The same phone also receives the outage
+alerts described under "Changing the controller's address or login later";
+leaving the field blank turns those off too. Saving options reloads the integration and
 invalidates any outstanding Revert buttons.
 
 Eligible external changes receive an additional mobile notification showing the
@@ -410,7 +411,7 @@ Other ways in:
 - If the controller rejects the saved login, Home Assistant shows a **Re-authenticate** prompt; enter the current username and password.
 - If the controller has been unreachable for 10 minutes, **Settings > Repairs** shows a **Fix** button where you can enter the new address or login.
 - On the dashboard's **Admin** tab, the **Connection** card shows the saved address and has buttons that open the integration page and Repairs.
-- **Phone alerts while it's down:** if a phone is set in **Configure > Phone for Revert buttons and outage alerts** (a `mobile_app_…` name), that phone gets a **time-sensitive** alert once the controller has been unreachable for 10 minutes, and again about every hour while it stays down (each reminder can be a few minutes late, because it is sent from a failed poll). Time-sensitive alerts get through Focus modes but stay silent when the phone is muted. On an iPhone with the Home Assistant app's Live Activities switched on (iOS 17.2+, Companion app 2026.9+, a beta feature: Companion app **Settings > Live Activities**), a lock-screen card also shows how long it has been down. iOS removes a Live Activity after several hours, which is why the hourly alerts continue. When the controller answers again, the card is removed and the last alert is replaced by a "back online" message. This works without **Push notifications for setting changes**. It cannot warn you if Home Assistant itself, or its internet connection, is down.
+- **Phone alerts while it's down:** if a phone is set in **Configure > Phone for Revert buttons and outage alerts** (a `mobile_app_…` name), that phone gets a **time-sensitive** alert once the controller has been unreachable for 10 minutes, and again about every hour while it stays down (each reminder can be a few minutes late, because it is sent from a failed poll). Time-sensitive alerts get through Focus modes but stay silent when the phone is muted. On an iPhone with the Home Assistant app's Live Activities switched on (iOS 17.2+; a beta feature, see Companion app **Settings > Live Activities**; minimum app version: owner to confirm), a lock-screen card also shows how long it has been down. iOS removes a Live Activity after several hours, which is why the hourly alerts continue. When the controller answers again, the card is removed and the last alert is replaced by a "back online" message, also after a Home Assistant restart during the outage. This works without **Push notifications for setting changes**. It cannot warn you if Home Assistant itself, or its internet connection, is down.
 
 To stop the address changing again, give the module a DHCP reservation (a fixed address) in your router. Some routers (for example Starlink) can't do reservations, which is why the automatic follow below exists.
 

@@ -36,7 +36,9 @@ def async_report_failure(hass: HomeAssistant, entry: ConfigEntry) -> None:
     failures: dict[str, Any] = hass.data.setdefault(_FAILURES_KEY, {})
     now = dt_util.utcnow()
     first = failures.setdefault(entry.entry_id, now)
-    if now - first >= CONNECTION_ISSUE_AFTER:
+    reached = now - first >= CONNECTION_ISSUE_AFTER
+    async_outage_ongoing(hass, entry, first, now, reached)
+    if reached:
         ir.async_create_issue(
             hass,
             DOMAIN,
@@ -47,7 +49,6 @@ def async_report_failure(hass: HomeAssistant, entry: ConfigEntry) -> None:
             translation_placeholders={"host": entry.data[CONF_HOST]},
             data={"entry_id": entry.entry_id},
         )
-        async_outage_ongoing(hass, entry, first, now)
 
 
 @callback
