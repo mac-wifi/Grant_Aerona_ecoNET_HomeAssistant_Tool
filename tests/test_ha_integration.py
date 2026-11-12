@@ -1792,3 +1792,19 @@ async def test_follow_still_works_after_a_manual_address_change(dhcp_env, monkey
     notice = hass.data["persistent_notification"][f"econet_grant_address_changed_{entry.entry_id}"]
     assert "127.0.0.2" in notice["message"] and "127.0.0.1" in notice["message"]
 
+
+
+async def test_no_deprecated_device_registry_calls(dhcp_env, monkeypatch, caplog):
+    """HA deprecates these; they stop working in 2027.8 / 2027.10."""
+    hass, entry, pump_a, _b, _port = await dhcp_env()
+
+    async def lookup(hass_, ip):
+        return MAC
+
+    monkeypatch.setattr("custom_components.econet_grant.discovery.async_lookup_mac", lookup)
+    from custom_components.econet_grant import discovery
+
+    await discovery.async_register_controller_mac(hass, entry, entry.runtime_data.api)
+    pump_a.unavailable = True
+    await _dhcp(hass, "127.0.0.2")
+    assert "is deprecated" not in caplog.text

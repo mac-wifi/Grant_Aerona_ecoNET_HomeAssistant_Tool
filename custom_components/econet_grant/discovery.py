@@ -140,7 +140,7 @@ async def async_register_controller_mac(hass: HomeAssistant, entry, api) -> None
             _LOGGER.debug("MAC not registered: no MAC known for %s", ip)
             return
         registry = dr.async_get(hass)
-        device = registry.async_get_device(identifiers={(DOMAIN, api.uid)})
+        device = registry.async_get_device_by_identifier((DOMAIN, api.uid), entry.entry_id)
         if device is None:
             _LOGGER.debug("MAC not registered: device not found")
             return

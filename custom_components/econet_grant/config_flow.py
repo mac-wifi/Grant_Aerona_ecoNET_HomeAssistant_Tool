@@ -300,8 +300,7 @@ class EconetGrantConfigFlow(ConfigFlow, domain=DOMAIN):
                 for device in dr.async_get(self.hass).async_get_devices(
                     connections={(dr.CONNECTION_NETWORK_MAC, mac)}
                 )
-                for entry_id in device.config_entries
-                if (found := self.hass.config_entries.async_get_entry(entry_id))
+                if (found := self.hass.config_entries.async_get_entry(device.config_entry_id))
                 and found.domain == DOMAIN
             ),
             None,
