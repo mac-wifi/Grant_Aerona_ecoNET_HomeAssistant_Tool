@@ -1787,7 +1787,7 @@ async def test_follow_still_works_after_a_manual_address_change(dhcp_env, monkey
     pump_a.unavailable = False
     _seen_at(monkeypatch, "127.0.0.1")
     assert f"econet_grant_address_changed_{entry.entry_id}" not in \
-        hass.data["persistent_notification"]
+        hass.data.get("persistent_notification", {})
     await _failed_poll(hass, entry)
     assert entry.data["host"] == a
     assert entry.state is ConfigEntryState.LOADED
