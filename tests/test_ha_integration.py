@@ -1126,6 +1126,145 @@ async def test_dhcp_duplicate_reports_are_harmless(dhcp_env):
     assert entry.state is ConfigEntryState.LOADED
 
 
+# --- Retry a refused follow on every failed poll -----------------------------
+# The production incident: the module moved and HA saw it at the new IP while
+# its web server was still starting, so the one-off follow was refused and HA
+# never reported that IP again. The integration must keep retrying.
+
+def _seen_at(monkeypatch, ip):
+    """Make HA's network data report the controller's MAC at ip (or ip())."""
+    from custom_components.econet_grant import discovery
+
+    calls = []
+
+    async def lookup(hass, mac):
+        calls.append(mac)
+        found = ip() if callable(ip) else ip
+        return [found] if found else []
+
+    monkeypatch.setattr(discovery, "async_lookup_ips", lookup)
+    return calls
+
+
+async def _failed_poll(hass, entry):
+    await entry.runtime_data.fast_coordinator.async_refresh()
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+
+async def test_refused_follow_is_retried_until_new_address_answers(
+        dhcp_env, monkeypatch, caplog):
+    hass, entry, pump_a, pump_b, port = await dhcp_env()
+    old, new = f"http://127.0.0.1:{port}", f"http://127.0.0.2:{port}"
+    pump_a.unavailable = True  # gone from the old address
+    pump_b.unavailable = True  # at the new address, web server still starting
+    assert (await _dhcp(hass, "127.0.0.2"))["reason"] == "cannot_connect"
+    assert entry.data["host"] == old
+    _seen_at(monkeypatch, "127.0.0.2")  # HA does not report the same IP again
+
+    # Next failed poll: retries the login at the new address, still not ready.
+    tried = len(pump_b.requests)
+    await _failed_poll(hass, entry)
+    assert len(pump_b.requests) > tried
+    assert entry.data["host"] == old
+    assert "Will try again" in caplog.text
+
+    # The web server is up now: the next failed poll completes the move.
+    pump_b.unavailable = False
+    await _failed_poll(hass, entry)
+    assert entry.data["host"] == new
+    assert entry.unique_id == new
+    assert entry.state is ConfigEntryState.LOADED
+    assert "regParams" in pump_b.requests[tried:]
+    notice = hass.data["persistent_notification"][f"econet_grant_address_changed_{entry.entry_id}"]
+    assert "127.0.0.1" in notice["message"] and "127.0.0.2" in notice["message"]
+    assert "test-only" not in caplog.text and "test-only" not in notice["message"]
+    assert pump_a.writes == [] and pump_b.writes == []
+
+
+async def test_successful_poll_does_not_look_for_a_new_address(dhcp_env, monkeypatch):
+    hass, entry, _a, pump_b, port = await dhcp_env()
+    calls = _seen_at(monkeypatch, "127.0.0.2")
+    await _failed_poll(hass, entry)  # pump A answers, so this poll succeeds
+    assert calls == []
+    assert pump_b.requests == []
+    assert entry.data["host"] == f"http://127.0.0.1:{port}"
+
+
+async def test_retry_retries_saved_address_before_new_one(dhcp_env, monkeypatch):
+    """If the saved address answers again, the login never goes elsewhere."""
+    hass, entry, pump_a, pump_b, port = await dhcp_env()
+    pump_a.unavailable = True
+
+    def old_address_recovers():
+        pump_a.unavailable = False
+        return "127.0.0.2"
+
+    _seen_at(monkeypatch, old_address_recovers)
+    await _failed_poll(hass, entry)
+    assert entry.data["host"] == f"http://127.0.0.1:{port}"
+    assert pump_b.requests == []
+
+
+@pytest.mark.parametrize("seen", [None, "127.0.0.1"])
+async def test_retry_needs_a_different_address(dhcp_env, monkeypatch, seen):
+    hass, entry, pump_a, pump_b, port = await dhcp_env()
+    pump_a.unavailable = True
+    calls = _seen_at(monkeypatch, seen)
+    await _failed_poll(hass, entry)
+    assert calls == [MAC]
+    assert pump_b.requests == []
+    assert entry.data["host"] == f"http://127.0.0.1:{port}"
+
+
+async def test_retry_refuses_a_different_controller(dhcp_env, monkeypatch):
+    hass, entry, pump_a, pump_b, port = await dhcp_env()
+    pump_a.unavailable = True
+    pump_b.sys = {**pump_b.sys, "uid": "some-other-device"}
+    _seen_at(monkeypatch, "127.0.0.2")
+    await _failed_poll(hass, entry)
+    await _failed_poll(hass, entry)
+    assert entry.data["host"] == f"http://127.0.0.1:{port}"
+    assert f"econet_grant_address_changed_{entry.entry_id}" not in \
+        hass.data.get("persistent_notification", {})
+
+
+async def test_retry_after_failed_setup(dhcp_env, monkeypatch):
+    """HA restarted while the controller was away: setup retries also follow."""
+    hass, entry, _a, pump_b, port = await dhcp_env(pump_a_up=False)
+    _seen_at(monkeypatch, "127.0.0.2")
+    await hass.config_entries.async_reload(entry.entry_id)  # setup fails again
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert entry.data["host"] == f"http://127.0.0.2:{port}"
+    assert entry.state is ConfigEntryState.LOADED
+    assert "regParams" in pump_b.requests
+
+
+async def test_only_one_follow_at_a_time(dhcp_env):
+    hass, entry, pump_a, pump_b, _port = await dhcp_env()
+    pump_a.unavailable = True
+    async with config_flow.follow_lock(hass, entry):
+        assert await config_flow.async_follow_to_ip(hass, entry, "127.0.0.2") == "in_progress"
+    assert pump_b.requests == []
+
+
+async def test_lookup_ips_uses_dhcp_data_then_arp(real_hass, monkeypatch, tmp_path):
+    from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
+
+    from custom_components.econet_grant import discovery
+
+    dhcp = _import_dhcp_component(monkeypatch)
+    monkeypatch.setattr(dhcp, "async_discovered_service_info", lambda hass: [
+        DhcpServiceInfo(ip="192.0.2.9", hostname="", macaddress="112233445566"),
+        DhcpServiceInfo(ip="192.0.2.7", hostname="", macaddress="aabbccddeeff")])
+    arp = tmp_path / "arp"
+    arp.write_text(
+        "IP address  HW type  Flags  HW address  Mask  Device\n"
+        "192.0.2.8   0x1      0x2    AA:BB:CC:DD:EE:FF  *  eth0\n"
+        "192.0.2.6   0x1      0x0    aa:bb:cc:dd:ee:ff  *  eth0\n")
+    monkeypatch.setattr(discovery, "ARP_TABLE_PATH", str(arp))
+    assert await discovery.async_lookup_ips(real_hass, MAC) == ["192.0.2.7", "192.0.2.8"]
+
+
 def _import_dhcp_component(monkeypatch):
     """Import HA's dhcp component, stubbing raw-socket helpers the test venv lacks."""
     import sys

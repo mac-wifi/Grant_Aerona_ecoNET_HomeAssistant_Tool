@@ -31,6 +31,7 @@ from .const import (
 from .coordinator import EconetFastCoordinator, EconetSlowCoordinator
 from .database import EconetDatabase
 from .entity import EconetConfigEntry, EconetRuntimeData
+from .follow import async_schedule_follow_retry
 from .repairs import async_report_failure, async_report_success, issue_id
 from .revert import RevertActions
 from .services import async_register_services
@@ -114,6 +115,7 @@ async def _async_connect(hass: HomeAssistant, entry: EconetConfigEntry) -> Econe
         raise ConfigEntryAuthFailed("Invalid credentials") from err
     except Exception as err:
         async_report_failure(hass, entry)
+        async_schedule_follow_retry(hass, entry)
         raise ConfigEntryNotReady(f"Cannot connect to {host}") from err
     async_report_success(hass, entry)
     return api

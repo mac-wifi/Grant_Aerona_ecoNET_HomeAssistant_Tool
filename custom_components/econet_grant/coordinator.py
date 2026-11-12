@@ -25,6 +25,7 @@ from .const import (
     DOMAIN,
     FAST_POLL_INTERVAL,
 )
+from .follow import async_schedule_follow_retry
 from .repairs import async_report_failure, async_report_success
 
 _LOGGER = logging.getLogger(__name__)
@@ -85,6 +86,8 @@ class EconetFastCoordinator(_EconetCoordinator):
             raise
         except UpdateFailed:
             async_report_failure(self.hass, self._entry)
+            # The saved address just failed: look for the controller elsewhere.
+            async_schedule_follow_retry(self.hass, self._entry)
             raise
         async_report_success(self.hass, self._entry)
         return data

@@ -62,6 +62,9 @@ def hass(tmp_path, real_hass, monkeypatch):
     # Boundary tests use a fake hass with no issue registry.
     monkeypatch.setattr("custom_components.econet_grant.repairs.ir", Mock())
     monkeypatch.setattr("custom_components.econet_grant.ir", Mock())
+    # Boundary tests have no real HA to run the background address retry in.
+    monkeypatch.setattr(
+        "custom_components.econet_grant.async_schedule_follow_retry", Mock())
     return SimpleNamespace(
         data={}, config=SimpleNamespace(config_dir=str(tmp_path)),
         bus=SimpleNamespace(async_fire=Mock(), async_listen=Mock(return_value=Mock())),

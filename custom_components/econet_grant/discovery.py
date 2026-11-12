@@ -75,6 +75,56 @@ async def async_lookup_mac(hass: HomeAssistant, ip: str) -> str | None:
     return parse_arp_table(text, ip)
 
 
+def parse_arp_table_ips(text: str, mac: str) -> list[str]:
+    """Return the IPs /proc/net/arp lists for the formatted mac."""
+    found = []
+    for line in text.splitlines()[1:]:
+        parts = line.split()
+        if len(parts) < 4 or parts[2] == "0x0":
+            continue
+        try:
+            if dr.format_mac(parts[3]) == mac:
+                found.append(parts[0])
+        except ValueError:
+            continue
+    return found
+
+
+def entry_macs(hass: HomeAssistant, entry) -> list[str]:
+    """MAC addresses registered on this entry's devices."""
+    return sorted(
+        mac
+        for device in dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+        for kind, mac in device.connections
+        if kind == dr.CONNECTION_NETWORK_MAC
+    )
+
+
+async def async_lookup_ips(hass: HomeAssistant, mac: str) -> list[str]:
+    """Where the network last saw mac: HA's DHCP data first, then the ARP table."""
+    found: list[str] = []
+    try:
+        from homeassistant.components.dhcp import async_discovered_service_info
+
+        found += [
+            info.ip
+            for info in async_discovered_service_info(hass)
+            if dr.format_mac(info.macaddress) == mac
+        ]
+    except (ImportError, KeyError):
+        pass
+
+    def _read() -> str:
+        with open(ARP_TABLE_PATH, encoding="utf-8") as arp:
+            return arp.read()
+
+    try:
+        found += parse_arp_table_ips(await hass.async_add_executor_job(_read), mac)
+    except OSError:
+        pass
+    return list(dict.fromkeys(found))
+
+
 async def async_register_controller_mac(hass: HomeAssistant, entry, api) -> None:
     """Add the controller's MAC to its device. Never raises."""
     try:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 import logging
 from typing import Any
@@ -174,6 +175,66 @@ def async_apply_connection(
         hass.config_entries.async_schedule_reload(entry.entry_id)
 
 
+_FOLLOW_LOCKS = f"{DOMAIN}_follow_locks"
+
+
+@callback
+def follow_lock(hass: HomeAssistant, entry: ConfigEntry) -> asyncio.Lock:
+    """One move attempt per entry at a time (DHCP report or poll retry)."""
+    return hass.data.setdefault(_FOLLOW_LOCKS, {}).setdefault(
+        entry.entry_id, asyncio.Lock()
+    )
+
+
+async def async_follow_to_ip(hass: HomeAssistant, entry: ConfigEntry, ip: str) -> str:
+    """Move the entry to ip if the controller really moved there.
+
+    Returns "address_updated" on a move, otherwise the reason it did not move.
+    The login goes to ip only after the saved address has failed once more and
+    never while it still answers, and the controller ID must match exactly.
+    """
+    lock = follow_lock(hass, entry)
+    if lock.locked():
+        return "in_progress"
+    async with lock:
+        old = entry.data[CONF_HOST]
+        if discovery.host_ip(old) is None:
+            _LOGGER.debug("ecoNET entry uses a host name (%s); not moving it", old)
+            return "not_ip_host"
+        new_host = discovery.replace_host_ip(old, ip)
+        if _normalise_host(new_host) == _normalise_host(old):
+            return "already_configured"
+
+        username, password = entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD]
+        # Is the controller still answering at its current address (even if it
+        # rejects the login)? If so it has not moved, and we must not send the
+        # login anywhere else.
+        if await async_check_connection(
+            hass, entry, old, username, password, require_same_device=True
+        ) in (None, "invalid_auth"):
+            _LOGGER.info(
+                "ecoNET MAC reported at %s, but the controller still answers at "
+                "its current address; ignoring", ip,
+            )
+            return "already_configured"
+        error = await async_check_connection(
+            hass, entry, new_host, username, password, require_same_device=True
+        )
+        if error:
+            return error
+
+        async_apply_connection(hass, entry, new_host, username, password)
+        persistent_notification.async_create(
+            hass,
+            f"The ecoNET controller moved from {old} to {new_host}. The integration "
+            "now uses the new address. No heat-pump settings were changed.",
+            title="EcoNet Grant - controller address changed",
+            notification_id=f"econet_grant_address_changed_{entry.entry_id}",
+        )
+        _LOGGER.warning("ecoNET controller moved from %s to %s", old, new_host)
+        return "address_updated"
+
+
 class EconetGrantConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for EcoNet Grant Aerona."""
 
@@ -238,45 +299,13 @@ class EconetGrantConfigFlow(ConfigFlow, domain=DOMAIN):
         if entry is None:
             return self.async_abort(reason="not_econet_device")
 
-        old = entry.data[CONF_HOST]
-        if discovery.host_ip(old) is None:
-            _LOGGER.debug("ecoNET entry uses a host name (%s); not moving it", old)
-            return self.async_abort(reason="not_ip_host")
-        new_host = discovery.replace_host_ip(old, discovery_info.ip)
-        if _normalise_host(new_host) == _normalise_host(old):
-            return self.async_abort(reason="already_configured")
-
-        username, password = entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD]
-        # Is the controller still answering at its current address (even if it
-        # rejects the login)? If so it has not moved, and we must not send the
-        # login anywhere else.
-        if await async_check_connection(
-            self.hass, entry, old, username, password, require_same_device=True
-        ) in (None, "invalid_auth"):
-            _LOGGER.info(
-                "ecoNET MAC reported at %s, but the controller still answers at "
-                "its current address; ignoring", discovery_info.ip,
-            )
-            return self.async_abort(reason="already_configured")
-        error = await async_check_connection(
-            self.hass, entry, new_host, username, password, require_same_device=True
-        )
-        if error:
+        result = await async_follow_to_ip(self.hass, entry, discovery_info.ip)
+        if result not in ("address_updated", "already_configured", "not_ip_host"):
+            # A move is retried on every failed poll, so this isn't final.
             _LOGGER.warning(
-                "ecoNET MAC seen at %s but not switching: %s", discovery_info.ip, error
+                "ecoNET MAC seen at %s but not switching yet: %s", discovery_info.ip, result
             )
-            return self.async_abort(reason=error)
-
-        async_apply_connection(self.hass, entry, new_host, username, password)
-        persistent_notification.async_create(
-            self.hass,
-            f"The ecoNET controller moved from {old} to {new_host}. The integration "
-            "now uses the new address. No heat-pump settings were changed.",
-            title="EcoNet Grant - controller address changed",
-            notification_id=f"econet_grant_address_changed_{entry.entry_id}",
-        )
-        _LOGGER.info("ecoNET controller moved from %s to %s", old, new_host)
-        return self.async_abort(reason="address_updated")
+        return self.async_abort(reason=result)
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
