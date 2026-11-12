@@ -17,6 +17,7 @@ sent if Home Assistant itself is down. No function here ever raises.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta
 import logging
 from typing import Any
@@ -97,9 +98,13 @@ def _states(hass: HomeAssistant) -> dict[str, dict[str, Any]]:
 
 async def async_load(hass: HomeAssistant) -> None:
     """Restore outages that were in progress when Home Assistant stopped."""
-    if _LOADED not in hass.data:
-        hass.data[_LOADED] = hass.async_create_task(_async_load(hass), eager_start=True)
-    await hass.data[_LOADED]
+    task = hass.data.get(_LOADED)
+    if task is None or task.cancelled():
+        task = hass.data[_LOADED] = hass.async_create_task(
+            _async_load(hass), eager_start=True
+        )
+    # Shielded: a cancelled caller must not cancel the shared load.
+    await asyncio.shield(task)
 
 
 async def _async_load(hass: HomeAssistant) -> None:
@@ -125,7 +130,7 @@ def _sent_something(state: dict[str, Any]) -> bool:
 @callback
 def _save(hass: HomeAssistant) -> None:
     loading = hass.data.get(_LOADED)
-    if loading is None or not loading.done():
+    if loading is None or not loading.done() or loading.cancelled():
         # Saving before the file is read would drop outages saved earlier.
         async def load_then_save() -> None:
             await async_load(hass)
@@ -176,19 +181,20 @@ def _ongoing(hass, entry, since, now, threshold_reached) -> None:
     if phone is None:
         return
     if not hass.services.has_service("notify", phone):
-        if not (state or {}).get("missing_logged"):
+        if (state or {}).get("missing_logged") != phone:
             _LOGGER.warning(
-                "EcoNet outage alert not sent: notify.%s doesn't exist. Check the "
-                "phone set in the integration's options.", phone,
+                "EcoNet outage alert not sent: notify.%s isn't available (yet). If "
+                "this persists, check the phone set in the integration's options.",
+                phone,
             )
-            if state is not None:
-                state["missing_logged"] = True
-            else:
-                _states(hass)[entry.entry_id] = {
+            if state is None:
+                state = _states(hass)[entry.entry_id] = {
                     "phone": phone, "since": since, "last": None, "live": False,
-                    "missing_logged": True,
                 }
+            state["missing_logged"] = phone
         return
+    if state is not None:
+        state.pop("missing_logged", None)
     if state is None:
         state = _states(hass)[entry.entry_id] = {
             "phone": phone, "since": since, "last": None, "live": False,

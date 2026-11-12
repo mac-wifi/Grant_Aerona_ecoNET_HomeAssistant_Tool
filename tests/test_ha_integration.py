@@ -1532,7 +1532,7 @@ async def test_outage_alert_survives_a_missing_notify_service(real_hass, monkeyp
     start, now = _clock(monkeypatch)
     await _fail_at(hass, entry, now, start)
     await _fail_at(hass, entry, now, start + timedelta(minutes=10))
-    assert "notify.mobile_app_gone doesn't exist" in caplog.text
+    assert "notify.mobile_app_gone isn't available" in caplog.text
     key = (DOMAIN, f"cannot_connect_{entry.entry_id}")
     assert key in ir.async_get(hass).issues  # the Repairs issue still appears
 
@@ -1746,9 +1746,18 @@ async def test_removing_an_entry_before_load_keeps_other_saved_outages(
     await _restart(hass)
     for key in [k for k in hass.data if k.startswith(f"{DOMAIN}_")]:
         hass.data.pop(key)  # nothing loaded yet in this session
+    # A session state for the second entry, so forgetting it saves.
+    outage_alert._states(hass)[second.entry_id] = {
+        "phone": PHONE, "since": start, "last": start, "live": False}
     outage_alert.async_forget(hass, second)
+    await hass.async_block_till_done(wait_background_tasks=True)
     await outage_alert.async_load(hass)
     assert first.entry_id in hass.data[outage_alert.OUTAGE_ALERTS]
+    from pytest_homeassistant_custom_component.common import flush_store
+
+    await flush_store(outage_alert._store(hass))
+    saved = hass_storage[f"{DOMAIN}.outage_alerts"]["data"]
+    assert first.entry_id in saved and second.entry_id not in saved
 
 
 async def test_missing_phone_service_is_not_retried_every_poll(real_hass, monkeypatch, caplog):
