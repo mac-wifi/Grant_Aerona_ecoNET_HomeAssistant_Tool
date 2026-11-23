@@ -152,8 +152,11 @@ NUMBER_DEFINITIONS: dict[str, dict] = {
     "Circuit1Curveshift": _number("275", "CH Curve Shift", -20, 20, 1, _C),
     "Circuit1boosttimeleft": _number("1521", "CH Boost Time", 0, 180, 1, _MIN),
     "Korekta_temperatury": _number("10413", "Panel Temp Correction", -5, 5, 0.1, _C),
-    "SummerOn": _number("702", "Summer Threshold", 17, 30, 1, _C),
-    "SummerOff": _number("703", "Winter Threshold", 0, 19, 1, _C),
+    # Ranges follow what the live controller accepts at this site (both at 20):
+    # its Summer minimum equals the Winter value and its Winter maximum equals
+    # the Summer value.
+    "SummerOn": _number("702", "Summer Threshold", 20, 30, 1, _C),
+    "SummerOff": _number("703", "Winter Threshold", 0, 20, 1, _C),
     "HeatSourceTempInc": _number("481", "HW Correction Temp", 0, 20, 1, _C),
     "hSMPTSIncreaseCirc": _number("1402", "Heating Temp Correction", 0, 20, 1, _C),
     "decreaseSetTemp": _number("1054", "Cooling Setpoint Adj", 1, 10, 1, _C),

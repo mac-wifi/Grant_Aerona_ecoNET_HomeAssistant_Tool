@@ -4,6 +4,15 @@ Versions follow `MAJOR.MINOR.PATCH`: PATCH for fixes and small changes, MINOR
 for new or changed functionality. Only versions with a GitHub Release were
 published; the others were local development candidates.
 
+## Unreleased
+
+- **Season threshold ranges match the controller.** Winter Threshold now
+  goes up to 20 °C (was 19) and Summer Threshold starts at 20 °C (was 17), so
+  the 20/20 setting this heat pump runs on can be set from Home Assistant.
+  The controller ties the two together (Summer cannot go below Winter), so
+  Summer can no longer be set below 20 from Home Assistant. Entity IDs are
+  unchanged.
+
 ## 0.11.0 — 2026-11-12
 
 - **Tests now run on Home Assistant 2026.10.4** (was 2026.9.4), the newest
