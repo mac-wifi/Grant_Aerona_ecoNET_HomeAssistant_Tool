@@ -18,6 +18,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from . import discovery, outage_alert
 from .api import AuthError, EconetApi, make_api
+from .auto_revert import AutoRevert
 from .change_detector import ChangeDetector
 from .const import (
     CONF_HOST,
@@ -67,7 +68,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: EconetConfigEntry) -> bo
 
     change_detector = ChangeDetector(hass, entry)
     revert_actions = RevertActions(hass, entry, api, db, change_detector)
-    data = EconetRuntimeData(api, fast, slow, db, change_detector, revert_actions)
+    auto_revert = AutoRevert(hass, entry, api, db, change_detector)
+    await auto_revert.async_load()
+    entry.async_on_unload(auto_revert.close)
+    data = EconetRuntimeData(api, fast, slow, db, change_detector, revert_actions, auto_revert)
 
     await _async_record_baseline(hass, data)
     entry.async_on_unload(fast.async_add_listener(_fast_update_listener(hass, data)))

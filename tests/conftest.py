@@ -68,6 +68,10 @@ def hass(tmp_path, real_hass, monkeypatch):
     # ...nor storage for saved outage alerts.
     monkeypatch.setattr(
         "custom_components.econet_grant.outage_alert.async_load", AsyncMock())
+    # ...or for auto-revert overrides (covered by the real-HA tests).
+    monkeypatch.setattr(
+        "custom_components.econet_grant.AutoRevert",
+        Mock(return_value=Mock(async_load=AsyncMock())))
     return SimpleNamespace(
         data={}, config=SimpleNamespace(config_dir=str(tmp_path)),
         bus=SimpleNamespace(async_fire=Mock(), async_listen=Mock(return_value=Mock())),

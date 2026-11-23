@@ -25,6 +25,7 @@ from .const import (
 
 if TYPE_CHECKING:
     from .api import EconetApi
+    from .auto_revert import AutoRevert
     from .change_detector import ChangeDetector
     from .coordinator import EconetFastCoordinator, EconetSlowCoordinator
     from .database import EconetDatabase
@@ -43,6 +44,7 @@ class EconetRuntimeData:
     database: EconetDatabase
     change_detector: ChangeDetector
     revert_actions: RevertActions
+    auto_revert: AutoRevert | None = None
 
 
 type EconetConfigEntry = ConfigEntry[EconetRuntimeData]
