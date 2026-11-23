@@ -6,6 +6,7 @@ Supports multiple named snapshots (e.g. "Default", "Guest Mode").
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 import json
 import logging
 from datetime import datetime, timezone
@@ -118,10 +119,12 @@ async def async_restore_settings(
     api: EconetApi,
     snapshot_name: str = "Default",
     safe_mode: bool = True,
+    before_first_write: Callable[[], Awaitable[None]] | None = None,
 ) -> dict[str, Any]:
     """Restore settings from a named snapshot. Returns a summary dict.
 
     In safe mode, generates a report but does NOT write to the device.
+    ``before_first_write`` runs once, only when a real write is about to be sent.
     """
     path = snapshot_path(hass, snapshot_name)
     if not path.exists():
@@ -201,6 +204,8 @@ async def async_restore_settings(
         )
         return {"success": True, "safe_mode": True, "changes": len(to_restore), "details": to_restore}
 
+    if before_first_write is not None:
+        await before_first_write()
     successes = 0
     failures = 0
     lines: list[str] = []

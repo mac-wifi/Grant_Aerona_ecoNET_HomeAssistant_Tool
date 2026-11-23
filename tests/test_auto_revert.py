@@ -255,3 +255,174 @@ async def test_divergences_judge_numbers_selects_and_masks(setup):
     data["238"]["value"] = 25  # CH Day Temp, never judged
     assert not {"Circuit1boosttimeleft", "Circuit1ComfortTemp"} & set(
         d.name for d in ar(entry).divergences(data))
+
+
+# --- Packet 5: hooks (own writes, manual Revert, Restore pause, fetch-start stamp) ---
+
+
+async def ha_set(hass, entity_id, value):
+    if entity_id.startswith("number."):
+        await hass.services.async_call("number", "set_value",
+                                       {"entity_id": entity_id, "value": value}, blocking=True)
+    else:
+        await hass.services.async_call("select", "select_option",
+                                       {"entity_id": entity_id, "option": value}, blocking=True)
+    await hass.async_block_till_done()
+
+
+async def test_ha_number_select_and_bitmask_writes_record_overrides(setup):
+    hass, entry, pump, _ = await setup()
+    await ha_set(hass, HW_SET_POINT, 45)
+    await ha_set(hass, WORK_MODE, "Summer")
+    await ha_set(hass, HW_PRIORITY, "Yes")
+    assert pump.writes == [("HDWTSetPoint", 45.0), ("workState2", 1.0), ("HDWSETTINGS", 21.0)]
+    targets = ar(entry).targets
+    assert (targets["HDWTSetPoint"], targets["workState2"], targets["HDWSETTINGS"]) == (45, 1, 17)
+    assert not any(ar(entry).held(n) for n in ("HDWTSetPoint", "workState2", "HDWSETTINGS"))
+
+
+async def test_ha_write_sticks_across_reload_and_restart(setup):
+    hass, entry, pump, _ = await setup()
+    await ha_set(hass, SUMMER, 22)
+    await reload(hass, entry)
+    assert ar(entry).targets["SummerOn"] == 22
+
+
+async def test_ha_write_equal_to_snapshot_drops_override(setup):
+    hass, entry, pump, _ = await setup()
+    await ha_set(hass, HW_SET_POINT, 45)
+    await ha_set(hass, HW_SET_POINT, 50)
+    assert ar(entry)._overrides == {}
+
+
+async def test_safe_mode_ha_write_is_a_preview_and_records_nothing(setup):
+    hass, entry, pump, _ = await setup(safe_mode=True)
+    await ha_set(hass, HW_SET_POINT, 45)
+    assert pump.writes == [] and ar(entry)._overrides == {}
+
+
+async def test_manual_revert_counts_as_own_write(setup, monkeypatch):
+    hass, entry, pump, pushes = await setup(push=True)
+    await set_options(hass, entry, revert_notify_service="mobile_app_test")
+    hass.services.async_register("notify", "mobile_app_test", lambda call: pushes.append(call.data))
+    pump.guest_change("HDWTSetPoint", 45)
+    await poll(hass, entry)
+    token = next(p["data"]["actions"][0]["action"] for p in pushes if "data" in p)
+    await take_snapshot(hass)  # the reference is now 45
+    hass.bus.async_fire("mobile_app_notification_action", {"action": token})
+    await hass.async_block_till_done()
+    assert pump.writes == [("HDWTSetPoint", 50.0)]
+    assert ar(entry).targets["HDWTSetPoint"] == 50  # the owner's tap sticks
+
+
+async def test_failed_or_timed_out_ha_write_judged_only_from_post_completion_poll(setup):
+    hass, entry, pump, _ = await setup()
+    pump.write_modes = ["http_error"]
+    await ha_set(hass, HW_SET_POINT, 45)  # refused: the entity logs, it does not raise
+    assert ar(entry).held("HDWTSetPoint")
+    pump.guest_change("HDWTSetPoint", 45)  # it was applied despite the error
+    await poll(hass, entry)
+    assert not ar(entry).held("HDWTSetPoint")
+    assert ar(entry).targets["HDWTSetPoint"] == 45
+    pump.write_modes = ["http_error"]
+    await ha_set(hass, HW_SET_POINT, 47)  # not applied this time
+    await poll(hass, entry)
+    assert not ar(entry).held("HDWTSetPoint")
+    assert ar(entry).targets["HDWTSetPoint"] == 45  # existing override kept
+
+
+async def test_late_pre_completion_poll_does_not_decide(setup):
+    hass, entry, pump, _ = await setup()
+    started_before = entry.runtime_data.slow_coordinator.data_started_at
+    pump.write_modes = ["http_error"]
+    await ha_set(hass, HW_SET_POINT, 45)
+    pump.guest_change("HDWTSetPoint", 45)
+    await ar(entry).async_observe(pump.edit, started_before)
+    assert ar(entry).held("HDWTSetPoint")
+    assert "HDWTSetPoint" not in ar(entry)._overrides
+
+
+async def test_two_overlapping_same_name_writes_hold_two_counts(setup):
+    hass, entry, pump, _ = await setup()
+    first = ar(entry).begin_own_write("HDWSETTINGS", 21)
+    second = ar(entry).begin_own_write("HDWSETTINGS", 4117)
+    await ar(entry).async_finish_own_write(second, True)
+    assert ar(entry).held("HDWSETTINGS")
+    await poll(hass, entry)
+    assert ar(entry).held("HDWSETTINGS")
+    await ar(entry).async_finish_own_write(first, True)
+    assert not ar(entry).held("HDWSETTINGS")
+    assert ar(entry).targets["HDWSETTINGS"] == 21 & (16 | 1 | 4096)  # last completed wins
+
+
+async def restore(hass, name="Default"):
+    await hass.services.async_call(DOMAIN, "restore_settings", {"snapshot_name": name},
+                                   blocking=True)
+    await hass.async_block_till_done()
+
+
+@pytest.mark.parametrize("case", ["safe_mode", "missing", "unreadable", "preflight"])
+async def test_restore_preview_and_prewrite_failures_keep_overrides(setup, case):
+    hass, entry, pump, _ = await setup()
+    await ha_set(hass, HW_SET_POINT, 45)
+    name = "Default"
+    if case == "safe_mode":
+        await set_options(hass, entry, safe_mode=True)
+    elif case == "missing":
+        name = "Missing"
+    elif case == "unreadable":
+        await hass.async_add_executor_job(snapshot_file(hass).write_text, "{not json")
+    else:
+        pump.unavailable = True
+    writes = len(pump.writes)
+    if case == "unreadable":
+        # Existing behaviour, unchanged here: with Safe Mode off the service
+        # raises on an unreadable snapshot before anything is written.
+        with pytest.raises(ValueError):
+            await restore(hass, name)
+    else:
+        await restore(hass, name)
+    pump.unavailable = False
+    assert len(pump.writes) == writes
+    assert not ar(entry).paused
+    await reload(hass, entry)
+    assert ar(entry)._overrides == {"HDWTSetPoint": 45}
+
+
+async def test_authorised_restore_clears_overrides_at_first_write(setup):
+    hass, entry, pump, _ = await setup()
+    await ha_set(hass, HW_SET_POINT, 45)
+    resume_before = ar(entry)._resume_after
+    await restore(hass)
+    assert pump.writes[-1] == ("HDWTSetPoint", 50.0)
+    assert ar(entry)._overrides == {}
+    assert not ar(entry).paused and ar(entry)._resume_after > resume_before
+    assert not ar(entry).judgeable(resume_before)
+
+
+async def test_restore_exception_releases_the_pause(setup, monkeypatch):
+    hass, entry, pump, _ = await setup()
+
+    async def broken(*args, **kwargs):
+        raise RuntimeError("synthetic")
+
+    monkeypatch.setattr("custom_components.econet_grant.services.async_restore_settings", broken)
+    with pytest.raises(RuntimeError):
+        await restore(hass)
+    assert not ar(entry).paused
+
+
+async def test_unload_closes_auto_revert(setup):
+    hass, entry, pump, _ = await setup()
+    instance = ar(entry)
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert instance._active is False and instance._unsubscribe is None
+
+
+async def test_failed_write_to_an_unprotected_setting_is_not_tracked(setup):
+    hass, entry, pump, _ = await setup()
+    pump.write_modes = ["http_error"]
+    await ha_set(hass, "number.grant_aerona_heat_pump_ch_day_temp", 22)
+    assert ar(entry)._own == {}
+    await poll(hass, entry)  # must not raise in the background

@@ -14,7 +14,8 @@ from custom_components.econet_grant.const import EVENT_SETTING_CHANGED
 
 def restore_handler(hass, entry, api, db, detector):
     """Register the real services against one loaded synthetic entry."""
-    entry.runtime_data = SimpleNamespace(api=api, database=db, change_detector=detector)
+    entry.runtime_data = SimpleNamespace(api=api, database=db, change_detector=detector,
+                                         auto_revert=None)
     hass.config_entries.async_loaded_entries = Mock(return_value=[entry])
     services.async_register_services(hass)
     return next(call.args[2] for call in hass.services.async_register.call_args_list

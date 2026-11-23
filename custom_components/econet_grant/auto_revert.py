@@ -8,10 +8,11 @@ candidates (``const.AUTO_REVERT_CANDIDATES``).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 import logging
 from math import isfinite
+from time import monotonic
 from typing import Any
 
 from homeassistant.components.persistent_notification import async_dismiss as pn_async_dismiss
@@ -89,6 +90,24 @@ class Divergence:
     known: bool  # False: unrecognised select value or invalid mask, never overwritten
 
 
+@dataclass
+class _OwnWrites:
+    """Overlapping Home Assistant writes to one parameter (per-operation count)."""
+
+    count: int = 0
+    settled_after: float = 0.0  # judge only polls that started after this
+    values: list = field(default_factory=list)  # completed values, oldest first
+    failed: bool = False
+
+
+@dataclass
+class OwnWrite:
+    """Token for one own-write operation."""
+
+    name: str
+    value: int | float
+
+
 class AutoRevert:
     """Baseline, overrides and judgement for one config entry."""
 
@@ -103,6 +122,10 @@ class AutoRevert:
         self.snapshot_usable = False
         self.revision = 0  # bumped whenever a queued decision must be dropped
         self._unsubscribe = None
+        self._active = False
+        self._own: dict[str, _OwnWrites] = {}
+        self._pauses = 0
+        self._resume_after = 0.0
 
     # --- state ---
 
@@ -135,8 +158,10 @@ class AutoRevert:
         await self._async_load_snapshot()
         self._unsubscribe = async_dispatcher_connect(
             self._hass, SIGNAL_SNAPSHOT_SAVED, self._on_snapshot_saved)
+        self._active = True
 
     def close(self) -> None:
+        self._active = False
         self.revision += 1
         if self._unsubscribe:
             self._unsubscribe()
@@ -215,6 +240,83 @@ class AutoRevert:
 
     async def _async_save_overrides(self) -> None:
         await self._store.async_save({"overrides": dict(self._overrides)})
+
+    # --- hooks: own writes, Restore pause ---
+
+    def begin_own_write(self, name: str, value: int | float) -> OwnWrite:
+        """Before a Home Assistant write: drop queued decisions, hold this parameter."""
+        self.revision += 1
+        if name in AUTO_REVERT_CANDIDATES:  # others are never judged
+            self._own.setdefault(name, _OwnWrites()).count += 1
+        return OwnWrite(name, value)
+
+    async def async_finish_own_write(self, write: OwnWrite, ok: bool) -> None:
+        """In a ``finally``: the last acknowledged completion wins."""
+        state = self._own.get(write.name)
+        if state is None:
+            return
+        state.count -= 1
+        state.settled_after = monotonic()
+        state.values.append(write.value)
+        state.failed = state.failed or not ok
+        if ok:
+            await self.async_record_override(write.name, write.value)
+        if state.count == 0 and not state.failed:
+            self._own.pop(write.name, None)
+
+    def held(self, name: str) -> bool:
+        """An own write is in flight, or its outcome is not yet judged."""
+        return name in self._own
+
+    async def _async_settle_own_writes(self, data: dict[str, Any], started_at: float) -> None:
+        """After a failed or timed-out write, adopt what a later poll shows."""
+        for name, state in list(self._own.items()):
+            if state.count or started_at <= state.settled_after:
+                continue
+            self._own.pop(name)
+            if not state.failed or eligibility_problem(data, name):
+                continue
+            observed = data[AUTO_REVERT_CANDIDATES[name]["param_index"]].get("value")
+            for value in reversed(state.values):
+                if _number(observed) and self._same_raw(name, observed, value):
+                    await self.async_record_override(name, value)
+                    break
+
+    def pause(self) -> None:
+        """Restore starts: nothing is sent and queued decisions are dropped."""
+        self._pauses += 1
+        self.revision += 1
+
+    def resume(self) -> None:
+        self._pauses -= 1
+        self.revision += 1
+        self._resume_after = monotonic()
+
+    @property
+    def paused(self) -> bool:
+        return self._pauses > 0
+
+    def _same_raw(self, name: str, observed: int | float, value: int | float) -> bool:
+        candidate = AUTO_REVERT_CANDIDATES[name]
+        if candidate["kind"] == "mask":
+            bits = candidate["labelled_bits"]
+            return _integral(observed) and int(observed) & bits == int(value) & bits
+        return self._same(name, observed, value)
+
+    # --- per poll ---
+
+    def judgeable(self, started_at: float) -> bool:
+        """Only polls that started after the last Restore ended, and not while paused."""
+        return self._active and not self.paused and started_at > self._resume_after
+
+    async def async_observe(self, edit_params: dict[str, Any], started_at: float) -> None:
+        """Called after change detection on every settings poll."""
+        if not self._active:
+            return
+        data = edit_params.get("data", {})
+        if not isinstance(data, dict) or not data:
+            return
+        await self._async_settle_own_writes(data, started_at)
 
     # --- judgement ---
 

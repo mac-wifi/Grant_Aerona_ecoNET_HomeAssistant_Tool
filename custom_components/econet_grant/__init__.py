@@ -71,6 +71,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: EconetConfigEntry) -> bo
     auto_revert = AutoRevert(hass, entry, api, db, change_detector)
     await auto_revert.async_load()
     entry.async_on_unload(auto_revert.close)
+    revert_actions.auto_revert = auto_revert
     data = EconetRuntimeData(api, fast, slow, db, change_detector, revert_actions, auto_revert)
 
     await _async_record_baseline(hass, data)
@@ -188,6 +189,9 @@ def _slow_update_listener(hass: HomeAssistant, data: EconetRuntimeData):
         try:
             changes = detector.process_edit_params(edit_params)
             data.revert_actions.observe(edit_params, changes)
+            if data.auto_revert is not None:
+                hass.async_create_task(
+                    data.auto_revert.async_observe(edit_params, slow.data_started_at))
             for change in changes:
                 source = change.get("source", "external")
                 hass.async_create_task(db.async_log_change(hass, change, source))

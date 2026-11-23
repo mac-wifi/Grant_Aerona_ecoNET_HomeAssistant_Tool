@@ -57,6 +57,7 @@ class RevertActions:
         self._active = False
         self._unsubscribe = None
         self._generation = 0
+        self.auto_revert = None  # set at setup; manual Revert counts as an own write
 
     def start(self):
         self._active = True
@@ -170,10 +171,15 @@ class RevertActions:
             write = self._change_detector.begin_revert(
                 pending.index, pending.name, pending.new_value, pending.old_value,
             )
+            own = (self.auto_revert.begin_own_write(pending.name, pending.old_value)
+                   if self.auto_revert else None)
+            success = False
             try:
                 success = await self._api.set_param(pending.name, pending.old_value)
             finally:
                 self._change_detector.finish_revert(write)
+                if own is not None:
+                    await self.auto_revert.async_finish_own_write(own, success)
             if not success:
                 self._notice("Revert not confirmed. Check the controller state before trying again.")
                 return

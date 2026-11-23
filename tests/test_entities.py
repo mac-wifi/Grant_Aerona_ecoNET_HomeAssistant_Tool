@@ -18,6 +18,7 @@ def make_entity(cls, key, definition, hass, entry, api, data, detector=None):
         slow_coordinator=SimpleNamespace(data={"editParams": {"data": data}}),
         change_detector=detector or Mock(),
         database=SimpleNamespace(async_log_change=AsyncMock()),
+        auto_revert=None,  # covered by tests/test_auto_revert.py
     )
     entity = cls(runtime, entry, key, definition)
     entity.hass = hass

@@ -140,6 +140,7 @@ class EconetSettingEntity(EconetEntity):
         super().__init__(data.fast_coordinator, data.api, key)
         self._slow_coordinator = data.slow_coordinator
         self._change_detector = data.change_detector
+        self._auto_revert = data.auto_revert
         self._database = data.database
         self._entry = entry
         self._key = key
@@ -177,7 +178,15 @@ class EconetSettingEntity(EconetEntity):
         name the change detector will see on the next settings poll.
         """
         self._change_detector.mark_self_write(api_param_name)
-        if not await self._api.set_param(api_param_name, api_value):
+        auto_revert = self._auto_revert
+        own = auto_revert.begin_own_write(api_param_name, api_value) if auto_revert else None
+        ok = False
+        try:
+            ok = await self._api.set_param(api_param_name, api_value)
+        finally:
+            if own is not None:
+                await auto_revert.async_finish_own_write(own, ok)
+        if not ok:
             _LOGGER.error("Failed to set %s to %s (API value %s)", self._key, new, api_value)
             self._change_detector.clear_self_write(api_param_name)
             return False

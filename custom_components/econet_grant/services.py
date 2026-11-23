@@ -37,13 +37,22 @@ async def async_handle_backup(hass: HomeAssistant, call: ServiceCall) -> None:
 async def async_handle_restore(hass: HomeAssistant, call: ServiceCall) -> None:
     entry = _loaded_entry(hass)
     data: EconetRuntimeData = entry.runtime_data
-    name = call.data.get("snapshot_name", "Default")
-    safe_mode = is_safe_mode(entry)
-    if not safe_mode:
-        await _async_mark_restore_writes(hass, data, name)
-    result = await async_restore_settings(
-        hass, data.api, snapshot_name=name, safe_mode=safe_mode,
-    )
+    auto_revert = data.auto_revert
+    if auto_revert is not None:
+        auto_revert.pause()  # before any await: nothing automatic during a Restore
+    try:
+        name = call.data.get("snapshot_name", "Default")
+        safe_mode = is_safe_mode(entry)
+        if not safe_mode:
+            await _async_mark_restore_writes(hass, data, name)
+        result = await async_restore_settings(
+            hass, data.api, snapshot_name=name, safe_mode=safe_mode,
+            # Only a real Restore replaces Home Assistant changes with the snapshot.
+            before_first_write=auto_revert.async_clear_overrides if auto_revert else None,
+        )
+    finally:
+        if auto_revert is not None:
+            auto_revert.resume()
     _LOGGER.info("Restore result: %s", result)
 
 

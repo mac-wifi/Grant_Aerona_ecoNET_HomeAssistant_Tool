@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 from datetime import timedelta
 import logging
+from time import monotonic
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -118,8 +119,12 @@ class EconetSlowCoordinator(_EconetCoordinator):
     def __init__(self, hass: HomeAssistant, api: EconetApi, entry: ConfigEntry) -> None:
         minutes = entry.options.get(CONF_SLOW_POLL_INTERVAL, DEFAULT_SLOW_POLL_MINUTES)
         super().__init__(hass, api, entry, "slow", timedelta(minutes=minutes))
+        # When the request behind ``data`` started (monotonic). Auto-revert
+        # judges only polls that started after an own write or Restore ended.
+        self.data_started_at = 0.0
 
     async def _async_fetch(self) -> dict[str, Any]:
+        started = monotonic()
         edit_params, sys_params = await asyncio.gather(
             self.api.fetch_edit_params(),
             self.api.fetch_sys_params(),
@@ -128,4 +133,5 @@ class EconetSlowCoordinator(_EconetCoordinator):
             raise UpdateFailed("editParams returned None")
         if sys_params is None:
             raise UpdateFailed("sysParams returned None")
+        self.data_started_at = started
         return {"editParams": edit_params, "sysParams": sys_params}
