@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from collections.abc import Callable
 from decimal import Decimal, InvalidOperation
 import logging
 import time
@@ -27,6 +28,13 @@ _LOGGER = logging.getLogger(__name__)
 
 class AuthError(Exception):
     """Raised when authentication fails (HTTP 401)."""
+
+
+class WriteCancelled(Exception):
+    """An ``authorise`` guard refused a request; nothing was sent. Never retried."""
+
+
+Authorise = Callable[[], bool]
 
 
 class EconetClient:
@@ -59,6 +67,7 @@ class EconetClient:
 
     async def _throttled_get(
         self, url: str, params: dict[str, str] | None = None,
+        authorise: Authorise | None = None,
     ) -> tuple[int, dict[str, Any] | None]:
         """Execute a single GET, serialized and throttled.
 
@@ -66,11 +75,17 @@ class EconetClient:
         MIN_REQUEST_GAP seconds elapse between consecutive requests.
         Raises AuthError on 401, asyncio.TimeoutError on timeout.
         Returns (status_code, parsed_json_or_None).
+
+        ``authorise`` (optional) is evaluated synchronously after the lock and
+        the gap, immediately before the send; False raises WriteCancelled and
+        sends nothing.
         """
         async with self._request_lock:
             gap = MIN_REQUEST_GAP - (time.monotonic() - self._last_request_at)
             if gap > 0:
                 await asyncio.sleep(gap)
+            if authorise is not None and not authorise():
+                raise WriteCancelled(url)
             try:
                 kwargs: dict[str, Any] = {
                     "headers": self._headers,
@@ -89,15 +104,17 @@ class EconetClient:
 
     async def get(
         self, endpoint: str, params: dict[str, str] | None = None,
+        authorise: Authorise | None = None,
     ) -> dict[str, Any] | None:
         """GET an endpoint, retrying only on timeout. Returns parsed JSON or None.
 
-        A non-200 response returns None at once; AuthError propagates.
+        A non-200 response returns None at once; AuthError and WriteCancelled
+        propagate (the guard is re-checked before every attempt).
         """
         url = self._url(endpoint)
         for attempt in range(1, API_MAX_RETRIES + 1):
             try:
-                status, data = await self._throttled_get(url, params)
+                status, data = await self._throttled_get(url, params, authorise)
             except asyncio.TimeoutError:
                 _LOGGER.warning(
                     "Timeout fetching %s (attempt %d/%d)",
@@ -153,9 +170,13 @@ class EconetApi:
         """Fetch live readings (temperatures, performance, state)."""
         return await self._client.get(API_REG_PARAMS)
 
-    async def fetch_edit_params(self) -> dict[str, Any] | None:
+    async def fetch_edit_params(
+        self, authorise: Authorise | None = None,
+    ) -> dict[str, Any] | None:
         """Fetch all editable parameters with min/max/value."""
-        return await self._client.get(API_EDIT_PARAMS)
+        if authorise is None:
+            return await self._client.get(API_EDIT_PARAMS)
+        return await self._client.get(API_EDIT_PARAMS, authorise=authorise)
 
     async def fetch_sys_params(self) -> dict[str, Any] | None:
         """Fetch system info (controller ID, firmware, alarms, etc.)."""
@@ -163,16 +184,21 @@ class EconetApi:
 
     # --- Write endpoints ---
 
-    async def set_param(self, param_name: str, value: float | int) -> bool:
+    async def set_param(
+        self, param_name: str, value: float | int,
+        authorise: Authorise | None = None,
+    ) -> bool:
         """Set a parameter by name via /econet/newParam (the only write path).
 
         True means the controller acknowledged the exact name/value, not that a
-        later poll has confirmed the change.
+        later poll has confirmed the change. ``authorise`` (auto-revert only)
+        may cancel before any attempt; then WriteCancelled is raised.
         """
-        data = await self._client.get(
-            API_NEW_PARAM,
-            {"newParamName": param_name, "newParamValue": str(value)},
-        )
+        params = {"newParamName": param_name, "newParamValue": str(value)}
+        if authorise is None:
+            data = await self._client.get(API_NEW_PARAM, params)
+        else:
+            data = await self._client.get(API_NEW_PARAM, params, authorise=authorise)
         return _check_write_result(data, param_name, value, expected_name=param_name)
 
     async def test_connection(self) -> bool:
