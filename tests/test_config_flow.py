@@ -91,6 +91,31 @@ async def test_user_step_strips_host_whitespace(hass, entry, api, monkeypatch):
     assert flow.async_create_entry.call_args.kwargs["data"]["host"] == "econet.invalid"
 
 
+async def test_auto_revert_option_defaults_off_and_is_saved(entry):
+    flow = config_flow.EconetGrantOptionsFlow(entry)
+    schema = (await flow.async_step_init())["data_schema"]
+    assert schema({})["auto_revert"] is False
+    assert (await flow.async_step_init(schema({"auto_revert": True})))["data"]["auto_revert"] is True
+    with pytest.raises(vol.Invalid):
+        schema({"auto_revert": "yes"})
+    entry.options["auto_revert"] = True
+    assert (await flow.async_step_init())["data_schema"]({})["auto_revert"] is True
+
+
+def test_auto_revert_candidates_cover_site_requirements():
+    from custom_components.econet_grant.const import AUTO_REVERT_CANDIDATES
+
+    for name in ("workState2", "SummerOn", "SummerOff"):
+        assert name in AUTO_REVERT_CANDIDATES
+    for name in ("Circuit1ComfortTemp", "DHWBoost", "Circuit1boosttimeleft"):
+        assert name not in AUTO_REVERT_CANDIDATES
+    assert AUTO_REVERT_CANDIDATES["HDWSETTINGS"] == {
+        "kind": "mask", "param_index": "101", "labelled_bits": 16 | 1 | 4096,
+    }
+    kinds = [c["kind"] for c in AUTO_REVERT_CANDIDATES.values()]
+    assert (kinds.count("number"), kinds.count("select"), kinds.count("mask")) == (22, 6, 7)
+
+
 def test_translations_match_strings_and_cover_reconfigure():
     import json
     from pathlib import Path

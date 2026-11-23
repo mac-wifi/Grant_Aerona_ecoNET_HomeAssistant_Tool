@@ -12,10 +12,12 @@ CONF_SAFE_MODE = "safe_mode"
 CONF_RETENTION_DAYS = "retention_days"
 CONF_PUSH_NOTIFICATIONS = "push_notifications"
 CONF_SLOW_POLL_INTERVAL = "slow_poll_interval"
+CONF_AUTO_REVERT = "auto_revert"
 
 DEFAULT_USERNAME = "admin"
 DEFAULT_SAFE_MODE = True
 DEFAULT_PUSH_NOTIFICATIONS = True
+DEFAULT_AUTO_REVERT = False
 DATA_RETENTION_DAYS = 3650  # 10 years default
 
 # Companion App service that receives single-use manual Revert actions.
@@ -304,6 +306,42 @@ VOLATILE_PARAMETERS: set[str] = {
     "signal",
     "quality",
 }
+
+# --- Auto-revert (opt-in) ---
+# Never protected: CH Day Temp (owner instruction), HW Boost (a one-shot
+# trigger the controller clears itself) and every volatile value. Settings
+# without an entity definition are never candidates at all.
+AUTO_REVERT_EXCLUDED: frozenset[str] = frozenset(
+    {"Circuit1ComfortTemp", "DHWBoost", *VOLATILE_PARAMETERS}
+)
+# The Default snapshot is the reference for every protected setting.
+AUTO_REVERT_SNAPSHOT = "Default"
+
+
+def _auto_revert_candidates() -> dict[str, dict]:
+    """API name -> what may be protected, derived from the entity definitions.
+
+    A bitmask parameter is one candidate covering all its labelled bits.
+    """
+    candidates: dict[str, dict] = {}
+    for name, defn in NUMBER_DEFINITIONS.items():
+        if name not in AUTO_REVERT_EXCLUDED:
+            candidates[name] = {"kind": "number", "param_index": defn["param_index"],
+                                "min_value": defn["min_value"],
+                                "max_value": defn["max_value"]}
+    for name, defn in SELECT_DEFINITIONS.items():
+        if name not in AUTO_REVERT_EXCLUDED:
+            candidates[name] = {"kind": "select", "param_index": defn["param_index"],
+                                "options": frozenset(defn["options"])}
+    for defn in BITMASK_SELECT_DEFINITIONS.values():
+        candidate = candidates.setdefault(defn["settings_param_name"], {
+            "kind": "mask", "param_index": defn["settings_param"], "labelled_bits": 0,
+        })
+        candidate["labelled_bits"] |= defn["bit_mask"]
+    return candidates
+
+
+AUTO_REVERT_CANDIDATES: dict[str, dict] = _auto_revert_candidates()
 
 # sysParams fields that should never change -- alert as critical if they do
 CRITICAL_SYS_PARAMS: set[str] = {

@@ -31,6 +31,7 @@ from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 from . import discovery
 from .api import AuthError, EconetApi, EconetClient
 from .const import (
+    CONF_AUTO_REVERT,
     CONF_HOST,
     CONF_PASSWORD,
     CONF_PUSH_NOTIFICATIONS,
@@ -40,6 +41,7 @@ from .const import (
     CONF_SLOW_POLL_INTERVAL,
     CONF_USERNAME,
     DATA_RETENTION_DAYS,
+    DEFAULT_AUTO_REVERT,
     DEFAULT_PUSH_NOTIFICATIONS,
     DEFAULT_SAFE_MODE,
     DEFAULT_SLOW_POLL_MINUTES,
@@ -422,6 +424,10 @@ class EconetGrantOptionsFlow(OptionsFlow):
                     vol.Required(
                         CONF_PUSH_NOTIFICATIONS,
                         default=options.get(CONF_PUSH_NOTIFICATIONS, DEFAULT_PUSH_NOTIFICATIONS),
+                    ): bool,
+                    vol.Required(
+                        CONF_AUTO_REVERT,
+                        default=options.get(CONF_AUTO_REVERT, DEFAULT_AUTO_REVERT),
                     ): bool,
                     vol.Optional(
                         CONF_REVERT_NOTIFY_SERVICE,
