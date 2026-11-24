@@ -196,8 +196,11 @@ class AutoRevert:
 
     async def _async_snapshot_saved(self) -> None:
         try:
-            await self._async_save_overrides()
-            await self._async_load_snapshot()
+            try:
+                await self._async_save_overrides()
+            except Exception:  # noqa: BLE001 - the new reference must still be loaded
+                _LOGGER.exception("Auto-revert: could not save the cleared overrides")
+            await self._async_load_snapshot()  # never raises
         finally:
             self._reloading -= 1
             self.revision += 1
@@ -322,17 +325,22 @@ class AutoRevert:
 
         After a failed or timed-out write, adopt what that poll shows.
         """
+        # Everything up to the save is synchronous, so no other observer or new
+        # own write can interleave and no hold is removed after an await.
+        changed = False
         for name, state in list(self._own.items()):
             if state.count or started_at <= state.settled_after:
                 continue
-            self._own.pop(name)
+            del self._own[name]
             if not state.failed or eligibility_problem(data, name):
                 continue
             observed = data[AUTO_REVERT_CANDIDATES[name]["param_index"]].get("value")
             for value in reversed(state.values):
                 if _number(observed) and self._same_raw(name, observed, value):
-                    await self.async_record_override(name, value)
+                    changed = self._apply_override(name, value) or changed
                     break
+        if changed:
+            await self._async_save_overrides()
 
     def pause(self) -> None:
         """Restore starts: nothing is sent and queued decisions are dropped."""

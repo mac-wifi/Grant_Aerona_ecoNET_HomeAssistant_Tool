@@ -998,3 +998,52 @@ async def test_malformed_stored_overrides_are_ignored(setup, hass_storage, store
     hass_storage[key] = {"version": 1, "minor_version": 1, "key": key, "data": stored}
     await reload(hass, entry)
     assert entry.state is ConfigEntryState.LOADED and ar(entry)._overrides == {}
+
+
+
+async def test_settling_one_failed_write_cannot_release_a_newer_hold_on_another_setting(
+        setup, monkeypatch):
+    hass, entry, pump, _ = await setup()
+    short_timeouts(entry, monkeypatch)
+    # A (HW Set Point) fails but was applied; B (Work Mode) completes normally.
+    pump.write_modes = ["http_error"]
+    await ha_set(hass, HW_SET_POINT, 45)
+    pump.guest_change("HDWTSetPoint", 45)
+    await ha_set(hass, WORK_MODE, "Summer")
+    entered, release = gate_store_saves(entry, monkeypatch)
+    first = hass.async_create_task(  # settles A, then waits in A's save
+        ar(entry).async_observe(pump.edit, auto_revert_module.monotonic()))
+    await asyncio.wait_for(entered.wait(), 5)
+    assert not ar(entry).held("workState2")  # B was settled before the save
+    pump.write_modes = ["timeout", "timeout", "ok"]
+    newer = select_task(hass, WORK_MODE, "Auto")  # a newer B write, retrying
+    await wait_for(lambda: len(pump.writes) == 4)
+    release.set()  # the first observer resumes after its save
+    await asyncio.wait_for(first, 5)
+    assert ar(entry).held("workState2")
+    pump.guest_change("workState2", 2)
+    judged = hass.async_create_task(
+        ar(entry).async_observe(pump.edit, auto_revert_module.monotonic()))
+    try:
+        await asyncio.wait_for(asyncio.gather(newer, judged), 10)
+    finally:
+        for release_timeout in pump.timeout_releases:
+            release_timeout.set()
+    assert pump.writes == [("HDWTSetPoint", 45.0), ("workState2", 1.0)] + [
+        ("workState2", 6.0)] * 3
+
+
+async def test_failed_overrides_save_still_loads_the_new_snapshot(setup, monkeypatch):
+    hass, entry, pump, _ = await setup()
+    store = ar(entry)._store
+
+    async def broken_save(data):
+        raise OSError("synthetic: storage directory not writable")
+
+    monkeypatch.setattr(store, "async_save", broken_save)
+    pump.guest_change("workState2", 1)  # the owner's new intended value
+    await take_snapshot(hass)
+    await hass.async_block_till_done()
+    assert ar(entry).targets["workState2"] == 1 and not ar(entry)._reloading
+    await poll(hass, entry)
+    assert pump.writes == []  # the superseded target (2) is never sent
