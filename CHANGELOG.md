@@ -6,6 +6,17 @@ published; the others were local development candidates.
 
 ## Unreleased
 
+- **Auto-revert (opt-in, off by default).** A new option puts protected
+  settings changed outside Home Assistant (EcoNet app, control panel, guests)
+  back to the Default snapshot at the next settings poll, with a notification
+  and an audit entry. Changes made in Home Assistant stay until the next
+  Default snapshot. CH Day Temp, HW Boost, volatile values and unexposed
+  settings are never touched. Safe Mode on means report only. Nothing is put
+  back for 5 minutes after loading; each change is tried once; at most 3 times
+  per setting per hour. A new **Auto-revert** diagnostic sensor shows On/Off
+  and what it is doing (the entity contract and dashboard gain this entity).
+  Switch it off before working in the EcoNet app, then take a new Default
+  snapshot.
 - **Season threshold ranges match the controller.** Winter Threshold now
   goes up to 20 °C (was 19) and Summer Threshold starts at 20 °C (was 17), so
   the 20/20 setting this heat pump runs on can be set from Home Assistant.

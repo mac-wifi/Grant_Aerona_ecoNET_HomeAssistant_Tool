@@ -51,6 +51,7 @@ async def async_setup_entry(
         EconetSettingsVersionSensor(fast, api),
         EconetDatabaseSizeSensor(fast, api, db),
         EconetSafeModeSensor(fast, api, entry),
+        EconetAutoRevertSensor(fast, api, entry),
         EconetRemoteMenuSensor(slow, api),
         EconetRecentChangesSensor(slow, api, db),
         EconetLastSnapshotSensor(fast, api),
@@ -214,6 +215,34 @@ class EconetSafeModeSensor(EconetDiagnosticEntity):
     @property
     def native_value(self) -> str:
         return "On" if is_safe_mode(self._entry) else "Off"
+
+
+class EconetAutoRevertSensor(EconetDiagnosticEntity):
+    """Whether Auto-revert is on, and what it is actually doing."""
+
+    _attr_name = "Auto-revert"
+    _attr_icon = "mdi:backup-restore"
+
+    def __init__(self, coordinator: Any, api: EconetApi, entry: EconetConfigEntry) -> None:
+        super().__init__(coordinator, api, "auto_revert")
+        self._entry = entry
+
+    @property
+    def native_value(self) -> str:
+        auto_revert = self._entry.runtime_data.auto_revert
+        return "On" if auto_revert is not None and auto_revert.enabled else "Off"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        auto_revert = self._entry.runtime_data.auto_revert
+        if auto_revert is None:
+            return {}
+        return {
+            "effect": auto_revert.effect,
+            "snapshot_date": auto_revert.snapshot_date,
+            "protected_count": len(auto_revert.targets),
+            "unprotected": dict(auto_revert.unprotected),
+        }
 
 
 class EconetRemoteMenuSensor(EconetDiagnosticEntity):

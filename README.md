@@ -102,6 +102,7 @@ These read and modify one bit within a larger settings value. The integration wr
 - **Safe Mode**: All write operations are blocked by default and previewed in persistent notifications. Disable Safe Mode in integration options only when ready to write to the controller.
 - **Change Detection**: Monitors both `editParams` and `sysParams`, filters volatile values, and uses version counters from `regParams` to trigger an immediate settings refresh. It fires `econet_grant_setting_changed`, `econet_grant_urgent_change`, and `econet_grant_sys_param_changed` events. Persistent and optional push notifications are enabled by default.
 - **History and Audit**: A bundled SQLite database records live readings, settings history, system snapshots, and a source-tagged change log. Retention for the first three defaults to 10 years, is configurable from 30 days to 20 years, and is enforced when the integration is set up or reloaded. Change-log audit entries and named JSON backup snapshots are currently retained indefinitely.
+- **Auto-revert (opt-in, off by default)**: Puts protected settings changed outside Home Assistant back to the Default snapshot. See [Optional: Auto-revert unexpected changes](#optional-auto-revert-unexpected-changes).
 - **Backup & Restore**: Services create named JSON snapshots and restore changed editable parameters. Safe Mode previews a restore without writing. Home Assistant also exposes a Restore Default Settings button; dashboard cards call both services.
 - **Dashboard YAML**: The Lovelace dashboard uses Mushroom Cards and Mini Graph Card. Its single canonical copy is `custom_components/econet_grant/extras/econet_grant_dashboard.yaml`, where the Marketplace (or HACS on older Core) installs it and manual installers can also access it.
 - **Optional Grafana support**: Example InfluxDB and Grafana configuration is included for users who want Grafana dashboards. It is not required for the integration, change detection, SQLite audit history, or Home Assistant history.
@@ -377,7 +378,8 @@ after a timeout, up to **five total attempts** (initial plus at most four retrie
 Requests remain serialised with at least one second after the preceding request
 completes, including timeouts. A response stops timeout retries; explicit errors
 and response mismatches are not retried. Duplicate taps cannot start another
-operation. There is no scheduled retry, automatic revert, or Revert All.
+operation. There is no scheduled retry or Revert All. Automatic putting-back is
+the separate, opt-in Auto-revert option below.
 
 Only an API-acknowledged success is logged with `source=revert`; this is not
 physical-state confirmation. After an unconfirmed/failed operation, check the
@@ -389,6 +391,50 @@ separate from Restore's self-write markers and preserves later genuine-change
 alerts; deferred Restore issue #11 is unchanged. Identical-target guest activity
 before observation remains ambiguous. Local HA/emulator tests cover this path,
 not real phone delivery or heat-pump behaviour.
+
+#### Optional: Auto-revert unexpected changes
+
+Off by default. When switched on in **Configure** (**Auto-revert unexpected
+changes**), protected settings changed outside Home Assistant (EcoNet app,
+control panel, guests) are put back to the **Default snapshot**:
+
+- The reference is the Default snapshot. Pressing **Take Default Snapshot** is
+  how you say "this is now correct". Without a usable Default snapshot you get a
+  warning and nothing is protected.
+- **Changes made in Home Assistant stay**, also after a restart, until the next
+  Default snapshot. Changes made anywhere else are put back: the integration
+  cannot tell the EcoNet app from a guest.
+- Protected: every setting this integration offers as a number, select or
+  bitmask, including Work Mode and both season thresholds. Never protected:
+  CH Day Temp, HW Boost (a one-shot trigger), volatile values and settings the
+  integration does not expose. Only the labelled bits of a bitmask are put back.
+- With **Safe Mode on**, nothing is written: you get a notification saying what
+  would have been put back. With Safe Mode off, a change is put back at the next
+  settings poll, with a notification and a `source=auto_revert` audit entry.
+- For 5 minutes after the integration loads (restart, reload, saving options)
+  nothing is put back; you get one list of what will be.
+- Each change is tried once. A refused or unanswered request is reported and not
+  retried for that change. A value the integration does not recognise is left
+  alone. A setting put back 3 times within an hour is left alone and reported.
+  If the controller's current limits do not allow the snapshot value (for
+  example Winter Threshold while Summer Threshold is lower), nothing is sent and
+  you are told why.
+- The **Auto-revert** diagnostic sensor shows On/Off; its attributes show what it
+  is doing (`effect`), the snapshot date, how many settings are protected and
+  why any are not.
+
+**Before working in the EcoNet app:** 1. switch Auto-revert off; 2. make the
+changes; 3. press **Take Default Snapshot**; 4. switch Auto-revert on. Skipping
+step 3 means the changes are put back after the 5-minute grace period. Turning
+Safe Mode off with Auto-revert on likewise starts putting back anything that
+already differs from the snapshot.
+
+Limits: a wrong value is live until the next settings poll (up to about 5
+minutes). The read before a write is not atomic with another writer, and a
+request already sent cannot be recalled. If the controller itself changes a
+protected setting, it and Auto-revert fight until the hourly limit stops it. A
+Default snapshot taken while someone else's change is in place makes that change
+the reference.
 
 #### What gets created
 

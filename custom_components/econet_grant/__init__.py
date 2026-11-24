@@ -1,7 +1,8 @@
 """EcoNet Grant Aerona integration for Home Assistant.
 
-Notify-only by design: the integration reports setting changes and never
-reverts them automatically. Manual Revert needs an explicit owner tap.
+The integration reports setting changes. Manual Revert needs an explicit owner
+tap. The opt-in Auto-revert option (off by default) puts protected settings
+changed outside Home Assistant back to the Default snapshot.
 """
 
 from __future__ import annotations

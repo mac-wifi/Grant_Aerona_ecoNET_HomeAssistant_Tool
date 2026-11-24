@@ -4,6 +4,8 @@ Writes are asserted as real HTTP requests (``pump.writes``). The three-setting
 emulator fixture stays unchanged; each test adds the site's settings in-test.
 Test names follow the plan's specification.
 """
+
+import asyncio
 import json
 import sqlite3
 from pathlib import Path
@@ -741,3 +743,92 @@ async def test_switching_off_stops_and_unload_cancels(setup):
     await set_options(hass, entry, auto_revert=False)
     await guest(hass, entry, pump, "workState2", 1)
     assert pump.writes == []
+
+
+# --- Packet 7: sensor ---
+
+SENSOR = "sensor.grant_aerona_heat_pump_auto_revert"
+
+
+async def test_sensor_mirrors_option_and_reports_effect(setup):
+    hass, entry, pump, _ = await setup(safe_mode=True)
+    await entry.runtime_data.fast_coordinator.async_refresh()
+    await hass.async_block_till_done()
+    state = hass.states.get(SENSOR)
+    assert state.state == "On"
+    assert state.attributes["effect"] == "reporting only (Safe Mode on)"
+    assert state.attributes["protected_count"] == len(ar(entry).targets) > 0
+    assert state.attributes["snapshot_date"]
+    await set_options(hass, entry, safe_mode=False)
+    assert hass.states.get(SENSOR).attributes["effect"] == "active"
+    await set_options(hass, entry, auto_revert=False)
+    assert hass.states.get(SENSOR).state == "Off"
+
+
+async def test_new_snapshot_reloads_baseline_and_clears_overrides(setup):
+    hass, entry, pump, _ = await setup()
+    await ha_set(hass, HW_SET_POINT, 45)
+    await guest(hass, entry, pump, "workState2", 1)  # reverted to the old target, 2
+    assert pump.writes[-1] == ("workState2", 2.0)
+    pump.guest_change("workState2", 1)
+    await take_snapshot(hass)  # 1 is now the reference; the override is gone
+    assert ar(entry)._overrides == {}
+    assert ar(entry).targets["workState2"] == 1 and ar(entry).targets["HDWTSetPoint"] == 45
+    before = len(pump.writes)
+    await poll(hass, entry)
+    assert pump.writes[before:] == []
+
+
+async def test_two_overlapping_same_name_writes_hold_two_counts_and_no_auto_send_until_both_end(
+        setup, monkeypatch):
+    hass, entry, pump, _ = await setup()
+    api = entry.runtime_data.api
+    real = api.set_param
+    gate = asyncio.Event()
+    entered = []
+    automatic = []  # auto-revert always passes a dispatch-time guard
+
+    async def slow_set_param(name, value, **kwargs):
+        if "authorise" in kwargs:
+            automatic.append(name)
+            return await real(name, value, **kwargs)
+        entered.append(value)
+        if len(entered) == 1:
+            await gate.wait()  # the first toggle is still in flight
+        return await real(name, value, **kwargs)
+
+    monkeypatch.setattr(api, "set_param", slow_set_param)
+    def toggle(entity_id):
+        # Not ha_set: its async_block_till_done would wait for the other toggle.
+        return hass.async_create_task(hass.services.async_call(
+            "select", "select_option", {"entity_id": entity_id, "option": "Yes"},
+            blocking=True))
+
+    first = toggle(HW_PRIORITY)
+    await asyncio.sleep(0)
+    for _ in range(20):
+        if entered:
+            break
+        await asyncio.sleep(0.01)
+    second = toggle("select.grant_aerona_heat_pump_off_circuits_on_hw")
+    for _ in range(50):
+        if len(entered) == 2 or second.done():
+            break
+        await asyncio.sleep(0.01)
+    assert ar(entry).held("HDWSETTINGS")
+    pump.guest_change("HDWTSetPoint", 40)  # an unrelated guest change is still handled
+    pump.guest_change("HDWSETTINGS", 4)  # and a wrong mask value meanwhile...
+    # Not async_block_till_done: the first toggle is deliberately still waiting.
+    await entry.runtime_data.slow_coordinator.async_refresh()
+    for _ in range(50):
+        if ("HDWTSetPoint", 50.0) in pump.writes:
+            break
+        await asyncio.sleep(0.01)
+    assert "HDWSETTINGS" not in automatic  # ...is not auto-sent while one write is open
+    assert ar(entry).held("HDWSETTINGS")
+    gate.set()
+    await asyncio.wait_for(asyncio.gather(first, second), 10)
+    await hass.async_block_till_done()
+    assert not ar(entry).held("HDWSETTINGS")
+    assert len(entered) == 2 and "HDWSETTINGS" not in automatic
+    assert [w[0] for w in pump.writes].count("HDWSETTINGS") == 2  # only the two own writes

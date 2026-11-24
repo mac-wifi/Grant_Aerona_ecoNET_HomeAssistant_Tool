@@ -43,7 +43,10 @@ rather than silently "fixed".
   editParams, sysParams and by-name `newParam`). These tests cover setup and
   unload, options reload, guest-change detection and notifications, Safe Mode,
   own-write classification, manual Revert, the Restore button and entity
-  freshness.
+  freshness. `test_auto_revert.py` covers Auto-revert the same way: real HTTP
+  writes asserted in the emulator, the Default snapshot baseline, own-write
+  interlocking, Restore pausing, grace, the hourly limit and notifications.
+  `test_api_guard.py` covers the dispatch-time guard over loopback HTTP.
 - **Entity contract** (`fixtures/entity_contract.json`): every entity ID,
   unique ID, name, icon, unit, category and device attribute. Entity IDs feed
   dashboards, Grafana and history, so an accidental rename fails the suite.

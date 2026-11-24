@@ -403,7 +403,7 @@
     "number.grant_aerona_heat_pump_summer_threshold": {
       "attributes": {
         "max": 30,
-        "min": 17,
+        "min": 20,
         "mode": "box",
         "step": 1,
         "unit_of_measurement": "\u00b0C"
@@ -419,7 +419,7 @@
     },
     "number.grant_aerona_heat_pump_winter_threshold": {
       "attributes": {
-        "max": 19,
+        "max": 20,
         "min": 0,
         "mode": "box",
         "step": 1,
@@ -774,6 +774,23 @@
       "original_name": "Work Mode",
       "state": "unknown",
       "unique_id": "econet_grant_synthetic-test-device_workState2",
+      "unit": null
+    },
+    "sensor.grant_aerona_heat_pump_auto_revert": {
+      "attributes": {
+        "effect": "off",
+        "icon": "mdi:backup-restore",
+        "protected_count": 0,
+        "snapshot_date": null,
+        "unprotected": {}
+      },
+      "entity_category": "diagnostic",
+      "friendly_name": "Grant Aerona Heat Pump Auto-revert",
+      "original_device_class": null,
+      "original_icon": "mdi:backup-restore",
+      "original_name": "Auto-revert",
+      "state": "Off",
+      "unique_id": "econet_grant_synthetic-test-device_auto_revert",
       "unit": null
     },
     "sensor.grant_aerona_heat_pump_buffer_temp_lower": {

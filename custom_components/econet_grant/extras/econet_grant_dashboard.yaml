@@ -537,6 +537,9 @@ views:
           - entity: sensor.grant_aerona_heat_pump_safe_mode
             name: Safe Mode
             icon: mdi:shield-lock
+          - entity: sensor.grant_aerona_heat_pump_auto_revert
+            name: Auto-revert
+            icon: mdi:backup-restore
           - entity: sensor.grant_aerona_heat_pump_last_sensor_poll
             name: Last Sensor Poll
             icon: mdi:clock-check
