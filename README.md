@@ -51,8 +51,8 @@ Nine additional diagnostic sensors report the last sensor poll, last settings ch
 | HW Extend Work | 113 | 0-30 min |
 | HW Correction Temp | 481 | 0-20 °C |
 | Panel Temp Correction | 10413 | -5 to 5 °C |
-| Summer Threshold | 702 | 17-30 °C |
-| Winter Threshold | 703 | 0-19 °C |
+| Summer Threshold | 702 | 20-30 °C |
+| Winter Threshold | 703 | 0-20 °C |
 | Heating Temp Correction | 1402 | 0-20 °C |
 | Cooling Setpoint Adj | 1054 | 1-10 °C |
 | HW Pump Start Temp | 433 | 20-60 °C |
