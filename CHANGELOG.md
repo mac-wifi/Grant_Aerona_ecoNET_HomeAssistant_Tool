@@ -4,7 +4,7 @@ Versions follow `MAJOR.MINOR.PATCH`: PATCH for fixes and small changes, MINOR
 for new or changed functionality. Only versions with a GitHub Release were
 published; the others were local development candidates.
 
-## Unreleased
+## 0.12.0 — 2026-11-24
 
 - **Auto-revert (opt-in, off by default).** A new option puts protected
   settings changed outside Home Assistant (EcoNet app, control panel, guests)
