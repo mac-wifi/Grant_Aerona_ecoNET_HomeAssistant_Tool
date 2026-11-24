@@ -20,7 +20,9 @@ from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.storage import Store
 
+from .api import WriteCancelled
 from .backup import snapshot_path
+from .change_detector import format_setting_change
 from .const import (
     AUTO_REVERT_CANDIDATES,
     AUTO_REVERT_SNAPSHOT,
@@ -37,6 +39,8 @@ _LOGGER = logging.getLogger(__name__)
 
 GRACE_SECONDS = 300  # no automatic write until 5 minutes after load (owner decision D4)
 TOLERANCE = 0.05  # number settings step by 0.1
+CAP_PER_HOUR = 3  # automatic reverts per setting per rolling hour
+THRESHOLDS = frozenset({"SummerOn", "SummerOff"})  # each limits the other
 STORE_VERSION = 1
 NOTICE_PREFIX = "auto_revert"  # the detector's alert adds the "econet_grant_" prefix
 
@@ -126,6 +130,13 @@ class AutoRevert:
         self._own: dict[str, _OwnWrites] = {}
         self._pauses = 0
         self._resume_after = 0.0
+        self._loaded_at = 0.0
+        self._grace_checked = False
+        self._busy = False
+        self._episodes: dict[str, int | float] = {}  # name -> wrong value already handled
+        self._unconfirmed: dict[str, tuple] = {}  # name -> (sent, wrong value, done at)
+        self._sends: dict[str, list[float]] = {}
+        self._cap_notified: set[str] = set()
 
     # --- state ---
 
@@ -158,6 +169,7 @@ class AutoRevert:
         await self._async_load_snapshot()
         self._unsubscribe = async_dispatcher_connect(
             self._hass, SIGNAL_SNAPSHOT_SAVED, self._on_snapshot_saved)
+        self._loaded_at = monotonic()
         self._active = True
 
     def close(self) -> None:
@@ -317,6 +329,164 @@ class AutoRevert:
         if not isinstance(data, dict) or not data:
             return
         await self._async_settle_own_writes(data, started_at)
+        if (not self.enabled or not self.snapshot_usable or self._busy
+                or not self.judgeable(started_at)):
+            return
+        self._busy = True  # one evaluation at a time; a skipped poll consumes nothing
+        try:
+            await self._async_judge(data, started_at)
+        finally:
+            self._busy = False
+
+    async def _async_judge(self, data: dict[str, Any], started_at: float) -> None:
+        found = {d.name: d for d in self.divergences(data)}
+        # An episode ends when the setting returns to its target or moves on.
+        for name, wrong in list(self._episodes.items()):
+            if name not in found or found[name].observed != wrong:
+                self._episodes.pop(name)
+        for name, (sent, wrong, done_at) in list(self._unconfirmed.items()):
+            if started_at <= done_at:
+                continue
+            self._unconfirmed.pop(name)
+            if name in found and found[name].observed == wrong:
+                self._notify(name, "Auto-revert not confirmed",
+                             f"{format_setting_change(name, wrong, sent)}\n\n"
+                             "The controller accepted the change but still reports the old "
+                             "value. It will not be tried again for this change; check the "
+                             "controller.")
+        safe = is_safe_mode(self._entry)
+        if not safe and monotonic() - self._loaded_at < GRACE_SECONDS:
+            if not self._grace_checked:
+                listed = [format_setting_change(d.name, d.observed, d.target)
+                          for d in found.values() if d.known and not self.held(d.name)]
+                if listed:
+                    self._notify("grace", "Auto-revert will put settings back",
+                                 "These protected settings differ from the Default snapshot "
+                                 "and will be put back in about 5 minutes, unless you take a "
+                                 "new Default snapshot or switch Auto-revert off:\n\n- "
+                                 + "\n- ".join(listed))
+            self._grace_checked = True
+            return
+        self._grace_checked = True
+        for d in found.values():
+            if self.held(d.name) or d.name in self._episodes:
+                continue
+            if not d.known:
+                self._episodes[d.name] = d.observed
+                self._notify(d.name, "Auto-revert: unrecognised value left alone",
+                             f"{label(d.name)} is at a value this integration does not "
+                             f"recognise ({d.observed!r}). It was not changed.")
+                continue
+            if safe:
+                self._episodes[d.name] = d.observed
+                self._notify(d.name, "Auto-revert report (Safe Mode on)",
+                             f"{format_setting_change(d.name, d.observed, d.target)}\n\n"
+                             "Auto-revert would have put this back to the Default snapshot "
+                             "value (after the arrow). Safe Mode is on, so nothing was changed.")
+                continue
+            if self._capped(d.name):
+                if d.name not in self._cap_notified:
+                    self._cap_notified.add(d.name)
+                    self._notify(d.name, "Auto-revert stopped for this setting",
+                                 f"{label(d.name)} has been put back {CAP_PER_HOUR} times "
+                                 "in the last hour. Something keeps changing it, so "
+                                 "auto-revert has stopped for it for now.")
+                continue
+            await self._async_revert(d)
+
+    def _capped(self, name: str) -> bool:
+        now = monotonic()
+        recent = [t for t in self._sends.get(name, []) if now - t < 3600]
+        self._sends[name] = recent
+        if len(recent) < CAP_PER_HOUR:
+            self._cap_notified.discard(name)
+            return False
+        return True
+
+    async def _async_revert(self, d: Divergence) -> None:
+        """Fresh read, re-check, then one guarded write by name."""
+        revision, name = self.revision, d.name
+        candidate = AUTO_REVERT_CANDIDATES[name]
+
+        def armed() -> bool:
+            return (self._active and self.enabled and not is_safe_mode(self._entry)
+                    and not self.paused and self.revision == revision
+                    and not self.held(name))
+
+        try:
+            fresh = await self._api.fetch_edit_params(authorise=armed)
+        except WriteCancelled:
+            return
+        except Exception:
+            _LOGGER.exception("Auto-revert: could not re-read %s; will try on a later poll", name)
+            return
+        data = (fresh or {}).get("data")
+        if not isinstance(data, dict) or not armed() or self.targets.get(name) != d.target:
+            return
+        if eligibility_problem(data, name):
+            self._episodes[name] = d.observed
+            self._notify(name, "Auto-revert cancelled",
+                         f"{label(name)} could not be verified "
+                         f"({eligibility_problem(data, name)}). Nothing was changed.")
+            return
+        param = data[d.index]
+        current = param.get("value")
+        if not _number(current) or not self._same_raw(name, current, d.observed):
+            return  # it moved again: the next poll starts a new episode
+        if candidate["kind"] == "number":
+            low, high = param.get("minv"), param.get("maxv")
+            if not (_number(low) and _number(high) and low <= d.target <= high):
+                self._episodes[name] = d.observed
+                reason = ("while the other season threshold blocks it" if name in THRESHOLDS
+                          else "because it is outside the controller's current limits")
+                self._notify(name, "Auto-revert not possible",
+                             f"{format_setting_change(name, d.observed, d.target)}\n\n"
+                             f"{label(name)} cannot be put back {reason} "
+                             f"(allowed now: {low} to {high}). Nothing was sent.")
+                return
+            value = d.target
+        elif candidate["kind"] == "select":
+            value = int(d.target)
+        else:
+            bits = candidate["labelled_bits"]
+            value = (int(current) & ~bits) | (int(d.target) & bits)
+
+        sent = False
+
+        def authorise() -> bool:
+            nonlocal sent
+            if armed():
+                sent = True
+                return True
+            return False
+
+        write = self._detector.begin_revert(d.index, name, current, value)
+        ok = False
+        try:
+            ok = await self._api.set_param(name, value, authorise=authorise)
+        except WriteCancelled:
+            pass
+        except Exception:
+            _LOGGER.exception("Auto-revert of %s failed", name)
+        finally:
+            self._detector.finish_revert(write)
+        if not sent:
+            return  # cancelled before anything was sent: the attempt is not used up
+        self._episodes[name] = d.observed
+        self._sends.setdefault(name, []).append(monotonic())
+        change = format_setting_change(name, current, value)
+        if not ok:
+            self._notify(name, "Auto-revert failed",
+                         f"{change}\n\nThe request was sent but not accepted, or no reply "
+                         "came. It will not be retried for this change; check the controller.")
+            return
+        self._unconfirmed[name] = (value, d.observed, monotonic())
+        await self._db.async_log_change(self._hass, {
+            "name": name, "index": d.index, "old_value": current, "new_value": value,
+        }, source="auto_revert")
+        self._notify(name, "Setting put back",
+                     f"{change}\n\nChanged outside Home Assistant, so it was put back to the "
+                     "Default snapshot value. The controller accepted the change.")
 
     # --- judgement ---
 

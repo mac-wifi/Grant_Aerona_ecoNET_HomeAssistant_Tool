@@ -426,3 +426,318 @@ async def test_failed_write_to_an_unprotected_setting_is_not_tracked(setup):
     await ha_set(hass, "number.grant_aerona_heat_pump_ch_day_temp", 22)
     assert ar(entry)._own == {}
     await poll(hass, entry)  # must not raise in the background
+
+
+# --- Packet 6: execution ---
+
+
+def auto_writes(pump, before):
+    return pump.writes[before:]
+
+
+async def guest(hass, entry, pump, name, value):
+    pump.guest_change(name, value)
+    await poll(hass, entry)
+
+
+async def test_default_off_writes_nothing(setup):
+    hass, entry, pump, _ = await setup(auto_revert=False)
+    await guest(hass, entry, pump, "workState2", 1)
+    await poll(hass, entry)
+    assert pump.writes == []
+    assert not [k for k in notices(hass) if "auto_revert" in k]
+
+
+async def test_safe_mode_on_reports_would_revert_and_writes_nothing(setup):
+    hass, entry, pump, _ = await setup(safe_mode=True)
+    await guest(hass, entry, pump, "workState2", 1)
+    assert pump.writes == []
+    message = notice(hass, "workState2")["message"]
+    assert "Winter" in message and "Summer" in message and "nothing was changed" in message
+    assert ar(entry).effect == "reporting only (Safe Mode on)"
+
+
+async def test_safe_mode_report_once_per_episode(setup):
+    hass, entry, pump, _ = await setup(safe_mode=True)
+    await guest(hass, entry, pump, "workState2", 1)
+    pn = hass.data["persistent_notification"]
+    pn.pop("econet_grant_auto_revert_workState2")
+    await poll(hass, entry)
+    assert notice(hass, "workState2") is None  # same wrong value: no repeat
+    await guest(hass, entry, pump, "workState2", 2)
+    await guest(hass, entry, pump, "workState2", 1)
+    assert notice(hass, "workState2") is not None  # a new episode
+
+
+async def test_armed_reverts_number_select_and_bitmask(setup):
+    hass, entry, pump, _ = await setup()
+    pump.guest_change("workState2", 1)
+    pump.guest_change("SummerOff", 18)
+    pump.guest_change("HDWSETTINGS", 4)  # HW Support (bit 1) switched off
+    await poll(hass, entry)
+    assert sorted(pump.writes) == [("HDWSETTINGS", 5.0), ("SummerOff", 20.0), ("workState2", 2.0)]
+    assert "put back" in notice(hass, "workState2")["message"]
+    rows = [r for r in await audit(hass) if r[3] == "auto_revert"]
+    assert {r[0] for r in rows} == {"workState2", "SummerOff", "HDWSETTINGS"}
+    await poll(hass, entry)  # the corrections are not reported as guest changes
+    assert len(pump.writes) == 3
+    assert notice(hass, "workState2")["title"] == "EcoNet Grant - Setting put back"
+
+
+async def test_bitmask_restores_only_labelled_bits_even_if_unlabelled_bits_change(setup):
+    hass, entry, pump, _ = await setup()
+    # Snapshot 5 = bits 1 and 4; labelled bits are 1, 16 and 4096 (4 and 256 are not).
+    await guest(hass, entry, pump, "HDWSETTINGS", 4 | 16 | 256)  # bit 1 off, 16 on, 256 on
+    assert pump.writes == [("HDWSETTINGS", float(1 | 4 | 256))]  # unlabelled bits kept
+
+
+async def test_grace_after_load_lists_differences_and_does_not_write_for_5_minutes(setup, monkeypatch):
+    hass, entry, pump, _ = await setup(grace=300)
+    await guest(hass, entry, pump, "workState2", 1)
+    assert pump.writes == []
+    assert "will be put back" in notice(hass, "grace")["message"]
+    clock = [auto_revert_module.monotonic() + 301]
+    monkeypatch.setattr(auto_revert_module, "monotonic", lambda: clock[0])
+    entry.runtime_data.slow_coordinator.data_started_at = clock[0]
+    monkeypatch.setattr("custom_components.econet_grant.coordinator.monotonic",
+                        lambda: clock[0])
+    await poll(hass, entry)
+    assert pump.writes == [("workState2", 2.0)]
+
+
+async def test_same_wrong_value_one_attempt_but_new_episode_qualifies_again(setup):
+    hass, entry, pump, _ = await setup()
+    pump.mode = "non_ok"  # the controller refuses
+    await guest(hass, entry, pump, "workState2", 1)
+    await poll(hass, entry)
+    assert pump.writes == [("workState2", 2.0)]
+    assert "Auto-revert failed" in notice(hass, "workState2")["title"]
+    pump.mode = "ok"
+    await guest(hass, entry, pump, "workState2", 6)
+    assert pump.writes[-1] == ("workState2", 2.0) and len(pump.writes) == 2
+
+
+async def test_failed_write_not_retried_on_next_poll_and_notified(setup):
+    hass, entry, pump, _ = await setup()
+    pump.mode = "http_error"
+    await guest(hass, entry, pump, "SummerOn", 25)
+    await poll(hass, entry)
+    await poll(hass, entry)
+    assert pump.writes == [("SummerOn", 20.0)]
+    assert "not accepted" in notice(hass, "SummerOn")["message"]
+
+
+async def test_pre_send_cancellation_does_not_consume_the_attempt(setup, monkeypatch):
+    hass, entry, pump, _ = await setup()
+    real = entry.runtime_data.api.fetch_edit_params
+
+    async def fetch_then_owner_writes(*args, **kwargs):
+        result = await real(*args, **kwargs)
+        ar(entry).revision += 1  # e.g. the owner started a write meanwhile
+        return result
+
+    monkeypatch.setattr(entry.runtime_data.api, "fetch_edit_params", fetch_then_owner_writes)
+    await guest(hass, entry, pump, "workState2", 1)
+    assert pump.writes == []
+    monkeypatch.setattr(entry.runtime_data.api, "fetch_edit_params", real)
+    await poll(hass, entry)
+    assert pump.writes == [("workState2", 2.0)]
+
+
+async def test_hourly_cap_stops_a_fight(setup):
+    hass, entry, pump, _ = await setup()
+    for wrong in (1, 6, 1):
+        await guest(hass, entry, pump, "workState2", wrong)
+        await poll(hass, entry)
+    assert len(pump.writes) == 3
+    await guest(hass, entry, pump, "workState2", 6)
+    assert len(pump.writes) == 3
+    assert "stopped" in notice(hass, "workState2")["message"]
+
+
+async def test_not_confirmed_is_reported_once(setup):
+    hass, entry, pump, _ = await setup()
+    pump.mode = "value_mismatch"
+    pump.write_modes = ["ok"]
+
+    await guest(hass, entry, pump, "SummerOff", 18)
+    pump.guest_change("SummerOff", 18)  # the controller put it straight back
+    await poll(hass, entry)
+    assert "not confirmed" in notice(hass, "SummerOff")["title"]
+    assert pump.writes == [("SummerOff", 20.0)]
+
+
+async def test_day_temperature_and_hw_boost_never_reverted(setup):
+    hass, entry, pump, _ = await setup()
+    await guest(hass, entry, pump, "Circuit1ComfortTemp", 25)
+    await guest(hass, entry, pump, "DHWBoost", 1)
+    assert pump.writes == []
+
+
+async def test_volatile_and_unlabelled_never_reverted(setup):
+    hass, entry, pump, _ = await setup()
+    await guest(hass, entry, pump, "Circuit1boosttimeleft", 50)
+    await guest(hass, entry, pump, "HDWSETTINGS", 5 | 256)
+    assert pump.writes == []
+
+
+async def test_work_mode_reverts_to_snapshot_value_whatever_the_other_raw_value(setup):
+    hass, entry, pump, _ = await setup()
+    for wrong in (1, 6):
+        await guest(hass, entry, pump, "workState2", wrong)
+        await poll(hass, entry)
+    assert pump.writes == [("workState2", 2.0), ("workState2", 2.0)]
+
+
+async def test_any_select_with_an_unknown_value_is_left_alone_and_notified(setup):
+    hass, entry, pump, _ = await setup()
+    await guest(hass, entry, pump, "workState2", 3)
+    await poll(hass, entry)
+    assert pump.writes == []
+    assert "not recognise" in notice(hass, "workState2")["message"]
+
+
+async def test_select_value_not_a_known_option_is_left_alone_and_mask_with_fractional_value_is_not_protected(setup):
+    hass, entry, pump, _ = await setup()
+    await guest(hass, entry, pump, "HDWSETTINGS", 4.5)
+    assert pump.writes == []
+
+
+async def test_observed_summer_19_outside_definition_range_is_still_judged(setup):
+    hass, entry, pump, _ = await setup()
+    pump.edit["data"]["702"]["minv"] = 0  # suppose the controller allowed it
+    await guest(hass, entry, pump, "SummerOn", 19)
+    assert pump.writes == [("SummerOn", 20.0)]
+
+
+async def test_threshold_blocked_by_the_other_threshold_is_notified_once_and_not_sent(setup):
+    hass, entry, pump, _ = await setup()
+    # A guest lowers Winter to 15 and Summer to 18; the controller then allows Winter
+    # only up to 18, so Winter 20 cannot be sent until Summer is back at 20.
+    pump.guest_change("SummerOff", 15)
+    pump.guest_change("SummerOn", 18)
+    pump.edit["data"]["702"]["minv"] = 15
+    pump.edit["data"]["703"]["maxv"] = 18
+    await poll(hass, entry)
+    assert ("SummerOff", 20.0) not in pump.writes
+    assert ("SummerOn", 20.0) in pump.writes
+    assert "other season threshold" in notice(hass, "SummerOff")["message"]
+    count = len(pump.writes)
+    await poll(hass, entry)
+    assert len(pump.writes) == count
+
+
+async def test_threshold_revert_rejected_by_controller_is_reported_once_not_retried(setup):
+    hass, entry, pump, _ = await setup()
+    pump.mode = "non_ok"
+    await guest(hass, entry, pump, "SummerOn", 25)
+    await poll(hass, entry)
+    assert pump.writes == [("SummerOn", 20.0)]
+
+
+async def test_threshold_target_outside_fresh_live_bounds_is_never_sent(setup):
+    hass, entry, pump, _ = await setup()
+    pump.edit["data"]["103"]["maxv"] = 45  # HW Set Point limit lowered by the controller
+    await guest(hass, entry, pump, "HDWTSetPoint", 40)
+    assert pump.writes == []
+    assert "current limits" in notice(hass, "HDWTSetPoint")["message"]
+
+
+async def test_bounds_change_after_baseline_cancels_the_write(setup, monkeypatch):
+    hass, entry, pump, _ = await setup()
+    real = entry.runtime_data.api.fetch_edit_params
+
+    async def fetch_with_new_bounds(*args, **kwargs):
+        pump.edit["data"]["702"]["minv"] = 21
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(entry.runtime_data.api, "fetch_edit_params", fetch_with_new_bounds)
+    await guest(hass, entry, pump, "SummerOn", 25)
+    assert pump.writes == []
+
+
+async def test_renamed_duplicate_or_readonly_parameter_not_protected_and_cancelled_if_it_changes_later(setup, monkeypatch):
+    hass, entry, pump, _ = await setup()
+    real = entry.runtime_data.api.fetch_edit_params
+
+    async def fetch_readonly(*args, **kwargs):
+        if "authorise" in kwargs:  # only auto-revert's fresh read, not the poll
+            pump.edit["data"]["162"]["edit"] = False
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(entry.runtime_data.api, "fetch_edit_params", fetch_readonly)
+    await guest(hass, entry, pump, "workState2", 1)
+    assert pump.writes == []
+    assert "cancelled" in notice(hass, "workState2")["title"]
+
+
+async def test_ha_number_select_and_bitmask_writes_stick_with_autorevert_on(setup):
+    hass, entry, pump, _ = await setup()
+    await ha_set(hass, HW_SET_POINT, 45)
+    await ha_set(hass, WORK_MODE, "Summer")
+    await ha_set(hass, HW_PRIORITY, "Yes")
+    await poll(hass, entry)
+    await poll(hass, entry)
+    assert len(pump.writes) == 3
+
+
+async def test_no_automatic_http_send_between_an_own_writes_timeout_retries(setup):
+    hass, entry, pump, _ = await setup()
+    own = ar(entry).begin_own_write("workState2", 1)
+    await guest(hass, entry, pump, "workState2", 6)
+    assert pump.writes == []
+    await ar(entry).async_finish_own_write(own, False)
+    await poll(hass, entry)  # settles: 6 is not what we wrote, override unchanged
+    await poll(hass, entry)
+    assert pump.writes == [("workState2", 2.0)]
+
+
+async def test_overlapping_own_write_cancels_queued_revert(setup, monkeypatch):
+    hass, entry, pump, _ = await setup()
+    real = entry.runtime_data.api.fetch_edit_params
+
+    async def fetch_during_own_write(*args, **kwargs):
+        result = await real(*args, **kwargs)
+        ar(entry).begin_own_write("workState2", 6)
+        return result
+
+    monkeypatch.setattr(entry.runtime_data.api, "fetch_edit_params", fetch_during_own_write)
+    await guest(hass, entry, pump, "workState2", 1)
+    assert pump.writes == []
+
+
+async def test_restore_pauses_cancels_queued_and_resumes_after_post_release_poll(setup):
+    hass, entry, pump, _ = await setup()
+    ar(entry).pause()
+    await guest(hass, entry, pump, "workState2", 1)
+    assert pump.writes == []
+    ar(entry).resume()
+    await poll(hass, entry)
+    assert pump.writes == [("workState2", 2.0)]
+
+
+async def test_two_overlapping_restores_cannot_release_each_other(setup):
+    hass, entry, pump, _ = await setup()
+    ar(entry).pause()
+    ar(entry).pause()
+    ar(entry).resume()
+    await guest(hass, entry, pump, "workState2", 1)
+    assert pump.writes == []
+    ar(entry).resume()
+    await poll(hass, entry)
+    assert pump.writes == [("workState2", 2.0)]
+
+
+async def test_stale_restore_markers_do_not_hide_a_divergence(setup):
+    hass, entry, pump, _ = await setup()
+    await set_options(hass, entry, safe_mode=False)
+    await restore(hass)  # nothing to restore, but #11 leaves name-only markers
+    await guest(hass, entry, pump, "workState2", 1)
+    assert pump.writes == [("workState2", 2.0)]
+
+
+async def test_switching_off_stops_and_unload_cancels(setup):
+    hass, entry, pump, _ = await setup()
+    await set_options(hass, entry, auto_revert=False)
+    await guest(hass, entry, pump, "workState2", 1)
+    assert pump.writes == []
