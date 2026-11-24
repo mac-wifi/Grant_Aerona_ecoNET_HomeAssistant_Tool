@@ -106,10 +106,11 @@ class _OwnWrites:
 
 @dataclass
 class OwnWrite:
-    """Token for one own-write operation."""
+    """Token for one own-write operation, bound to the state it counted in."""
 
     name: str
     value: int | float
+    state: _OwnWrites | None = None
 
 
 class AutoRevert:
@@ -130,6 +131,7 @@ class AutoRevert:
         self._own: dict[str, _OwnWrites] = {}
         self._pauses = 0
         self._resume_after = 0.0
+        self._reloading = 0  # a new Default snapshot is being loaded: old targets unusable
         self._loaded_at = 0.0
         self._grace_checked = False
         self._busy = False
@@ -163,9 +165,11 @@ class AutoRevert:
     # --- lifecycle ---
 
     async def async_load(self) -> None:
-        stored = await self._store.async_load() or {}
-        self._overrides = {name: value for name, value in stored.get("overrides", {}).items()
-                           if name in AUTO_REVERT_CANDIDATES and target_valid(name, value)}
+        stored = await self._store.async_load()
+        overrides = stored.get("overrides") if isinstance(stored, dict) else None
+        self._overrides = {name: value for name, value in (
+            overrides.items() if isinstance(overrides, dict) else ())
+            if name in AUTO_REVERT_CANDIDATES and target_valid(name, value)}
         await self._async_load_snapshot()
         self._unsubscribe = async_dispatcher_connect(
             self._hass, SIGNAL_SNAPSHOT_SAVED, self._on_snapshot_saved)
@@ -185,15 +189,36 @@ class AutoRevert:
             return
         # The new snapshot contains the owner's Home Assistant changes.
         self.revision += 1
+        self._reloading += 1  # nothing is judged against the old reference from now on
         self._overrides.clear()
         self._entry.async_create_task(self._hass, self._async_snapshot_saved(),
                                       "econet_grant_auto_revert_snapshot")
 
     async def _async_snapshot_saved(self) -> None:
-        await self._async_save_overrides()
-        await self._async_load_snapshot()
+        try:
+            await self._async_save_overrides()
+            await self._async_load_snapshot()
+        finally:
+            self._reloading -= 1
+            self.revision += 1
 
     async def _async_load_snapshot(self) -> None:
+        """Load the reference. Never raises: a bad snapshot only disables protection."""
+        try:
+            await self._async_read_snapshot()
+        except Exception:  # noqa: BLE001 - monitoring and control must keep working
+            _LOGGER.exception("Auto-revert: could not use the Default snapshot")
+            self._snapshot_targets, self.snapshot_usable, self.snapshot_date = {}, False, None
+            self._warn_no_snapshot()
+
+    def _warn_no_snapshot(self) -> None:
+        if self.enabled:
+            self._notify("no_snapshot", "Auto-revert: no usable Default snapshot",
+                         "Auto-revert is on, but there is no usable Default snapshot, "
+                         "so nothing is protected. Take a Default snapshot "
+                         "(Snapshot & Backup on the dashboard).")
+
+    async def _async_read_snapshot(self) -> None:
         path = snapshot_path(self._hass, AUTO_REVERT_SNAPSHOT)
 
         def read() -> dict[str, Any] | None:
@@ -206,37 +231,38 @@ class AutoRevert:
         self.revision += 1
         self._snapshot_targets, self.unprotected = {}, {}
         params = snapshot.get("parameters") if isinstance(snapshot, dict) else None
-        self.snapshot_usable = isinstance(params, dict) and bool(params)
-        self.snapshot_date = snapshot.get("created_at") if self.snapshot_usable else None
-        if not self.snapshot_usable:
-            if self.enabled:
-                self._notify("no_snapshot", "Auto-revert: no usable Default snapshot",
-                             "Auto-revert is on, but there is no usable Default snapshot, "
-                             "so nothing is protected. Take a Default snapshot "
-                             "(Snapshot & Backup on the dashboard).")
+        self.snapshot_usable, self.snapshot_date = False, None
+        if isinstance(params, dict):
+            for name, candidate in AUTO_REVERT_CANDIDATES.items():
+                problem = eligibility_problem(params, name, snapshot=True)
+                value = None
+                if problem is None:  # only now is the entry known to be a dict
+                    value = params[candidate["param_index"]].get("value")
+                    if not target_valid(name, value):
+                        problem = f"snapshot value {value!r} is not a valid setting"
+                if problem:
+                    self.unprotected[name] = problem
+                    continue
+                if candidate["kind"] == "mask":
+                    value = int(value) & candidate["labelled_bits"]
+                self._snapshot_targets[name] = value
+        if not self._snapshot_targets:  # missing, unreadable or nothing usable in it
+            self._warn_no_snapshot()
             return
+        self.snapshot_usable = True
+        created = snapshot.get("created_at")
+        self.snapshot_date = created if isinstance(created, str) else None
         pn_async_dismiss(self._hass, f"{DOMAIN}_{NOTICE_PREFIX}_no_snapshot")
-        for name, candidate in AUTO_REVERT_CANDIDATES.items():
-            problem = eligibility_problem(params, name, snapshot=True)
-            value = (params.get(candidate["param_index"]) or {}).get("value")
-            if problem is None and not target_valid(name, value):
-                problem = f"snapshot value {value!r} is not a valid setting"
-            if problem:
-                self.unprotected[name] = problem
-                continue
-            if candidate["kind"] == "mask":
-                value = int(value) & candidate["labelled_bits"]
-            self._snapshot_targets[name] = value
         for name, reason in self.unprotected.items():
             _LOGGER.info("Auto-revert: %s not protected (%s)", name, reason)
 
     # --- overrides (Home Assistant changes stick) ---
 
-    async def async_record_override(self, name: str, raw_value: int | float) -> None:
-        """Remember a value this integration wrote; drop it if it equals the snapshot."""
+    def _apply_override(self, name: str, raw_value: int | float) -> bool:
+        """Synchronous part: update the in-memory override. True if it may have changed."""
         candidate = AUTO_REVERT_CANDIDATES.get(name)
         if candidate is None or not target_valid(name, raw_value):
-            return
+            return False
         value = int(raw_value) & candidate["labelled_bits"] if candidate["kind"] == "mask" \
             else raw_value
         if name in self._snapshot_targets and self._same(name, value,
@@ -244,7 +270,12 @@ class AutoRevert:
             self._overrides.pop(name, None)
         else:
             self._overrides[name] = value
-        await self._async_save_overrides()
+        return True
+
+    async def async_record_override(self, name: str, raw_value: int | float) -> None:
+        """Remember a value this integration wrote; drop it if it equals the snapshot."""
+        if self._apply_override(name, raw_value):
+            await self._async_save_overrides()
 
     async def async_clear_overrides(self) -> None:
         self._overrides.clear()
@@ -258,30 +289,39 @@ class AutoRevert:
     def begin_own_write(self, name: str, value: int | float) -> OwnWrite:
         """Before a Home Assistant write: drop queued decisions, hold this parameter."""
         self.revision += 1
-        if name in AUTO_REVERT_CANDIDATES:  # others are never judged
-            self._own.setdefault(name, _OwnWrites()).count += 1
-        return OwnWrite(name, value)
+        if name not in AUTO_REVERT_CANDIDATES:  # others are never judged
+            return OwnWrite(name, value)
+        state = self._own.setdefault(name, _OwnWrites())
+        state.count += 1
+        return OwnWrite(name, value, state)
 
     async def async_finish_own_write(self, write: OwnWrite, ok: bool) -> None:
-        """In a ``finally``: the last acknowledged completion wins."""
-        state = self._own.get(write.name)
+        """In a ``finally``: the last acknowledged completion wins.
+
+        Everything that matters happens before the first await, on the token's own
+        state. The hold is released only by a poll that started after the last
+        overlapping write ended (``_async_settle_own_writes``), never here, so a
+        slow save cannot release a newer write's hold.
+        """
+        state = write.state
         if state is None:
             return
         state.count -= 1
         state.settled_after = monotonic()
         state.values.append(write.value)
         state.failed = state.failed or not ok
-        if ok:
-            await self.async_record_override(write.name, write.value)
-        if state.count == 0 and not state.failed:
-            self._own.pop(write.name, None)
+        if ok and self._apply_override(write.name, write.value):
+            await self._async_save_overrides()
 
     def held(self, name: str) -> bool:
         """An own write is in flight, or its outcome is not yet judged."""
         return name in self._own
 
     async def _async_settle_own_writes(self, data: dict[str, Any], started_at: float) -> None:
-        """After a failed or timed-out write, adopt what a later poll shows."""
+        """Release holds on the first poll that started after the last write ended.
+
+        After a failed or timed-out write, adopt what that poll shows.
+        """
         for name, state in list(self._own.items()):
             if state.count or started_at <= state.settled_after:
                 continue
@@ -329,8 +369,8 @@ class AutoRevert:
         if not isinstance(data, dict) or not data:
             return
         await self._async_settle_own_writes(data, started_at)
-        if (not self.enabled or not self.snapshot_usable or self._busy
-                or not self.judgeable(started_at)):
+        if (not self.enabled or not self.snapshot_usable or self._reloading
+                or self._busy or not self.judgeable(started_at)):
             return
         self._busy = True  # one evaluation at a time; a skipped poll consumes nothing
         try:
@@ -339,6 +379,9 @@ class AutoRevert:
             self._busy = False
 
     async def _async_judge(self, data: dict[str, Any], started_at: float) -> None:
+        # One revision for the whole batch: anything that invalidates the poll
+        # (own write, Restore, snapshot, options) cancels every remaining item.
+        revision = self.revision
         found = {d.name: d for d in self.divergences(data)}
         # An episode ends when the setting returns to its target or moves on.
         for name, wrong in list(self._episodes.items()):
@@ -392,7 +435,7 @@ class AutoRevert:
                                  "in the last hour. Something keeps changing it, so "
                                  "auto-revert has stopped for it for now.")
                 continue
-            await self._async_revert(d)
+            await self._async_revert(d, revision, started_at)
 
     def _capped(self, name: str) -> bool:
         now = monotonic()
@@ -403,14 +446,14 @@ class AutoRevert:
             return False
         return True
 
-    async def _async_revert(self, d: Divergence) -> None:
+    async def _async_revert(self, d: Divergence, revision: int, started_at: float) -> None:
         """Fresh read, re-check, then one guarded write by name."""
-        revision, name = self.revision, d.name
+        name = d.name
         candidate = AUTO_REVERT_CANDIDATES[name]
 
         def armed() -> bool:
-            return (self._active and self.enabled and not is_safe_mode(self._entry)
-                    and not self.paused and self.revision == revision
+            return (self.enabled and not is_safe_mode(self._entry) and not self._reloading
+                    and self.revision == revision and self.judgeable(started_at)
                     and not self.held(name))
 
         try:

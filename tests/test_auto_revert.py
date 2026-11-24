@@ -280,7 +280,10 @@ async def test_ha_number_select_and_bitmask_writes_record_overrides(setup):
     assert pump.writes == [("HDWTSetPoint", 45.0), ("workState2", 1.0), ("HDWSETTINGS", 21.0)]
     targets = ar(entry).targets
     assert (targets["HDWTSetPoint"], targets["workState2"], targets["HDWSETTINGS"]) == (45, 1, 17)
-    assert not any(ar(entry).held(n) for n in ("HDWTSetPoint", "workState2", "HDWSETTINGS"))
+    names = ("HDWTSetPoint", "workState2", "HDWSETTINGS")
+    assert all(ar(entry).held(n) for n in names)  # until a poll started after completion
+    await poll(hass, entry)
+    assert not any(ar(entry).held(n) for n in names)
 
 
 async def test_ha_write_sticks_across_reload_and_restart(setup):
@@ -353,8 +356,10 @@ async def test_two_overlapping_same_name_writes_hold_two_counts(setup):
     await poll(hass, entry)
     assert ar(entry).held("HDWSETTINGS")
     await ar(entry).async_finish_own_write(first, True)
-    assert not ar(entry).held("HDWSETTINGS")
+    assert ar(entry).held("HDWSETTINGS")  # until a poll started after both ended
     assert ar(entry).targets["HDWSETTINGS"] == 21 & (16 | 1 | 4096)  # last completed wins
+    await poll(hass, entry)
+    assert not ar(entry).held("HDWSETTINGS")
 
 
 async def restore(hass, name="Default"):
@@ -829,6 +834,167 @@ async def test_two_overlapping_same_name_writes_hold_two_counts_and_no_auto_send
     gate.set()
     await asyncio.wait_for(asyncio.gather(first, second), 10)
     await hass.async_block_till_done()
+    await poll(hass, entry)
     assert not ar(entry).held("HDWSETTINGS")
     assert len(entered) == 2 and "HDWSETTINGS" not in automatic
     assert [w[0] for w in pump.writes].count("HDWSETTINGS") == 2  # only the two own writes
+
+
+# --- Review fixes (2026-11-24 code review) ---
+
+
+def short_timeouts(entry, monkeypatch, seconds=0.3):
+    from aiohttp import ClientTimeout
+    monkeypatch.setattr(entry.runtime_data.api._client, "_timeout", ClientTimeout(total=seconds))
+
+
+def gate_store_saves(entry, monkeypatch):
+    """Make overrides saves wait until released; returns (entered, release)."""
+    store = ar(entry)._store
+    real = store.async_save
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def slow_save(data):
+        entered.set()
+        await release.wait()
+        await real(data)
+
+    monkeypatch.setattr(store, "async_save", slow_save)
+    return entered, release
+
+
+def select_task(hass, entity_id, option):
+    return hass.async_create_task(hass.services.async_call(
+        "select", "select_option", {"entity_id": entity_id, "option": option}, blocking=True))
+
+
+async def wait_for(condition, seconds=5):
+    for _ in range(int(seconds / 0.01)):
+        if condition():
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError("condition not reached")
+
+
+async def test_stale_finaliser_cannot_release_a_newer_writes_hold_during_its_timeout_retries(
+        setup, monkeypatch):
+    hass, entry, pump, _ = await setup()
+    short_timeouts(entry, monkeypatch)
+    entered, release = gate_store_saves(entry, monkeypatch)
+    first = select_task(hass, WORK_MODE, "Summer")  # acknowledged; its save is slow
+    await asyncio.wait_for(entered.wait(), 5)
+    # A poll that started after the first write ended runs during the slow save.
+    await ar(entry).async_observe(pump.edit, auto_revert_module.monotonic())
+    pump.write_modes = ["timeout", "timeout", "ok"]
+    second = select_task(hass, WORK_MODE, "Auto")  # a newer own write, retrying
+    await wait_for(lambda: len(pump.writes) == 2)
+    release.set()
+    await asyncio.wait_for(first, 5)  # the old finaliser ends during the retries
+    pump.guest_change("workState2", 2)  # meanwhile something else changes it
+    judged = hass.async_create_task(
+        ar(entry).async_observe(pump.edit, auto_revert_module.monotonic()))
+    try:
+        await asyncio.wait_for(asyncio.gather(second, judged), 10)
+    finally:
+        for release_timeout in pump.timeout_releases:  # held emulator responses
+            release_timeout.set()
+    # Only the own write's three attempts: nothing automatic between its retries.
+    assert pump.writes == [("workState2", 1.0)] + [("workState2", 6.0)] * 3
+
+
+async def test_successful_own_write_held_until_a_post_completion_poll(setup):
+    hass, entry, pump, _ = await setup()
+    before = auto_revert_module.monotonic()
+    await ha_set(hass, WORK_MODE, "Summer")
+    pump.guest_change("workState2", 2)
+    await ar(entry).async_observe(pump.edit, before)  # started before completion
+    assert ar(entry).held("workState2") and pump.writes == [("workState2", 1.0)]
+    await poll(hass, entry)  # releases the hold, then judges: 2 is not what was written
+    assert not ar(entry).held("workState2")
+    assert pump.writes == [("workState2", 1.0), ("workState2", 1.0)]
+
+
+async def test_restore_during_first_items_read_cancels_the_rest_of_that_poll(setup, monkeypatch):
+    hass, entry, pump, _ = await setup()
+    api = entry.runtime_data.api
+    real = api.fetch_edit_params
+    restored = []
+
+    async def fetch_with_restore_meanwhile(*args, **kwargs):
+        if "authorise" in kwargs and not restored:
+            restored.append(True)  # a whole Restore starts and finishes here
+            await hass.services.async_call(DOMAIN, "restore_settings",
+                                           {"snapshot_name": "Missing"}, blocking=True)
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(api, "fetch_edit_params", fetch_with_restore_meanwhile)
+    pump.guest_change("workState2", 1)
+    pump.guest_change("SummerOn", 25)
+    await ar(entry).async_observe(pump.edit, auto_revert_module.monotonic())
+    assert restored and pump.writes == []  # neither item uses the pre-Restore poll
+    await poll(hass, entry)  # a poll that started after the Restore ended
+    assert sorted(pump.writes) == [("SummerOn", 20.0), ("workState2", 2.0)]
+
+
+async def test_nothing_judged_against_the_old_reference_while_a_new_snapshot_loads(
+        setup, monkeypatch):
+    hass, entry, pump, _ = await setup()
+    entered, release = gate_store_saves(entry, monkeypatch)
+    pump.guest_change("workState2", 1)  # the owner's new intended value
+    saved = hass.async_create_task(hass.services.async_call(
+        DOMAIN, "backup_settings", {"snapshot_name": "Default"}, blocking=True))
+    await asyncio.wait_for(entered.wait(), 5)
+    await ar(entry).async_observe(pump.edit, auto_revert_module.monotonic())
+    assert pump.writes == []
+    release.set()
+    await asyncio.wait_for(saved, 5)
+    await hass.async_block_till_done()
+    assert ar(entry).targets["workState2"] == 1
+    await poll(hass, entry)
+    assert pump.writes == []
+
+
+MALFORMED_SNAPSHOTS = {
+    "entry_not_a_dict": {"parameters": {"103": "invalid", "162": None}},
+    "parameters_a_list": {"parameters": ["invalid"]},
+    "parameters_null": {"parameters": None},
+    "top_level_list": ["invalid"],
+    "bad_values": {"created_at": 5, "parameters": {
+        "162": {"name": "workState2", "value": "Winter"},
+        "702": {"name": "SummerOn", "value": [20]}}},
+}
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+@pytest.mark.parametrize("shape", sorted(MALFORMED_SNAPSHOTS))
+async def test_malformed_snapshot_never_stops_the_integration_loading(setup, shape, enabled):
+    hass, entry, pump, _ = await setup(auto_revert=enabled)
+    await hass.async_add_executor_job(
+        snapshot_file(hass).write_text, json.dumps(MALFORMED_SNAPSHOTS[shape]))
+    await reload(hass, entry)
+    assert entry.state is ConfigEntryState.LOADED
+    assert hass.states.get(HW_SET_POINT) is not None  # monitoring and control still work
+    assert not ar(entry).snapshot_usable and ar(entry).targets == {}
+    assert (notice(hass, "no_snapshot") is not None) is enabled
+    pump.guest_change("workState2", 1)
+    await poll(hass, entry)
+    assert pump.writes == []
+
+
+async def test_partly_malformed_snapshot_protects_only_the_valid_entries(setup):
+    hass, entry, pump, _ = await setup()
+    data = json.loads(await hass.async_add_executor_job(snapshot_file(hass).read_text))
+    data["parameters"]["702"] = "invalid"
+    await hass.async_add_executor_job(snapshot_file(hass).write_text, json.dumps(data))
+    await reload(hass, entry)
+    assert entry.state is ConfigEntryState.LOADED
+    assert "SummerOn" in ar(entry).unprotected and ar(entry).targets["workState2"] == 2
+
+
+@pytest.mark.parametrize("stored", [{"overrides": "invalid"}, ["invalid"], {"overrides": None}])
+async def test_malformed_stored_overrides_are_ignored(setup, hass_storage, stored):
+    hass, entry, pump, _ = await setup()
+    key = f"{DOMAIN}.auto_revert.{entry.entry_id}"
+    hass_storage[key] = {"version": 1, "minor_version": 1, "key": key, "data": stored}
+    await reload(hass, entry)
+    assert entry.state is ConfigEntryState.LOADED and ar(entry)._overrides == {}
